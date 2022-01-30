@@ -152,8 +152,7 @@ void NetPlayBrowser::Refresh()
 {
   std::map<std::string, std::string> filters;
 
-  if (m_check_hide_incompatible->isChecked())
-    filters["version"] = Common::GetScmDescStr();
+  filters["version"] = Common::GetScmDescStr();
 
   if (!m_edit_name->text().isEmpty())
     filters["name"] = m_edit_name->text().toStdString();
