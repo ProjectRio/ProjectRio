@@ -544,6 +544,8 @@ void GameList::OpenProperties()
   properties->setAttribute(Qt::WA_DeleteOnClose, true);
 
   connect(properties, &PropertiesDialog::OpenGeneralSettings, this, &GameList::OpenGeneralSettings);
+  connect(properties, &PropertiesDialog::OpenGraphicsSettings, this,
+          &GameList::OpenGraphicsSettings);
 
   properties->show();
 }

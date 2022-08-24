@@ -63,6 +63,9 @@ void FreeLookWidget::CreateLayout()
   description->setTextInteractionFlags(Qt::TextBrowserInteraction);
   description->setOpenExternalLinks(true);
 
+  m_freelook_background_input = new QCheckBox(tr("Background Input"));
+  m_freelook_background_input->setChecked(Config::Get(Config::FREE_LOOK_BACKGROUND_INPUT));
+
   auto* hlayout = new QHBoxLayout();
   hlayout->addWidget(new QLabel(tr("Camera 1")));
   hlayout->addWidget(m_freelook_control_type);
@@ -70,6 +73,7 @@ void FreeLookWidget::CreateLayout()
 
   layout->addWidget(m_enable_freelook);
   layout->addLayout(hlayout);
+  layout->addWidget(m_freelook_background_input);
   layout->addWidget(description);
 
   setLayout(layout);
@@ -80,6 +84,7 @@ void FreeLookWidget::ConnectWidgets()
   connect(m_freelook_controller_configure_button, &QPushButton::clicked, this,
           &FreeLookWidget::OnFreeLookControllerConfigured);
   connect(m_enable_freelook, &QCheckBox::clicked, this, &FreeLookWidget::SaveSettings);
+  connect(m_freelook_background_input, &QCheckBox::clicked, this, &FreeLookWidget::SaveSettings);
   connect(&Settings::Instance(), &Settings::ConfigChanged, this, [this] {
     const QSignalBlocker blocker(this);
     LoadSettings();
@@ -103,12 +108,16 @@ void FreeLookWidget::LoadSettings()
   m_enable_freelook->setChecked(checked);
   m_freelook_control_type->setEnabled(checked);
   m_freelook_controller_configure_button->setEnabled(checked);
+  m_freelook_background_input->setEnabled(checked);
 }
 
 void FreeLookWidget::SaveSettings()
 {
   const bool checked = m_enable_freelook->isChecked();
   Config::SetBaseOrCurrent(Config::FREE_LOOK_ENABLED, checked);
+  Config::SetBaseOrCurrent(Config::FREE_LOOK_BACKGROUND_INPUT,
+                           m_freelook_background_input->isChecked());
   m_freelook_control_type->setEnabled(checked);
   m_freelook_controller_configure_button->setEnabled(checked);
+  m_freelook_background_input->setEnabled(checked);
 }

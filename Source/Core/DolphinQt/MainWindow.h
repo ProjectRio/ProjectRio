@@ -11,11 +11,12 @@
 #include <optional>
 #include <string>
 
+#include "Core/Boot/Boot.h"
+
 class QStackedWidget;
 class QString;
 
 class BreakpointWidget;
-class BootSessionData;
 struct BootParameters;
 class CheatsManager;
 class CodeWidget;
@@ -103,6 +104,8 @@ private:
   void StateSaveUndo();
   void StateSaveOldest();
   void SetStateSlot(int slot);
+  void IncrementSelectedStateSlot();
+  void DecrementSelectedStateSlot();
   void BootWiiSystemMenu();
 
   void PerformOnlineUpdate(const std::string& region);

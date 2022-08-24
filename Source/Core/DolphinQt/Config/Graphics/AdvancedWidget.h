@@ -43,6 +43,7 @@ private:
   GraphicsBool* m_disable_vram_copies;
   GraphicsBool* m_load_custom_textures;
   QComboBox* m_custom_textures_list;
+  ToolTipCheckBox* m_enable_graphics_mods;
 
   // Texture dumping
   GraphicsBool* m_dump_textures;
