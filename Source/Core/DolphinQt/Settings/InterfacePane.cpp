@@ -116,7 +116,7 @@ void InterfacePane::CreateUI()
   m_combobox_theme = new QComboBox;
   combobox_layout->addRow(tr("&Theme:"), m_combobox_theme);
 
-  // List avalable themes
+  // List available themes
   auto theme_search_results =
       Common::DoFileSearch({File::GetUserPath(D_THEMES_IDX), File::GetSysDirectory() + THEMES_DIR});
   for (const std::string& path : theme_search_results)

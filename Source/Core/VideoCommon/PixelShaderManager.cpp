@@ -24,7 +24,7 @@ void PixelShaderManager::Init()
 {
   constants = {};
 
-  // Init any intial constants which aren't zero when bpmem is zero.
+  // Init any initial constants which aren't zero when bpmem is zero.
   s_bFogRangeAdjustChanged = true;
   s_bViewPortChanged = false;
 
@@ -59,9 +59,9 @@ void PixelShaderManager::Init()
     constants.konst[10][component] = 0;
     constants.konst[11][component] = 0;
 
-    // Annoyingly, alpha reads zero values for the .rgb colors (offically
+    // Annoyingly, alpha reads zero values for the .rgb colors (officially
     // defined as invalid)
-    // If it wasn't for this, we could just use one of the first 3 colunms
+    // If it wasn't for this, we could just use one of the first 3 columns
     // instead of
     // wasting an entire 4th column just for alpha.
     if (component == 3)

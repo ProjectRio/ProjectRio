@@ -334,7 +334,7 @@ bool BackupFile(const std::string& path)
   fprintf(log_fp, "Backing up unknown pre-existing %s to .bak.\n", path.c_str());
   if (!File::Rename(path, backup_path))
   {
-    fprintf(log_fp, "Cound not rename %s to %s for backup.\n", path.c_str(), backup_path.c_str());
+    fprintf(log_fp, "Could not rename %s to %s for backup.\n", path.c_str(), backup_path.c_str());
     return false;
   }
   return true;

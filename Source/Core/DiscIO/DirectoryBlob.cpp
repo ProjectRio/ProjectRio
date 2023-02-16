@@ -608,7 +608,7 @@ void DirectoryBlobReader::SetPartitions(std::vector<PartitionWithType>&& partiti
               if (lhs.type == rhs.type)
                 return lhs.partition.GetRootDirectory() < rhs.partition.GetRootDirectory();
 
-              // Ascending sort by partition type, except Update (1) comes before before Game (0)
+              // Ascending sort by partition type, except Update (1) comes before Game (0)
               return (lhs.type > PartitionType::Update || rhs.type > PartitionType::Update) ?
                          lhs.type < rhs.type :
                          lhs.type > rhs.type;

@@ -271,7 +271,7 @@ namespace Tag
     //        return empty_map;
     //    }
 
-    //    // Initalize vector that will be populated with TagSets and returned at end of function
+    //    // Initialize vector that will be populated with TagSets and returned at end of function
     //    std::map<int, TagSet> tag_sets;
 
     //    // Create a vector of tag_sets as picojson objects

@@ -329,7 +329,7 @@ auto DeviceContainer::DetectInput(const std::vector<std::string>& device_strings
     ControlState last_state = initial_state;
     MathUtil::RunningVariance<ControlState> stats;
 
-    // Prevent multiiple detections until after release.
+    // Prevent multiple detections until after release.
     bool is_ready = true;
 
     void Update()

@@ -33,7 +33,7 @@ public:
   char* GetMappedPointer() const { return m_map_pointer; }
   size_t GetMappedStride() const { return m_map_stride; }
   // Copies from the GPU texture object to the staging texture, which can be mapped/read by the CPU.
-  // Both src_rect and dst_rect must be with within the bounds of the the specified textures.
+  // Both src_rect and dst_rect must be with within the bounds of the specified textures.
   virtual void CopyFromTexture(const AbstractTexture* src, const MathUtil::Rectangle<int>& src_rect,
                                u32 src_layer, u32 src_level,
                                const MathUtil::Rectangle<int>& dst_rect) = 0;
@@ -43,7 +43,7 @@ public:
   void CopyFromTexture(const AbstractTexture* src, u32 src_layer = 0, u32 src_level = 0);
 
   // Copies from this staging texture to a GPU texture.
-  // Both src_rect and dst_rect must be with within the bounds of the the specified textures.
+  // Both src_rect and dst_rect must be with within the bounds of the specified textures.
   virtual void CopyToTexture(const MathUtil::Rectangle<int>& src_rect, AbstractTexture* dst,
                              const MathUtil::Rectangle<int>& dst_rect, u32 dst_layer,
                              u32 dst_level) = 0;

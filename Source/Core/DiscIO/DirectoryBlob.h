@@ -47,7 +47,7 @@ struct ContentFile
 };
 
 // Content chunk that loads data from a DirectoryBlobReader.
-// Intented for representing a partition within a disc.
+// Intended for representing a partition within a disc.
 struct ContentPartition
 {
   // The reader to read data from.

@@ -42,7 +42,7 @@ StreamBuffer::~StreamBuffer()
  * The next three functions are to create/delete/use the OpenGL synchronization.
  * ARB_sync (OpenGL 3.2) is used and required.
  *
- * To reduce overhead, the complete buffer is splitted up into SYNC_POINTS chunks.
+ * To reduce overhead, the complete buffer is split up into SYNC_POINTS chunks.
  * For each of this chunks, there is a fence which checks if this chunk is still in use.
  *
  * As our API allows to alloc more memory then it has to use, we have to catch how much is already
@@ -348,7 +348,7 @@ public:
 // Chooses the best streaming method based on the supported extensions and known issues
 std::unique_ptr<StreamBuffer> StreamBuffer::Create(u32 type, u32 size)
 {
-  // without basevertex support, only streaming methods whith uploads everything to zero works fine:
+  // without basevertex support, only streaming methods which uploads everything to zero works fine:
   if (!g_ogl_config.bSupportsGLBaseVertex)
   {
     if (!DriverDetails::HasBug(DriverDetails::BUG_BROKEN_BUFFER_STREAM))

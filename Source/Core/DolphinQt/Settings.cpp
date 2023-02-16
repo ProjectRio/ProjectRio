@@ -154,7 +154,7 @@ void Settings::SetCurrentUserStyle(const QString& stylesheet_name)
   }
   else if (bDarkMode)
   {
-    // Load defualt stylesheet
+    // Load default stylesheet
     std::string darkModeFile = "Kuroi (Dark) by Ani.qss";
     QDir directory = QDir(QString::fromStdString(File::GetSysStylesPath()));
     QFile stylesheet(directory.filePath(QString::fromStdString(darkModeFile)));

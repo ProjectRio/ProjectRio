@@ -76,7 +76,7 @@ void AdvancedWidget::CreateWidgets()
   m_custom_textures_list = new QComboBox;
   m_custom_textures_list->addItem(tr("Custom"));
 
-  // List avalable themes
+  // List available themes
   auto textures_search_results = Common::DoFileSearch(
       {File::GetUserPath(D_TEXTUREPACKS_IDX), File::GetSysDirectory() + TEXTUREPACKS_DIR});
   for (const std::string& path : textures_search_results)

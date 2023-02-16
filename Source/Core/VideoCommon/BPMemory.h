@@ -611,7 +611,7 @@ struct fmt::formatter<TevStageCombiner::AlphaCombiner>
       // WriteTevRegular for more details.
 
       // We don't need an alt_names map here, unlike the color combiner, as the only special term is
-      // Zero, and we we filter that out below.  However, we do need to append ".a" to all
+      // Zero, and we filter that out below.  However, we do need to append ".a" to all
       // parameters, to make it explicit that these are operations on the alpha term instead of the
       // 4-element vector.  We also need to use the :n specifier so that the numeric ID isn't shown.
 
@@ -1445,7 +1445,7 @@ struct fmt::formatter<FogType> : EnumFormatter<FogType::BackwardsExpSq>
       "Exponential fog",
       "Exponential-squared fog",
       "Backwards exponential fog",
-      "Backwards exponenential-sequared fog",
+      "Backwards exponential-squared fog",
   };
   constexpr formatter() : EnumFormatter(names) {}
 };

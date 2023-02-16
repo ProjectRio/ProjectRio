@@ -346,7 +346,7 @@ void MainWindow::InitControllers()
   m_hotkey_scheduler = new HotkeyScheduler();
   m_hotkey_scheduler->Start();
 
-  // Defaults won't work reliabily without loading and saving the config first
+  // Defaults won't work reliably without loading and saving the config first
 
   Wiimote::LoadConfig();
   Wiimote::GetConfig()->SaveConfig();

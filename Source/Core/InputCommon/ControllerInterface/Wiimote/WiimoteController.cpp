@@ -439,7 +439,7 @@ void Device::RunTasks()
     return;
 
   // Read the "active" extension ID. (This also gives us the current M+ mode)
-  // This will fail on an un-intialized other extension.
+  // This will fail on an un-initialized other extension.
   // But extension initialization is the same as M+ de-activation so we must try this first.
   if (m_extension_port == true &&
       (!IsMotionPlusStateKnown() || (!IsMotionPlusActive() && !m_extension_id.has_value())))
@@ -726,7 +726,7 @@ void Device::ProcessExtensionID(u8 id_0, u8 id_4, u8 id_5)
   }
   else
   {
-    // This is a normal occurance before extension initialization.
+    // This is a normal occurrence before extension initialization.
     DEBUG_LOG_FMT(WIIMOTE, "WiiRemote: Unknown extension: {} {} {}.", id_0, id_4, id_5);
     m_extension_id = ExtensionID::Unsupported;
   }
@@ -1064,7 +1064,7 @@ void Device::TriggerMotionPlusCalibration()
   static constexpr u8 CALIBRATION_TRIGGER_VALUE = 0x00;
 
   // This triggers a hardware "zero" calibration.
-  // The effect is notiecable but output still strays from calibration data.
+  // The effect is noticeable but output still strays from calibration data.
   // It seems we're better off just manually determining "zero".
   WriteData(AddressSpace::I2CBus, WiimoteEmu::MotionPlus::ACTIVE_DEVICE_ADDR,
             CALIBRATION_TRIGGER_ADDR, {CALIBRATION_TRIGGER_VALUE}, [](ErrorCode result) {
@@ -1282,7 +1282,7 @@ void Device::IRState::ProcessData(const std::array<WiimoteEmu::IRBasic, 2>& data
   if (points.Count() >= 2)
   {
     const auto variance = points.PopulationVariance();
-    // Adjusts Y coorinate to match horizontal FOV.
+    // Adjusts Y coordinate to match horizontal FOV.
     const auto separation =
         Common::Vec2(std::sqrt(variance.x), std::sqrt(variance.y)) /
         Common::Vec2(WiimoteEmu::CameraLogic::CAMERA_RES_X,

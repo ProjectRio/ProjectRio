@@ -99,7 +99,7 @@ struct ThreePointCalibration
 // Represents a raw/uncalibrated N-dimensional value of input data. (e.g. Joystick X and Y)
 // A normalized value can be calculated with a provided {Two,Three}PointCalibration.
 // Values are adjusted with mismatched bits of precision.
-// Underlying type may be an unsigned type or a a Common::TVecN<> of an unsigned type.
+// Underlying type may be an unsigned type or a Common::TVecN<> of an unsigned type.
 template <typename T, size_t Bits>
 struct RawValue
 {

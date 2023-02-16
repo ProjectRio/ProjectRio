@@ -58,7 +58,7 @@ bool SwapChain::CreateSwapChainBuffers()
 void SwapChain::DestroySwapChainBuffers()
 {
   // Swap chain textures must be released before it can be resized, therefore we need to destroy all
-  // of them immediately, and not place them onto the deferred desturction queue.
+  // of them immediately, and not place them onto the deferred destruction queue.
   for (BufferResources& res : m_buffers)
   {
     res.framebuffer.reset();

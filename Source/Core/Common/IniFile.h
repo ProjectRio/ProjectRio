@@ -15,7 +15,7 @@
 
 struct CaseInsensitiveStringCompare
 {
-  // Allow heterogenous lookup.
+  // Allow heterogeneous lookup.
   using is_transparent = void;
 
   bool operator()(std::string_view a, std::string_view b) const

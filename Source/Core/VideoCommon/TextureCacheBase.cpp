@@ -1368,7 +1368,7 @@ TextureCacheBase::GetTexture(const int textureCacheSafetyColorSampleSize, Textur
         // The texture format in VRAM must match the format that the copy was created with. Some
         // formats are inherently compatible, as the channel and bit layout is identical (e.g.
         // I8/C8). Others have the same number of bits per texel, and can be reinterpreted on the
-        // GPU (e.g. IA4 and I8 or RGB565 and RGBA5). The only known game which reinteprets texels
+        // GPU (e.g. IA4 and I8 or RGB565 and RGBA5). The only known game which reinterprets texels
         // in this manner is Spiderman Shattered Dimensions, where it creates a copy in B8 format,
         // and sets it up as a IA4 texture.
         if (!IsCompatibleTextureFormat(entry->format.texfmt, texture_info.GetTextureFormat()))
@@ -2302,7 +2302,7 @@ void TextureCacheBase::CopyRenderTargetToTexture(
 
   if (OpcodeDecoder::g_record_fifo_data)
   {
-    // Mark the memory behind this efb copy as dynamicly generated for the Fifo log
+    // Mark the memory behind this efb copy as dynamically generated for the Fifo log
     u32 address = dstAddr;
     for (u32 i = 0; i < num_blocks_y; i++)
     {
@@ -2499,7 +2499,7 @@ TextureCacheBase::FindMatchingTextureFromPool(const TextureConfig& config)
   // Find a texture from the pool that does not have a frameCount of FRAMECOUNT_INVALID.
   // This prevents a texture from being used twice in a single frame with different data,
   // which potentially means that a driver has to maintain two copies of the texture anyway.
-  // Render-target textures are fine through, as they have to be generated in a seperated pass.
+  // Render-target textures are fine through, as they have to be generated in a separated pass.
   // As non-render-target textures are usually static, this should not matter much.
   auto range = texture_pool.equal_range(config);
   auto matching_iter = std::find_if(range.first, range.second, [](const auto& iter) {

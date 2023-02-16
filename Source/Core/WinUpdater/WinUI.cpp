@@ -182,7 +182,7 @@ void Error(const std::string& text)
   auto wide_text = UTF8ToWString(text);
 
   MessageBox(nullptr,
-             (L"A fatal error occured and the updater cannot continue:\n " + wide_text).c_str(),
+             (L"A fatal error occurred and the updater cannot continue:\n " + wide_text).c_str(),
              L"Error", MB_ICONERROR);
 
   if (taskbar_list)
@@ -253,7 +253,7 @@ void Stop()
 
 void LaunchApplication(std::string path)
 {
-  // Hack: Launching the updater over the explorer ensures that admin priviliges are dropped. Why?
+  // Hack: Launching the updater over the explorer ensures that admin privileges are dropped. Why?
   // Ask Microsoft.
   ShellExecuteW(nullptr, nullptr, L"explorer.exe", UTF8ToWString(path).c_str(), nullptr, SW_SHOW);
 }

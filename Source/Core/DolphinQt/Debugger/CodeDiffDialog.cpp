@@ -225,7 +225,7 @@ void CodeDiffDialog::OnInclude()
     if (m_include_active)
       return;
 
-    // If we are building include for the first time and we have an exlcude list, then include =
+    // If we are building include for the first time and we have an exclude list, then include =
     // recorded - excluded.
     m_include = recorded_symbols;
     RemoveMatchingSymbolsFromIncludes(m_exclude);
@@ -260,7 +260,7 @@ void CodeDiffDialog::OnExclude()
   else
   {
     // If include already exists, the exclude list will have been used to trim it, so the exclude
-    // list is now irrelevant, as anythng not on the include list is effectively excluded.
+    // list is now irrelevant, as anything not on the include list is effectively excluded.
     // Exclude/subtract recorded items from the include list.
     RemoveMatchingSymbolsFromIncludes(recorded_symbols);
   }

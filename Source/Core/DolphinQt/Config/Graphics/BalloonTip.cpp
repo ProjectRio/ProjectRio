@@ -83,7 +83,7 @@ BalloonTip::BalloonTip(PrivateTag, const QIcon& icon, QString title, QString mes
                                .arg(text_color.rgba(), 0, 16);
   setStyleSheet(style_sheet);
 
-  // Replace text in our our message
+  // Replace text in our message
   // if specific "tags" are used
   message.replace(QStringLiteral("<dolphin_emphasis>"),
                   QStringLiteral("<font color=\"#%1\"><b>").arg(dolphin_emphasis.rgba(), 0, 16));

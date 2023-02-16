@@ -30,7 +30,7 @@ add_custom_target(force_build_pch
     DEPENDS $<TARGET_FILE_DIR:build_pch>/dolphin.pch
 )
 
-# linking against this interface libary will cause targets to enable PCH
+# linking against this interface library will cause targets to enable PCH
 add_library(use_pch INTERFACE)
 target_link_libraries(use_pch INTERFACE build_pch)
 

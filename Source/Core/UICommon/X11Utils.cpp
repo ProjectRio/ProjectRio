@@ -124,7 +124,7 @@ void XRRConfiguration::Update()
   }
   fullMode = 0;
 
-  // Get the resolution setings for fullscreen mode
+  // Get the resolution settings for fullscreen mode
   unsigned int fullWidth, fullHeight;
   char* output_name = nullptr;
   char auxFlag = '\0';

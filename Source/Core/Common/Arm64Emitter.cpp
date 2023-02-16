@@ -1122,7 +1122,7 @@ void ARM64XEmitter::CCMP(ARM64Reg Rn, u32 imm, u32 nzcv, CCFlags cond)
   EncodeCondCompareImmInst(1, Rn, imm, nzcv, cond);
 }
 
-// Conditiona Compare (register)
+// Conditional Compare (register)
 void ARM64XEmitter::CCMN(ARM64Reg Rn, ARM64Reg Rm, u32 nzcv, CCFlags cond)
 {
   EncodeCondCompareRegInst(0, Rn, Rm, nzcv, cond);
@@ -1989,7 +1989,7 @@ void ARM64XEmitter::ABI_PushRegisters(BitSet32 registers)
   if (!num_regs)
     return;
 
-  // 8 byte per register, but 16 byte alignment, so we may have to padd one register.
+  // 8 byte per register, but 16 byte alignment, so we may have to pad one register.
   // Only update the SP on the last write to avoid the dependency between those stores.
 
   // The first push must adjust the SP, else a context switch may invalidate everything below SP.
@@ -2032,7 +2032,7 @@ void ARM64XEmitter::ABI_PopRegisters(BitSet32 registers, BitSet32 ignore_mask)
   else
     second = {};
 
-  // 8 byte per register, but 16 byte alignment, so we may have to padd one register.
+  // 8 byte per register, but 16 byte alignment, so we may have to pad one register.
   // Only update the SP on the last load to avoid the dependency between those loads.
 
   // Fast load for all but the first (two) registers, this is always an even number.
@@ -2850,7 +2850,7 @@ void ARM64FloatEmitter::ST1(u8 size, u8 count, IndexType type, ARM64Reg Rt, ARM6
 {
   ASSERT_MSG(DYNA_REC, !(count == 0 || count > 4), "Must have a count of 1 to 4 registers! ({})",
              count);
-  ASSERT_MSG(DYNA_REC, type == IndexType::Post, "Only post indexing is supporte!");
+  ASSERT_MSG(DYNA_REC, type == IndexType::Post, "Only post indexing is supported!");
 
   u32 opcode = 0;
   if (count == 1)

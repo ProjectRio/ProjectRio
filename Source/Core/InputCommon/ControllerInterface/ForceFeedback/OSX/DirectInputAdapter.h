@@ -17,7 +17,7 @@ typedef LONG* LPLONG;  // Missing type for ForceFeedback.h
 #include <CoreFoundation/CoreFoundation.h>
 #include <ForceFeedback/ForceFeedback.h>
 #include "Common/CommonTypes.h"    // for LONG
-#include "DirectInputConstants.h"  // Not stricty necessary
+#include "DirectInputConstants.h"  // Not strictly necessary
 
 namespace ciface::ForceFeedback
 {

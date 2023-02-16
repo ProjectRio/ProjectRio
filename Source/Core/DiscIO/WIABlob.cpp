@@ -1783,7 +1783,7 @@ WIARVZFileReader<RVZ>::Convert(BlobReader* infile, const VolumeDisc* infile_volu
                       raw_data_entries_size + 0x100;
 
     // RVZ's added data in GroupEntry usually compresses well, so we'll assume the compression ratio
-    // for RVZ GroupEntries is 9 / 16 or better. This constant is somehwat arbitrarily chosen, but
+    // for RVZ GroupEntries is 9 / 16 or better. This constant is somewhat arbitrarily chosen, but
     // no games were found that get a worse compression ratio than that. There are some games that
     // get a worse ratio than 1 / 2, such as Metroid: Other M (PAL) with the default settings.
     if (RVZ && compression_type > WIARVZCompressionType::Purge)
@@ -1803,7 +1803,7 @@ WIARVZFileReader<RVZ>::Convert(BlobReader* infile, const VolumeDisc* infile_volu
 
   if (!infile->Read(0, header_2.disc_header.size(), header_2.disc_header.data()))
     return ConversionResultCode::ReadFailed;
-  // We intentially do not increment bytes_read here, since these bytes will be read again
+  // We intentionally do not increment bytes_read here, since these bytes will be read again
 
   std::map<ReuseID, GroupEntry> reusable_groups;
   std::mutex reusable_groups_mutex;

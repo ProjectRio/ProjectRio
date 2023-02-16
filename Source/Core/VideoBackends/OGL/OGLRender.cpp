@@ -395,7 +395,7 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
 
     if (!GLExtensions::Supports("GL_ARB_sampler_objects"))
     {
-      // Our sampler cache uses this extension. It could easyly be workaround and it's by far the
+      // Our sampler cache uses this extension. It could easily be workaround and it's by far the
       // highest requirement, but it seems that no driver lacks support for it.
       PanicAlertFmtT("GPU: OGL ERROR: Need GL_ARB_sampler_objects.\n"
                      "GPU: Does your video card support OpenGL 3.3?");
@@ -449,7 +449,7 @@ Renderer::Renderer(std::unique_ptr<GLContext> main_gl_context, float backbuffer_
   // Clip distance support is useless without a method to clamp the depth range
   g_Config.backend_info.bSupportsDepthClamp = GLExtensions::Supports("GL_ARB_depth_clamp");
 
-  // Desktop OpenGL supports bitfield manulipation and dynamic sampler indexing if it supports
+  // Desktop OpenGL supports bitfield manipulation and dynamic sampler indexing if it supports
   // shader5. OpenGL ES 3.1 supports it implicitly without an extension
   g_Config.backend_info.bSupportsBitfield = GLExtensions::Supports("GL_ARB_gpu_shader5");
   g_Config.backend_info.bSupportsDynamicSamplerIndexing =
