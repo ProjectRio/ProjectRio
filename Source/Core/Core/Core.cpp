@@ -287,7 +287,9 @@ void TrainingMode()
     if (BatterPort > 0)
       BatterPort--;
     u32 stickDirectionAddr = 0x8089392D + (0x10 * BatterPort);
-
+    
+    u32 contactQuality = Memory::Read_U32(aAB_Contact_Quality);
+    
     u16 contactFrame = Memory::Read_U16(aContactFrame);
     u8 typeOfContact_Value = Memory::Read_U8(aTypeOfContact);
     std::string typeOfContact;
@@ -347,6 +349,7 @@ void TrainingMode()
       "Batting Data:                    \n"
       "Contact Frame:  {}\n"
       "Type of Contact:  {}\n"
+      "Contact Quality: {}\n"
       "Input Direction:  {}\n"
       "Charge Percent:  {}%\n"
       "Ball Angle:  {}°\n\n"
@@ -357,6 +360,7 @@ void TrainingMode()
       "Net:  {} m/s  -->  {} mph",
       contactFrame,
       typeOfContact,
+      contactQuality,
       inputDirection,
       totalCharge,
       angle,
