@@ -219,20 +219,31 @@ std::string ArrayToString(const u8* data, u32 size, int line_len, bool spaces)
   return oss.str();
 }
 
-// Turns "\n\r\t hello " into "hello" (trims at the start and end but not inside).
-std::string_view StripSpaces(std::string_view str)
+template <typename T>
+static std::string_view StripEnclosingChars(std::string_view str, T chars)
 {
-  const size_t s = str.find_first_not_of(" \t\r\n");
+  const size_t s = str.find_first_not_of(chars);
 
   if (str.npos != s)
-    return str.substr(s, str.find_last_not_of(" \t\r\n") - s + 1);
+    return str.substr(s, str.find_last_not_of(chars) - s + 1);
   else
     return "";
 }
 
+// Turns "\n\r\t hello " into "hello" (trims at the start and end but not inside).
+std::string_view StripWhitespace(std::string_view str)
+{
+  return StripEnclosingChars(str, " \t\r\n");
+}
+
+std::string_view StripSpaces(std::string_view str)
+{
+  return StripEnclosingChars(str, ' ');
+}
+
 // "\"hello\"" is turned to "hello"
 // This one assumes that the string has already been space stripped in both
-// ends, as done by StripSpaces above, for example.
+// ends, as done by StripWhitespace above, for example.
 std::string_view StripQuotes(std::string_view s)
 {
   if (!s.empty() && '\"' == s[0] && '\"' == *s.rbegin())
@@ -246,6 +257,13 @@ void ReplaceBreaksWithSpaces(std::string& str)
 {
   std::replace(str.begin(), str.end(), '\r', ' ');
   std::replace(str.begin(), str.end(), '\n', ' ');
+}
+
+void TruncateToCString(std::string* s)
+{
+  const size_t terminator = s->find_first_of('\0');
+  if (terminator != s->npos)
+    s->resize(terminator);
 }
 
 bool TryParse(const std::string& str, bool* const output)
@@ -413,23 +431,13 @@ std::string ReplaceAll(std::string result, std::string_view src, std::string_vie
   return result;
 }
 
-bool StringBeginsWith(std::string_view str, std::string_view begin)
-{
-  return str.size() >= begin.size() && std::equal(begin.begin(), begin.end(), str.begin());
-}
-
-bool StringEndsWith(std::string_view str, std::string_view end)
-{
-  return str.size() >= end.size() && std::equal(end.rbegin(), end.rend(), str.rbegin());
-}
-
 void StringPopBackIf(std::string* s, char c)
 {
   if (!s->empty() && s->back() == c)
     s->pop_back();
 }
 
-size_t StringUTF8CodePointCount(const std::string& str)
+size_t StringUTF8CodePointCount(std::string_view str)
 {
   return str.size() -
          std::count_if(str.begin(), str.end(), [](char c) -> bool { return (c & 0xC0) == 0x80; });
@@ -627,7 +635,6 @@ std::u16string UTF8ToUTF16(std::string_view input)
   return converter.from_bytes(input.data(), input.data() + input.size());
 }
 
-#ifdef HAS_STD_FILESYSTEM
 // This is a replacement for path::u8path, which is deprecated starting with C++20.
 std::filesystem::path StringToPath(std::string_view path)
 {
@@ -648,7 +655,6 @@ std::string PathToString(const std::filesystem::path& path)
   return path.native();
 #endif
 }
-#endif
 
 #ifdef _WIN32
 std::vector<std::string> CommandLineToUtf8Argv(const wchar_t* command_line)
@@ -697,5 +703,13 @@ void ToLower(std::string* str)
 void ToUpper(std::string* str)
 {
   std::transform(str->begin(), str->end(), str->begin(), [](char c) { return Common::ToUpper(c); });
+}
+
+bool CaseInsensitiveEquals(std::string_view a, std::string_view b)
+{
+  if (a.size() != b.size())
+    return false;
+  return std::equal(a.begin(), a.end(), b.begin(),
+                    [](char ca, char cb) { return Common::ToLower(ca) == Common::ToLower(cb); });
 }
 }  // namespace Common

@@ -18,6 +18,7 @@ public:
 
 signals:
   void OpenGeneralSettings();
+  void OpenGraphicsSettings();
 };
 
 class GeckoDialog final : public QDialog

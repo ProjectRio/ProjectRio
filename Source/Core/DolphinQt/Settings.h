@@ -111,6 +111,8 @@ public:
   bool GetLockCursor() const;
   void SetKeepWindowOnTop(bool top);
   bool IsKeepWindowOnTopEnabled() const;
+  bool GetGraphicModsEnabled() const;
+  void SetGraphicModsEnabled(bool enabled);
 
   // Audio
   int GetVolume() const;
@@ -204,6 +206,7 @@ signals:
   void DevicesChanged();
   void SDCardInsertionChanged(bool inserted);
   void USBKeyboardConnectionChanged(bool connected);
+  void EnableGfxModsChanged(bool enabled);
 
 private:
   Settings();

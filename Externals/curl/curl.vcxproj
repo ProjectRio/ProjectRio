@@ -17,7 +17,7 @@
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(ExternalsDir)curl\lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>include;lib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>CURL_STATICLIB;CURL_DISABLE_LDAP;USE_WINDOWS_SSPI;USE_SCHANNEL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdcpp20</LanguageStandard>
     </ClCompile>
@@ -357,9 +357,6 @@
     <ClInclude Include="lib\warnless.h" />
     <ClInclude Include="lib\wildcard.h" />
     <ClInclude Include="lib\x509asn1.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="lib\libcurl.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

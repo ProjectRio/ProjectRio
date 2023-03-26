@@ -19,6 +19,7 @@
 #include "Core/PowerPC/Jit64Common/Jit64PowerPCState.h"
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PowerPC.h"
+#include "Core/System.h"
 
 using namespace Gen;
 
@@ -208,10 +209,10 @@ template <typename T>
 class MMIOReadCodeGenerator : public MMIO::ReadHandlingMethodVisitor<T>
 {
 public:
-  MMIOReadCodeGenerator(Gen::X64CodeBlock* code, BitSet32 registers_in_use, Gen::X64Reg dst_reg,
-                        u32 address, bool sign_extend)
-      : m_code(code), m_registers_in_use(registers_in_use), m_dst_reg(dst_reg), m_address(address),
-        m_sign_extend(sign_extend)
+  MMIOReadCodeGenerator(Core::System* system, Gen::X64CodeBlock* code, BitSet32 registers_in_use,
+                        Gen::X64Reg dst_reg, u32 address, bool sign_extend)
+      : m_system(system), m_code(code), m_registers_in_use(registers_in_use), m_dst_reg(dst_reg),
+        m_address(address), m_sign_extend(sign_extend)
   {
   }
 
@@ -220,7 +221,7 @@ public:
   {
     LoadAddrMaskToReg(8 * sizeof(T), addr, mask);
   }
-  void VisitComplex(const std::function<T(u32)>* lambda) override
+  void VisitComplex(const std::function<T(Core::System&, u32)>* lambda) override
   {
     CallLambda(8 * sizeof(T), lambda);
   }
@@ -269,14 +270,15 @@ private:
     }
   }
 
-  void CallLambda(int sbits, const std::function<T(u32)>* lambda)
+  void CallLambda(int sbits, const std::function<T(Core::System&, u32)>* lambda)
   {
     m_code->ABI_PushRegistersAndAdjustStack(m_registers_in_use, 0);
-    m_code->ABI_CallLambdaC(lambda, m_address);
+    m_code->ABI_CallLambdaPC(lambda, m_system, m_address);
     m_code->ABI_PopRegistersAndAdjustStack(m_registers_in_use, 0);
     MoveOpArgToReg(sbits, R(ABI_RETURN));
   }
 
+  Core::System* m_system;
   Gen::X64CodeBlock* m_code;
   BitSet32 m_registers_in_use;
   Gen::X64Reg m_dst_reg;
@@ -292,19 +294,22 @@ void EmuCodeBlock::MMIOLoadToReg(MMIO::Mapping* mmio, Gen::X64Reg reg_value,
   {
   case 8:
   {
-    MMIOReadCodeGenerator<u8> gen(this, registers_in_use, reg_value, address, sign_extend);
+    MMIOReadCodeGenerator<u8> gen(&m_jit.m_system, this, registers_in_use, reg_value, address,
+                                  sign_extend);
     mmio->GetHandlerForRead<u8>(address).Visit(gen);
     break;
   }
   case 16:
   {
-    MMIOReadCodeGenerator<u16> gen(this, registers_in_use, reg_value, address, sign_extend);
+    MMIOReadCodeGenerator<u16> gen(&m_jit.m_system, this, registers_in_use, reg_value, address,
+                                   sign_extend);
     mmio->GetHandlerForRead<u16>(address).Visit(gen);
     break;
   }
   case 32:
   {
-    MMIOReadCodeGenerator<u32> gen(this, registers_in_use, reg_value, address, sign_extend);
+    MMIOReadCodeGenerator<u32> gen(&m_jit.m_system, this, registers_in_use, reg_value, address,
+                                   sign_extend);
     mmio->GetHandlerForRead<u32>(address).Visit(gen);
     break;
   }
@@ -366,7 +371,7 @@ void EmuCodeBlock::SafeLoadToReg(X64Reg reg_value, const Gen::OpArg& opAddress, 
   }
 
   FixupBranch exit;
-  const bool dr_set = (flags & SAFE_LOADSTORE_DR_ON) || MSR.DR;
+  const bool dr_set = (flags & SAFE_LOADSTORE_DR_ON) || m_jit.m_ppc_state.msr.DR;
   const bool fast_check_address = !slowmem && dr_set && m_jit.jo.fastmem_arena;
   if (fast_check_address)
   {
@@ -441,7 +446,8 @@ void EmuCodeBlock::SafeLoadToRegImmediate(X64Reg reg_value, u32 address, int acc
   u32 mmioAddress = PowerPC::IsOptimizableMMIOAccess(address, accessSize);
   if (accessSize != 64 && mmioAddress)
   {
-    MMIOLoadToReg(Memory::mmio_mapping.get(), reg_value, registersInUse, mmioAddress, accessSize,
+    auto& memory = m_jit.m_system.GetMemory();
+    MMIOLoadToReg(memory.GetMMIOMapping(), reg_value, registersInUse, mmioAddress, accessSize,
                   signExtend);
     return;
   }
@@ -534,7 +540,7 @@ void EmuCodeBlock::SafeWriteRegToReg(OpArg reg_value, X64Reg reg_addr, int acces
   }
 
   FixupBranch exit;
-  const bool dr_set = (flags & SAFE_LOADSTORE_DR_ON) || MSR.DR;
+  const bool dr_set = (flags & SAFE_LOADSTORE_DR_ON) || m_jit.m_ppc_state.msr.DR;
   const bool fast_check_address = !slowmem && dr_set && m_jit.jo.fastmem_arena;
   if (fast_check_address)
   {

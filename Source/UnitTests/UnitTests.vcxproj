@@ -12,14 +12,14 @@
   <ImportGroup Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="$(VSPropsDir)Base.props" />
+    <Import Project="$(VSPropsDir)Base.Dolphin.props" />
     <Import Project="$(VSPropsDir)PCHUse.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup>
     <!--This project also compiles gtest-->
     <ClCompile>
-      <AdditionalIncludeDirectories>$(ExternalsDir)gtest\include;$(ExternalsDir)gtest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ExternalsDir)gtest\googletest\include;$(ExternalsDir)gtest\googletest;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -35,9 +35,9 @@
   </ItemGroup>
   <ItemGroup>
     <!--gtest is rather small, so just include it into the build here-->
-    <ClCompile Include="$(ExternalsDir)gtest\src\gtest-all.cc" />
-    <ClCompile Include="$(ExternalsDir)gtest\src\gtest_main.cc" />
+    <ClCompile Include="$(ExternalsDir)gtest\googletest\src\gtest-all.cc" />
     <!--Lump all of the tests (and supporting code) into one binary-->
+    <ClCompile Include="UnitTestsMain.cpp" />
     <ClCompile Include="Common\BitFieldTest.cpp" />
     <ClCompile Include="Common\BitSetTest.cpp" />
     <ClCompile Include="Common\BitUtilsTest.cpp" />
@@ -45,6 +45,7 @@
     <ClCompile Include="Common\BusyLoopTest.cpp" />
     <ClCompile Include="Common\CommonFuncsTest.cpp" />
     <ClCompile Include="Common\Crypto\EcTest.cpp" />
+    <ClCompile Include="Common\Crypto\SHA1Test.cpp" />
     <ClCompile Include="Common\EnumFormatterTest.cpp" />
     <ClCompile Include="Common\EventTest.cpp" />
     <ClCompile Include="Common\FileUtilTest.cpp" />
@@ -95,7 +96,8 @@
       <Project>{0e033be3-2e08-428e-9ae9-bc673efa12b5}</Project>
     </ProjectReference>
   </ItemGroup>
-  <Import Project="$(ExternalsDir)ExternalsReferenceAll.props" />
+  <Import Project="$(ExternalsDir)Bochs_disasm\exports.props" />
+  <Import Project="$(ExternalsDir)fmt\exports.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

@@ -37,6 +37,7 @@ public:
     void operator()(T* func)
     {
       (*func)();
+      delete func;
     }
   };
 
@@ -980,7 +981,7 @@ static std::unique_ptr<Expression> ParseBarewordExpression(const std::string& st
 
 ParseResult ParseExpression(const std::string& str)
 {
-  if (StripSpaces(str).empty())
+  if (StripWhitespace(str).empty())
     return ParseResult::MakeEmptyResult();
 
   auto bareword_expr = ParseBarewordExpression(str);

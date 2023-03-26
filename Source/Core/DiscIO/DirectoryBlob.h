@@ -43,7 +43,7 @@ struct ContentFile
   std::string m_filename;
 
   // Offset from the start of the file where the first byte of this content chunk is.
-  u64 m_offset;
+  u64 m_offset = 0;
 };
 
 // Content chunk that loads data from a DirectoryBlobReader.
@@ -54,20 +54,20 @@ struct ContentPartition
   DirectoryBlobReader* m_reader;
 
   // Offset from the start of the partition for the first byte represented by this chunk.
-  u64 m_offset;
+  u64 m_offset = 0;
 
   // The value passed as partition_data_offset to EncryptPartitionData().
-  u64 m_partition_data_offset;
+  u64 m_partition_data_offset = 0;
 };
 
 // Content chunk that loads data from a Volume.
 struct ContentVolume
 {
   // Offset from the start of the volume for the first byte represented by this chunk.
-  u64 m_offset;
+  u64 m_offset = 0;
 
   // The volume to read data from.
-  const Volume* m_volume;
+  const Volume* m_volume = nullptr;
 
   // The partition passed to the Volume's Read() method.
   Partition m_partition;
@@ -77,27 +77,34 @@ struct ContentVolume
 // Useful for padding between chunks within a file.
 struct ContentFixedByte
 {
-  u8 m_byte;
+  u8 m_byte = 0;
+};
+
+// Content chunk representing an arbitrary byte sequence that's stored within the struct itself.
+struct ContentByteVector
+{
+  std::vector<u8> m_bytes;
 };
 
 using ContentSource = std::variant<ContentFile,       // File
                                    const u8*,         // Memory
                                    ContentPartition,  // Partition
                                    ContentVolume,     // Volume
-                                   ContentFixedByte   // Fixed value padding
+                                   ContentFixedByte,  // Fixed value padding
+                                   ContentByteVector  // Byte sequence
                                    >;
 
 struct BuilderContentSource
 {
-  u64 m_offset;
-  u64 m_size;
+  u64 m_offset = 0;
+  u64 m_size = 0;
   ContentSource m_source;
 };
 
 struct FSTBuilderNode
 {
   std::string m_filename;
-  u64 m_size;
+  u64 m_size = 0;
   std::variant<std::vector<BuilderContentSource>, std::vector<FSTBuilderNode>> m_content;
   void* m_user_data = nullptr;
 
@@ -183,10 +190,11 @@ class DirectoryBlobPartition
 public:
   DirectoryBlobPartition() = default;
   DirectoryBlobPartition(const std::string& root_directory, std::optional<bool> is_wii);
-  DirectoryBlobPartition(DiscIO::VolumeDisc* volume, const DiscIO::Partition& partition,
-                         std::optional<bool> is_wii,
-                         const std::function<void(std::vector<FSTBuilderNode>* fst_nodes,
-                                                  FSTBuilderNode* dol_node)>& fst_callback);
+  DirectoryBlobPartition(
+      DiscIO::VolumeDisc* volume, const DiscIO::Partition& partition, std::optional<bool> is_wii,
+      const std::function<void(std::vector<FSTBuilderNode>* fst_nodes)>& sys_callback,
+      const std::function<void(std::vector<FSTBuilderNode>* fst_nodes, FSTBuilderNode* dol_node)>&
+          fst_callback);
 
   // We do not allow copying, because it might mess up the pointers inside DiscContents
   DirectoryBlobPartition(const DirectoryBlobPartition&) = delete;
@@ -196,6 +204,7 @@ public:
 
   bool IsWii() const { return m_is_wii; }
   u64 GetDataSize() const { return m_data_size; }
+  void SetDataSize(u64 size) { m_data_size = size; }
   const std::string& GetRootDirectory() const { return m_root_directory; }
   const std::vector<u8>& GetHeader() const { return m_disc_header; }
   const DiscContentContainer& GetContents() const { return m_contents; }
@@ -258,6 +267,7 @@ public:
   static std::unique_ptr<DirectoryBlobReader> Create(const std::string& dol_path);
   static std::unique_ptr<DirectoryBlobReader> Create(
       std::unique_ptr<DiscIO::VolumeDisc> volume,
+      const std::function<void(std::vector<FSTBuilderNode>* fst_nodes)>& sys_callback,
       const std::function<void(std::vector<FSTBuilderNode>* fst_nodes, FSTBuilderNode* dol_node)>&
           fst_callback);
 
@@ -275,7 +285,7 @@ public:
 
   u64 GetRawSize() const override;
   u64 GetDataSize() const override;
-  bool IsDataSizeAccurate() const override { return true; }
+  DataSizeType GetDataSizeType() const override { return DataSizeType::Accurate; }
 
   u64 GetBlockSize() const override { return 0; }
   bool HasFastRandomAccessInBlock() const override { return true; }
@@ -296,9 +306,11 @@ private:
 
   explicit DirectoryBlobReader(const std::string& game_partition_root,
                                const std::string& true_root);
-  explicit DirectoryBlobReader(std::unique_ptr<DiscIO::VolumeDisc> volume,
-                               const std::function<void(std::vector<FSTBuilderNode>* fst_nodes,
-                                                        FSTBuilderNode* dol_node)>& fst_callback);
+  explicit DirectoryBlobReader(
+      std::unique_ptr<DiscIO::VolumeDisc> volume,
+      const std::function<void(std::vector<FSTBuilderNode>* fst_nodes)>& sys_callback,
+      const std::function<void(std::vector<FSTBuilderNode>* fst_nodes, FSTBuilderNode* dol_node)>&
+          fst_callback);
 
   const DirectoryBlobPartition* GetPartition(u64 offset, u64 size, u64 partition_data_offset) const;
 

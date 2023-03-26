@@ -65,7 +65,7 @@ void CommonAsmRoutines::GenConvertDoubleToSingle()
 
   // Don't Denormalize
 
-  if (cpu_info.bFastBMI2)
+  if (cpu_info.bBMI2FastParallelBitOps)
   {
     // Extract bits 0-1 and 5-34
     MOV(64, R(RSCRATCH), Imm64(0xc7ffffffe0000000));
@@ -305,7 +305,7 @@ void CommonAsmRoutines::GenMfcr()
     if (i != 0)
       SHL(32, R(dst), Imm8(4));
 
-    MOV(64, R(cr_val), PPCSTATE(cr.fields[i]));
+    MOV(64, R(cr_val), PPCSTATE_CR(i));
 
     // EQ: Bits 31-0 == 0; set flag bit 1
     TEST(32, R(cr_val), R(cr_val));
@@ -369,7 +369,8 @@ const u8* CommonAsmRoutines::GenQuantizedStoreRuntime(bool single, EQuantizeType
   const u8* load = AlignCode4();
   GenQuantizedStore(single, type, -1);
   RET();
-  JitRegister::Register(start, GetCodePtr(), "JIT_QuantizedStore_{}_{}", type, single);
+  JitRegister::Register(start, GetCodePtr(), "JIT_QuantizedStore_{}_{}", static_cast<u32>(type),
+                        single);
 
   return load;
 }
@@ -400,7 +401,8 @@ const u8* CommonAsmRoutines::GenQuantizedLoadRuntime(bool single, EQuantizeType 
   const u8* load = AlignCode4();
   GenQuantizedLoad(single, type, -1);
   RET();
-  JitRegister::Register(start, GetCodePtr(), "JIT_QuantizedLoad_{}_{}", type, single);
+  JitRegister::Register(start, GetCodePtr(), "JIT_QuantizedLoad_{}_{}", static_cast<u32>(type),
+                        single);
 
   return load;
 }

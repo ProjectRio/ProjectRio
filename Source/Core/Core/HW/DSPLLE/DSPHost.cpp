@@ -18,6 +18,7 @@
 #include "Core/HW/DSPLLE/DSPSymbols.h"
 #include "Core/HW/Memmap.h"
 #include "Core/Host.h"
+#include "Core/System.h"
 #include "VideoCommon/OnScreenDisplay.h"
 
 // The user of the DSPCore library must supply a few functions so that the
@@ -29,22 +30,26 @@ namespace DSP::Host
 {
 u8 ReadHostMemory(u32 addr)
 {
-  return DSP::ReadARAM(addr);
+  return Core::System::GetInstance().GetDSP().ReadARAM(addr);
 }
 
 void WriteHostMemory(u8 value, u32 addr)
 {
-  DSP::WriteARAM(value, addr);
+  Core::System::GetInstance().GetDSP().WriteARAM(value, addr);
 }
 
 void DMAToDSP(u16* dst, u32 addr, u32 size)
 {
-  Memory::CopyFromEmuSwapped(dst, addr, size);
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
+  memory.CopyFromEmuSwapped(dst, addr, size);
 }
 
 void DMAFromDSP(const u16* src, u32 addr, u32 size)
 {
-  Memory::CopyToEmuSwapped(addr, src, size);
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
+  memory.CopyToEmuSwapped(addr, src, size);
 }
 
 void OSD_AddMessage(std::string str, u32 ms)
@@ -65,12 +70,14 @@ bool IsWiiHost()
 void InterruptRequest()
 {
   // Fire an interrupt on the PPC ASAP.
-  DSP::GenerateDSPInterruptFromDSPEmu(DSP::INT_DSP);
+  Core::System::GetInstance().GetDSP().GenerateDSPInterruptFromDSPEmu(DSP::INT_DSP);
 }
 
 void CodeLoaded(DSPCore& dsp, u32 addr, size_t size)
 {
-  CodeLoaded(dsp, Memory::GetPointer(addr), size);
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
+  CodeLoaded(dsp, memory.GetPointer(addr), size);
 }
 
 void CodeLoaded(DSPCore& dsp, const u8* ptr, size_t size)

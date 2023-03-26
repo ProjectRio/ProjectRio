@@ -29,6 +29,7 @@ namespace Tag {
 
 namespace Core
 {
+class System;
 
 bool GetIsThrottlerTempDisabled();
 void SetIsThrottlerTempDisabled(bool disable);
@@ -37,7 +38,7 @@ void SetIsThrottlerTempDisabled(bool disable);
 double GetActualEmulationSpeed();
 
 void Callback_FramePresented(double actual_emulation_speed = 1.0);
-void Callback_NewField();
+void Callback_NewField(Core::System& system);
 
 enum class State
 {
@@ -101,6 +102,36 @@ enum class ConsoleType : u32
   ReservedTDEVSystem = 0x20000007,
 };
 
+// Run a function as the CPU thread. This is an RAII alternative to the RunAsCPUThread function.
+//
+// If constructed from the Host thread, the CPU thread is paused and the current thread temporarily
+// becomes the CPU thread.
+// If constructed from the CPU thread, nothing special happens.
+//
+// This should only be constructed from the CPU thread or the host thread.
+//
+// Some functions use a parameter of this type to indicate that the function should only be called
+// from the CPU thread. If the parameter is a pointer, the function has a fallback for being called
+// from the wrong thread (with the argument being set to nullptr).
+class CPUThreadGuard final
+{
+public:
+  explicit CPUThreadGuard(Core::System& system);
+  ~CPUThreadGuard();
+
+  CPUThreadGuard(const CPUThreadGuard&) = delete;
+  CPUThreadGuard(CPUThreadGuard&&) = delete;
+  CPUThreadGuard& operator=(const CPUThreadGuard&) = delete;
+  CPUThreadGuard& operator=(CPUThreadGuard&&) = delete;
+
+  Core::System& GetSystem() const { return m_system; }
+
+private:
+  Core::System& m_system;
+  const bool m_was_cpu_thread;
+  bool m_was_unpaused = false;
+};
+
 bool Init(std::unique_ptr<BootParameters> boot, const WindowSystemInfo& wsi);
 void Stop();
 void Shutdown();
@@ -134,10 +165,6 @@ void RunRioFunctions();
 void FrameUpdateOnCPUThread();
 void OnFrameEnd();
 bool IsGolfMode();
-
-void VideoThrottle();
-
-void UpdateTitle(u32 ElapseTime);
 
 // Run a function as the CPU thread.
 //
@@ -181,6 +208,7 @@ void HostDispatchJobs();
 void DoFrameStep();
 
 void UpdateInputGate(bool require_focus, bool require_full_focus = false);
+void UpdateTitle();
 
 float u32ToFloat(u32 value);
 float ms_to_mph(float MetersPerSecond);

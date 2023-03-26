@@ -229,6 +229,8 @@ void Jit64::lXXx(UGeckoInstruction inst)
 
 void Jit64::dcbx(UGeckoInstruction inst)
 {
+  FALLBACK_IF(m_accurate_cpu_cache_enabled);
+
   INSTRUCTION_START
   JITDISABLE(bJITLoadStoreOff);
 
@@ -265,7 +267,7 @@ void Jit64::dcbx(UGeckoInstruction inst)
 
     // Alright, now figure out how many loops we want to do.
     const u8 cycle_count_per_loop =
-        js.op[0].opinfo->numCycles + js.op[1].opinfo->numCycles + js.op[2].opinfo->numCycles;
+        js.op[0].opinfo->num_cycles + js.op[1].opinfo->num_cycles + js.op[2].opinfo->num_cycles;
 
     // This is both setting the adjusted loop count to 0 for the downcount <= 0 case and clearing
     // the upper bits for the DIV instruction in the downcount > 0 case.
@@ -318,7 +320,7 @@ void Jit64::dcbx(UGeckoInstruction inst)
   FixupBranch bat_lookup_failed;
   MOV(32, R(effective_address), R(addr));
   const u8* loop_start = GetCodePtr();
-  if (MSR.IR)
+  if (m_ppc_state.msr.IR)
   {
     // Translate effective address to physical address.
     bat_lookup_failed = BATAddressLookup(addr, tmp, PowerPC::ibat_table.data());
@@ -347,7 +349,7 @@ void Jit64::dcbx(UGeckoInstruction inst)
 
   SwitchToFarCode();
   SetJumpTarget(invalidate_needed);
-  if (MSR.IR)
+  if (m_ppc_state.msr.IR)
     SetJumpTarget(bat_lookup_failed);
 
   BitSet32 registersInUse = CallerSavedRegistersInUse();
@@ -420,7 +422,7 @@ void Jit64::dcbz(UGeckoInstruction inst)
     end_dcbz_hack = J_CC(CC_L);
   }
 
-  bool emit_fast_path = MSR.DR && m_jit.jo.fastmem_arena;
+  bool emit_fast_path = m_ppc_state.msr.DR && m_jit.jo.fastmem_arena;
 
   if (emit_fast_path)
   {
@@ -444,7 +446,7 @@ void Jit64::dcbz(UGeckoInstruction inst)
   MOV(32, PPCSTATE(pc), Imm32(js.compilerPC));
   BitSet32 registersInUse = CallerSavedRegistersInUse();
   ABI_PushRegistersAndAdjustStack(registersInUse, 0);
-  ABI_CallFunctionR(PowerPC::ClearCacheLine, RSCRATCH);
+  ABI_CallFunctionR(PowerPC::ClearDCacheLine, RSCRATCH);
   ABI_PopRegistersAndAdjustStack(registersInUse, 0);
 
   if (emit_fast_path)
@@ -505,10 +507,10 @@ void Jit64::stX(UGeckoInstruction inst)
       }
       else
       {
-        RCOpArg Ra = gpr.UseNoImm(a, RCMode::ReadWrite);
+        RCOpArg Ra = gpr.UseNoImm(a, RCMode::Write);
         RegCache::Realize(Ra);
         MemoryExceptionCheck();
-        ADD(32, Ra, Imm32((u32)offset));
+        MOV(32, Ra, Imm32(addr));
       }
     }
   }

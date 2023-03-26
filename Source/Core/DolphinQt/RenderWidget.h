@@ -39,8 +39,8 @@ private:
   void OnLockCursorChanged();
   void OnKeepOnTopChanged(bool top);
   void UpdateCursor();
-  void PassEventToImGui(const QEvent* event);
-  void SetImGuiKeyMap();
+  void PassEventToPresenter(const QEvent* event);
+  void SetPresenterKeyMap();
   void dragEnterEvent(QDragEnterEvent* event) override;
   void dropEvent(QDropEvent* event) override;
 
@@ -51,4 +51,5 @@ private:
   bool m_lock_cursor_on_next_activation = false;
   bool m_dont_lock_cursor_on_show = false;
   bool m_waiting_for_message_box = false;
+  bool m_should_unpause_on_focus = false;
 };

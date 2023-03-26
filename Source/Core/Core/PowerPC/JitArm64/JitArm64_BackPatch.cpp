@@ -16,7 +16,6 @@
 #include "Common/StringUtil.h"
 #include "Common/Swap.h"
 
-#include "Core/HW/Memmap.h"
 #include "Core/PowerPC/Gekko.h"
 #include "Core/PowerPC/JitArm64/Jit_Util.h"
 #include "Core/PowerPC/JitArmCommon/BackPatch.h"
@@ -54,19 +53,47 @@ void JitArm64::DoBacktrace(uintptr_t access_address, SContext* ctx)
   ERROR_LOG_FMT(DYNA_REC, "Full block: {}", pc_memory);
 }
 
-void JitArm64::EmitBackpatchRoutine(u32 flags, bool fastmem, bool do_farcode, ARM64Reg RS,
-                                    ARM64Reg addr, BitSet32 gprs_to_push, BitSet32 fprs_to_push,
+void JitArm64::EmitBackpatchRoutine(u32 flags, MemAccessMode mode, ARM64Reg RS, ARM64Reg addr,
+                                    BitSet32 gprs_to_push, BitSet32 fprs_to_push,
                                     bool emitting_routine)
 {
   const u32 access_size = BackPatchInfo::GetFlagSize(flags);
+
+  if (m_accurate_cpu_cache_enabled)
+    mode = MemAccessMode::AlwaysSafe;
+
+  const bool emit_fastmem = mode != MemAccessMode::AlwaysSafe;
+  const bool emit_slowmem = mode != MemAccessMode::AlwaysUnsafe;
 
   bool in_far_code = false;
   const u8* fastmem_start = GetCodePtr();
   std::optional<FixupBranch> slowmem_fixup;
 
-  if (fastmem)
+  if (emit_fastmem)
   {
-    if (do_farcode && emitting_routine)
+    ARM64Reg memory_base = MEM_REG;
+    ARM64Reg memory_offset = addr;
+
+    if (!jo.fastmem_arena)
+    {
+      const ARM64Reg temp = emitting_routine ? ARM64Reg::W3 : ARM64Reg::W30;
+
+      memory_base = EncodeRegTo64(temp);
+      memory_offset = ARM64Reg::W2;
+
+      LSR(temp, addr, PowerPC::BAT_INDEX_SHIFT);
+      LDR(memory_base, MEM_REG, ArithOption(temp, true));
+
+      if (emit_slowmem)
+      {
+        FixupBranch pass = CBNZ(memory_base);
+        slowmem_fixup = B();
+        SetJumpTarget(pass);
+      }
+
+      AND(memory_offset, addr, LogicalImm(PowerPC::BAT_PAGE_SIZE - 1, 64));
+    }
+    else if (emit_slowmem && emitting_routine)
     {
       const ARM64Reg temp1 = flags & BackPatchInfo::FLAG_STORE ? ARM64Reg::W0 : ARM64Reg::W3;
       const ARM64Reg temp2 = ARM64Reg::W2;
@@ -79,11 +106,11 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, bool fastmem, bool do_farcode, AR
       ARM64Reg temp = ARM64Reg::D0;
       temp = ByteswapBeforeStore(this, &m_float_emit, temp, EncodeRegToDouble(RS), flags, true);
 
-      m_float_emit.STR(access_size, temp, MEM_REG, addr);
+      m_float_emit.STR(access_size, temp, memory_base, memory_offset);
     }
     else if ((flags & BackPatchInfo::FLAG_LOAD) && (flags & BackPatchInfo::FLAG_FLOAT))
     {
-      m_float_emit.LDR(access_size, EncodeRegToDouble(RS), MEM_REG, addr);
+      m_float_emit.LDR(access_size, EncodeRegToDouble(RS), memory_base, memory_offset);
 
       ByteswapAfterLoad(this, &m_float_emit, EncodeRegToDouble(RS), EncodeRegToDouble(RS), flags,
                         true, false);
@@ -94,44 +121,44 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, bool fastmem, bool do_farcode, AR
       temp = ByteswapBeforeStore(this, &m_float_emit, temp, RS, flags, true);
 
       if (flags & BackPatchInfo::FLAG_SIZE_32)
-        STR(temp, MEM_REG, addr);
+        STR(temp, memory_base, memory_offset);
       else if (flags & BackPatchInfo::FLAG_SIZE_16)
-        STRH(temp, MEM_REG, addr);
+        STRH(temp, memory_base, memory_offset);
       else
-        STRB(temp, MEM_REG, addr);
+        STRB(temp, memory_base, memory_offset);
     }
     else if (flags & BackPatchInfo::FLAG_ZERO_256)
     {
       // This literally only stores 32bytes of zeros to the target address
       ARM64Reg temp = ARM64Reg::X30;
-      ADD(temp, addr, MEM_REG);
+      ADD(temp, memory_base, memory_offset);
       STP(IndexType::Signed, ARM64Reg::ZR, ARM64Reg::ZR, temp, 0);
       STP(IndexType::Signed, ARM64Reg::ZR, ARM64Reg::ZR, temp, 16);
     }
     else
     {
       if (flags & BackPatchInfo::FLAG_SIZE_32)
-        LDR(RS, MEM_REG, addr);
+        LDR(RS, memory_base, memory_offset);
       else if (flags & BackPatchInfo::FLAG_SIZE_16)
-        LDRH(RS, MEM_REG, addr);
+        LDRH(RS, memory_base, memory_offset);
       else if (flags & BackPatchInfo::FLAG_SIZE_8)
-        LDRB(RS, MEM_REG, addr);
+        LDRB(RS, memory_base, memory_offset);
 
       ByteswapAfterLoad(this, &m_float_emit, RS, RS, flags, true, false);
     }
   }
   const u8* fastmem_end = GetCodePtr();
 
-  if (!fastmem || do_farcode)
+  if (emit_slowmem)
   {
     const bool memcheck = jo.memcheck && !emitting_routine;
 
-    if (fastmem && do_farcode)
+    if (emit_fastmem)
     {
       in_far_code = true;
       SwitchToFarCode();
 
-      if (!emitting_routine)
+      if (jo.fastmem_arena && !emitting_routine)
       {
         FastmemArea* fastmem_area = &m_fault_to_handler[fastmem_end];
         fastmem_area->fastmem_code = fastmem_start;
@@ -202,7 +229,7 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, bool fastmem, bool do_farcode, AR
     }
     else if (flags & BackPatchInfo::FLAG_ZERO_256)
     {
-      MOVP2R(ARM64Reg::X8, &PowerPC::ClearCacheLine);
+      MOVP2R(ARM64Reg::X8, &PowerPC::ClearDCacheLine);
       BLR(ARM64Reg::X8);
     }
     else
@@ -261,7 +288,7 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, bool fastmem, bool do_farcode, AR
 
   if (in_far_code)
   {
-    if (emitting_routine)
+    if (slowmem_fixup)
     {
       FixupBranch done = B();
       SwitchToNearCode();
@@ -275,19 +302,8 @@ void JitArm64::EmitBackpatchRoutine(u32 flags, bool fastmem, bool do_farcode, AR
   }
 }
 
-bool JitArm64::HandleFastmemFault(uintptr_t access_address, SContext* ctx)
+bool JitArm64::HandleFastmemFault(SContext* ctx)
 {
-  if (!(access_address >= (uintptr_t)Memory::physical_base &&
-        access_address < (uintptr_t)Memory::physical_base + 0x100010000) &&
-      !(access_address >= (uintptr_t)Memory::logical_base &&
-        access_address < (uintptr_t)Memory::logical_base + 0x100010000))
-  {
-    ERROR_LOG_FMT(DYNA_REC,
-                  "Exception handler - access below memory space. PC: {:#018x} {:#018x} < {:#018x}",
-                  ctx->CTX_PC, access_address, (uintptr_t)Memory::physical_base);
-    return false;
-  }
-
   const u8* pc = reinterpret_cast<const u8*>(ctx->CTX_PC);
   auto slow_handler_iter = m_fault_to_handler.upper_bound(pc);
 

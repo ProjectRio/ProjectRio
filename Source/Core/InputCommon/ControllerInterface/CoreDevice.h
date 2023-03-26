@@ -226,6 +226,7 @@ public:
   Device::Input* FindInput(std::string_view name, const Device* def_dev) const;
   Device::Output* FindOutput(std::string_view name, const Device* def_dev) const;
 
+  std::vector<std::shared_ptr<Device>> GetAllDevices() const;
   std::vector<std::string> GetAllDeviceStrings() const;
   bool HasDefaultDevice() const;
   std::string GetDefaultDeviceString() const;
@@ -237,6 +238,8 @@ public:
                                           std::chrono::milliseconds initial_wait,
                                           std::chrono::milliseconds confirmation_wait,
                                           std::chrono::milliseconds maximum_wait) const;
+
+  std::recursive_mutex& GetDevicesMutex() const { return m_devices_mutex; }
 
 protected:
   // Exclusively needed when reading/writing "m_devices"

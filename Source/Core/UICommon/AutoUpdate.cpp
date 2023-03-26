@@ -3,29 +3,33 @@
 
 #include "UICommon/AutoUpdate.h"
 
+#include <cstdlib>
 #include <string>
 
 #include <fmt/format.h>
 #include <picojson.h>
 
+#include "Common/CommonFuncs.h"
 #include "Common/CommonPaths.h"
 #include "Common/FileUtil.h"
 #include "Common/HttpRequest.h"
 #include "Common/Logging/Log.h"
+#include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
 #include "Common/Version.h"
 
 #ifdef _WIN32
 #include <Windows.h>
-#endif
-
-#ifdef __APPLE__
-#include <sys/stat.h>
+#else
 #include <sys/types.h>
 #include <unistd.h>
 #endif
 
-#if defined _WIN32 || defined __APPLE__
+#ifdef __APPLE__
+#include <sys/stat.h>
+#endif
+
+#if defined(_WIN32) || defined(__APPLE__)
 #define OS_SUPPORTS_UPDATER
 #endif
 
@@ -34,28 +38,35 @@
 namespace
 {
 bool s_update_triggered = false;
-#ifdef _WIN32
 
-const char UPDATER_FILENAME[] = "Updater.exe";
-const char UPDATER_RELOC_FILENAME[] = "Updater.2.exe";
-
-#elif defined(__APPLE__)
-
-const char UPDATER_FILENAME[] = "Dolphin Updater.app";
-const char UPDATER_RELOC_FILENAME[] = ".Dolphin Updater.2.app";
-
+#ifdef __APPLE__
+const char UPDATER_CONTENT_PATH[] = "/Contents/MacOS/Dolphin Updater";
 #endif
 
 #ifdef OS_SUPPORTS_UPDATER
+
 const char UPDATER_LOG_FILE[] = "Updater.log";
+
+std::string UpdaterPath(bool relocated = false)
+{
+  std::string path(File::GetExeDirectory() + DIR_SEP);
+#ifdef __APPLE__
+  if (relocated)
+    path += ".Dolphin Updater.2.app";
+  else
+    path += "Dolphin Updater.app";
+  return path;
+#else
+  return path + "Updater.exe";
+#endif
+}
 
 std::string MakeUpdaterCommandLine(const std::map<std::string, std::string>& flags)
 {
 #ifdef __APPLE__
-  std::string cmdline = "\"" + File::GetExeDirectory() + DIR_SEP + UPDATER_RELOC_FILENAME +
-                        "/Contents/MacOS/Dolphin Updater\"";
+  std::string cmdline = "\"" + UpdaterPath(true) + UPDATER_CONTENT_PATH + "\"";
 #else
-  std::string cmdline = File::GetExeDirectory() + DIR_SEP + UPDATER_RELOC_FILENAME;
+  std::string cmdline = UpdaterPath();
 #endif
 
   cmdline += " ";
@@ -70,17 +81,14 @@ std::string MakeUpdaterCommandLine(const std::map<std::string, std::string>& fla
   return cmdline;
 }
 
-// Used to remove the relocated updater file once we don't need it anymore.
+#ifdef __APPLE__
 void CleanupFromPreviousUpdate()
 {
-  std::string reloc_updater_path = File::GetExeDirectory() + DIR_SEP + UPDATER_RELOC_FILENAME;
-
-#ifdef __APPLE__
-  File::DeleteDirRecursively(reloc_updater_path);
-#else
-  File::Delete(reloc_updater_path);
-#endif
+  // Remove the relocated updater file.
+  File::DeleteDirRecursively(UpdaterPath(true));
 }
+#endif
+
 #endif
 
 // This ignores i18n because most of the text in there (change descriptions) is only going to be
@@ -128,7 +136,7 @@ std::string GenerateChangelog(const picojson::array& versions)
 
 bool AutoUpdateChecker::SystemSupportsAutoUpdates()
 {
-#if defined(AUTOUPDATE) && (defined(_WIN32) || defined(__APPLE__))
+#if defined(AUTOUPDATE) && defined(OS_SUPPORTS_UPDATER)
   return true;
 #else
   return false;
@@ -155,26 +163,49 @@ bool AutoUpdateChecker::SystemSupportsAutoUpdates()
 //#endif
 //}
 
+static std::string GetUpdateServerUrl()
+{
+  auto server_url = std::getenv("DOLPHIN_UPDATE_SERVER_URL");
+  if (server_url)
+    return server_url;
+  return "https://dolphin-emu.org";
+}
+
+static u32 GetOwnProcessId()
+{
+#ifdef _WIN32
+  return GetCurrentProcessId();
+#else
+  return getpid();
+#endif
+}
+
 void AutoUpdateChecker::CheckForUpdate(std::string_view update_track,
-                                       std::string_view hash_override)
+                                       std::string_view hash_override, const CheckType check_type)
 {
   // Don't bother checking if updates are not supported.
   //if (!SystemSupportsAutoUpdates()) 
   //  return;
 
-#ifdef OS_SUPPORTS_UPDATER
+#ifdef __APPLE__
   CleanupFromPreviousUpdate();
 #endif
 
   // This url returns a json containing info about the latest release
   std::string url = "https://api.github.com/repos/ProjectRio/ProjectRio/releases/latest";
   Common::HttpRequest::Headers headers = {{"user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36"}};
+  //std::string_view version_hash = hash_override.empty() ? Common::GetScmRevGitStr() : hash_override;
+  //std::string url = fmt::format("{}/update/check/v1/{}/{}/{}", GetUpdateServerUrl(), update_track,
+  //                              version_hash, GetPlatformID());
+
+  const bool is_manual_check = check_type == CheckType::Manual;
 
   Common::HttpRequest req{std::chrono::seconds{10}};
   auto resp = req.Get(url, headers);
   if (!resp)
   {
-    ERROR_LOG_FMT(COMMON, "Auto-update request failed");
+    if (is_manual_check)
+      CriticalAlertFmtT("Unable to contact update server.");
     return;
   }
   const std::string contents(reinterpret_cast<char*>(resp->data()), resp->size());
@@ -184,7 +215,7 @@ void AutoUpdateChecker::CheckForUpdate(std::string_view update_track,
   const std::string err = picojson::parse(json, contents);
   if (!err.empty())
   {
-    ERROR_LOG_FMT(COMMON, "Invalid JSON received from auto-update service: {}", err);
+    CriticalAlertFmtT("Invalid JSON received from auto-update service : {0}", err);
     return;
   }
   picojson::object obj = json.get<picojson::object>();
@@ -192,14 +223,39 @@ void AutoUpdateChecker::CheckForUpdate(std::string_view update_track,
   // check if latest version == current
   if (obj["tag_name"].get<std::string>() == Common::GetRioRevStr())
   {
+    if (is_manual_check)
+      SuccessAlertFmtT("You are running the latest version available on this update track.");
     INFO_LOG_FMT(COMMON, "Auto-update status: we are up to date.");
     return;
   }
+
   OnUpdateAvailable(obj["tag_name"].get<std::string>(), obj["body"].get<std::string>());
+
+  /*
+  NewVersionInformation nvi;
+  nvi.this_manifest_url = obj["old"].get<picojson::object>()["manifest"].get<std::string>();
+  nvi.next_manifest_url = obj["new"].get<picojson::object>()["manifest"].get<std::string>();
+  nvi.content_store_url = obj["content-store"].get<std::string>();
+  nvi.new_shortrev = obj["new"].get<picojson::object>()["name"].get<std::string>();
+  nvi.new_hash = obj["new"].get<picojson::object>()["hash"].get<std::string>();
+
+  // TODO: generate the HTML changelog from the JSON information.
+  nvi.changelog_html = GenerateChangelog(obj["changelog"].get<picojson::array>());
+
+  if (std::getenv("DOLPHIN_UPDATE_TEST_DONE"))
+  {
+    // We are at end of updater test flow, send a message to server, which will kill us.
+    req.Get(fmt::format("{}/update-test-done/{}", GetUpdateServerUrl(), GetOwnProcessId()));
+  }
+  else
+  {
+    OnUpdateAvailable(nvi);
+  }
+  */
 }
 
 void AutoUpdateChecker::TriggerUpdate(const AutoUpdateChecker::NewVersionInformation& info,
-                                      AutoUpdateChecker::RestartMode restart_mode)
+                                      const AutoUpdateChecker::RestartMode restart_mode)
 {
   // Check to make sure we don't already have an update triggered
   if (s_update_triggered)
@@ -214,37 +270,37 @@ void AutoUpdateChecker::TriggerUpdate(const AutoUpdateChecker::NewVersionInforma
   updater_flags["this-manifest-url"] = info.this_manifest_url;
   updater_flags["next-manifest-url"] = info.next_manifest_url;
   updater_flags["content-store-url"] = info.content_store_url;
-#ifdef _WIN32
-  updater_flags["parent-pid"] = std::to_string(GetCurrentProcessId());
-#else
-  updater_flags["parent-pid"] = std::to_string(getpid());
-#endif
+  updater_flags["parent-pid"] = std::to_string(GetOwnProcessId());
   updater_flags["install-base-path"] = File::GetExeDirectory();
   updater_flags["log-file"] = File::GetUserPath(D_LOGS_IDX) + UPDATER_LOG_FILE;
 
   if (restart_mode == RestartMode::RESTART_AFTER_UPDATE)
     updater_flags["binary-to-restart"] = File::GetExePath();
 
-  // Copy the updater so it can update itself if needed.
-  std::string updater_path = File::GetExeDirectory() + DIR_SEP + UPDATER_FILENAME;
-  std::string reloc_updater_path = File::GetExeDirectory() + DIR_SEP + UPDATER_RELOC_FILENAME;
-
 #ifdef __APPLE__
-  File::CopyDir(updater_path, reloc_updater_path);
-  chmod((reloc_updater_path + "/Contents/MacOS/Dolphin Updater").c_str(), 0700);
-#else
-  File::Copy(updater_path, reloc_updater_path);
+  // Copy the updater so it can update itself if needed.
+  const std::string reloc_updater_path = UpdaterPath(true);
+  if (!File::Copy(UpdaterPath(), reloc_updater_path))
+  {
+    CriticalAlertFmtT("Unable to create updater copy.");
+    return;
+  }
+  if (chmod((reloc_updater_path + UPDATER_CONTENT_PATH).c_str(), 0700) != 0)
+  {
+    CriticalAlertFmtT("Unable to set permissions on updater copy.");
+    return;
+  }
 #endif
 
   // Run the updater!
-  const std::string command_line = MakeUpdaterCommandLine(updater_flags);
+  std::string command_line = MakeUpdaterCommandLine(updater_flags);
   INFO_LOG_FMT(COMMON, "Updater command line: {}", command_line);
 
 #ifdef _WIN32
-  STARTUPINFO sinfo = {sizeof(sinfo)};
+  STARTUPINFO sinfo{.cb = sizeof(sinfo)};
   sinfo.dwFlags = STARTF_FORCEOFFFEEDBACK;  // No hourglass cursor after starting the process.
   PROCESS_INFORMATION pinfo;
-  if (CreateProcessW(UTF8ToWString(reloc_updater_path).c_str(), UTF8ToWString(command_line).data(),
+  if (CreateProcessW(UTF8ToWString(UpdaterPath()).c_str(), UTF8ToWString(command_line).data(),
                      nullptr, nullptr, FALSE, 0, nullptr, nullptr, &sinfo, &pinfo))
   {
     CloseHandle(pinfo.hThread);
@@ -252,12 +308,14 @@ void AutoUpdateChecker::TriggerUpdate(const AutoUpdateChecker::NewVersionInforma
   }
   else
   {
-    ERROR_LOG_FMT(COMMON, "Could not start updater process: error={}", GetLastError());
+    const std::string error = GetLastErrorString();
+    CriticalAlertFmtT("Could not start updater process: {0}", error);
   }
 #else
   if (popen(command_line.c_str(), "r") == nullptr)
   {
-    ERROR_LOG_FMT(COMMON, "Could not start updater process: error={}", errno);
+    const std::string error = LastStrerrorString();
+    CriticalAlertFmtT("Could not start updater process: {0}", error);
   }
 #endif
 

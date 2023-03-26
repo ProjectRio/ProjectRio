@@ -3,6 +3,7 @@ add_library(core
   ActionReplay.h
   ARDecrypt.cpp
   ARDecrypt.h
+  Boot/AncastTypes.h
   Boot/Boot_BS2Emu.cpp
   Boot/Boot_WiiWAD.cpp
   Boot/Boot.cpp
@@ -146,6 +147,8 @@ add_library(core
   HW/DSPHLE/MailHandler.h
   HW/DSPHLE/UCodes/ASnd.cpp
   HW/DSPHLE/UCodes/ASnd.h
+  HW/DSPHLE/UCodes/AESnd.cpp
+  HW/DSPHLE/UCodes/AESnd.h
   HW/DSPHLE/UCodes/AX.cpp
   HW/DSPHLE/UCodes/AX.h
   HW/DSPHLE/UCodes/AXStructs.h
@@ -279,6 +282,8 @@ add_library(core
   HW/WiimoteCommon/WiimoteReport.h
   HW/WiimoteEmu/Camera.cpp
   HW/WiimoteEmu/Camera.h
+  HW/WiimoteEmu/DesiredWiimoteState.cpp
+  HW/WiimoteEmu/DesiredWiimoteState.h
   HW/WiimoteEmu/Dynamics.cpp
   HW/WiimoteEmu/Dynamics.h
   HW/WiimoteEmu/EmuSubroutines.cpp
@@ -286,6 +291,7 @@ add_library(core
   HW/WiimoteEmu/Encryption.h
   HW/WiimoteEmu/Extension/Classic.cpp
   HW/WiimoteEmu/Extension/Classic.h
+  HW/WiimoteEmu/Extension/DesiredExtensionState.h
   HW/WiimoteEmu/Extension/DrawsomeTablet.cpp
   HW/WiimoteEmu/Extension/DrawsomeTablet.h
   HW/WiimoteEmu/Extension/Drums.cpp
@@ -296,6 +302,8 @@ add_library(core
   HW/WiimoteEmu/Extension/Guitar.h
   HW/WiimoteEmu/Extension/Nunchuk.cpp
   HW/WiimoteEmu/Extension/Nunchuk.h
+  HW/WiimoteEmu/Extension/Shinkansen.cpp
+  HW/WiimoteEmu/Extension/Shinkansen.h
   HW/WiimoteEmu/Extension/TaTaCon.cpp
   HW/WiimoteEmu/Extension/TaTaCon.h
   HW/WiimoteEmu/Extension/Turntable.cpp
@@ -358,6 +366,11 @@ add_library(core
   IOS/Network/KD/NetKDTime.h
   IOS/Network/KD/NWC24Config.cpp
   IOS/Network/KD/NWC24Config.h
+  IOS/Network/KD/NWC24DL.cpp
+  IOS/Network/KD/NWC24DL.h
+  IOS/Network/KD/VFF/VFFUtil.cpp
+  IOS/Network/KD/VFF/VFFUtil.h
+  IOS/Network/KD/WC24File.h
   IOS/Network/MACUtils.cpp
   IOS/Network/MACUtils.h
   IOS/Network/NCD/Manage.cpp
@@ -388,6 +401,8 @@ add_library(core
   IOS/USB/Bluetooth/WiimoteHIDAttr.h
   IOS/USB/Common.cpp
   IOS/USB/Common.h
+  IOS/USB/Emulated/Skylander.cpp
+  IOS/USB/Emulated/Skylander.h
   IOS/USB/Host.cpp
   IOS/USB/Host.h
   IOS/USB/OH0/OH0.cpp
@@ -445,6 +460,8 @@ add_library(core
   PowerPC/CachedInterpreter/InterpreterBlockCache.h
   PowerPC/ConditionRegister.cpp
   PowerPC/ConditionRegister.h
+  PowerPC/Expression.cpp
+  PowerPC/Expression.h
   PowerPC/Interpreter/ExceptionUtils.h
   PowerPC/Interpreter/Interpreter_Branch.cpp
   PowerPC/Interpreter/Interpreter_FloatingPoint.cpp
@@ -589,6 +606,7 @@ PUBLIC
   cubeb
   discio
   enet
+  expr
   inputcommon
   ${MBEDTLS_LIBRARIES}
   pugixml
@@ -600,6 +618,7 @@ PUBLIC
   videosoftware
 
 PRIVATE
+  FatFs
   fmt::fmt
   ${LZO}
   ZLIB::ZLIB
@@ -640,6 +659,10 @@ if(ENABLE_VULKAN)
   target_link_libraries(core PUBLIC videovulkan)
 endif()
 
+if(APPLE)
+  target_link_libraries(core PUBLIC videometal)
+endif()
+
 if(USE_MGBA)
   target_sources(core PRIVATE
     HW/GBACore.cpp
@@ -656,6 +679,8 @@ if(WIN32)
     HW/EXI/BBA/TAP_Win32.cpp
     HW/EXI/BBA/TAP_Win32.h
     HW/EXI/BBA/XLINK_KAI_BBA.cpp
+    HW/EXI/BBA/BuiltIn.cpp
+    HW/EXI/BBA/BuiltIn.h
     HW/WiimoteReal/IOWin.cpp
     HW/WiimoteReal/IOWin.h
   )
@@ -671,12 +696,16 @@ elseif(APPLE)
     HW/EXI/BBA/TAP_Apple.cpp
     HW/EXI/BBA/TAPServer_Apple.cpp
     HW/EXI/BBA/XLINK_KAI_BBA.cpp
+    HW/EXI/BBA/BuiltIn.cpp
+    HW/EXI/BBA/BuiltIn.h
   )
   target_link_libraries(core PUBLIC ${IOB_LIBRARY})
 elseif(UNIX)
   target_sources(core PRIVATE
     HW/EXI/BBA/TAP_Unix.cpp
     HW/EXI/BBA/XLINK_KAI_BBA.cpp
+    HW/EXI/BBA/BuiltIn.cpp
+    HW/EXI/BBA/BuiltIn.h
   )
   if(ANDROID)
     target_sources(core PRIVATE

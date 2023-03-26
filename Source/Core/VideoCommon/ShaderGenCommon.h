@@ -18,6 +18,7 @@
 #include "Common/StringUtil.h"
 #include "Common/TypeUtils.h"
 
+#include "VideoCommon/AbstractShader.h"
 #include "VideoCommon/VideoCommon.h"
 
 /**
@@ -176,6 +177,9 @@ union ShaderHostConfig
   BitField<24, 1, bool, u32> manual_texture_sampling;
   BitField<25, 1, bool, u32> manual_texture_sampling_custom_texture_sizes;
   BitField<26, 1, bool, u32> backend_sampler_lod_bias;
+  BitField<27, 1, bool, u32> backend_dynamic_vertex_loader;
+  BitField<28, 1, bool, u32> backend_vs_point_line_expand;
+  BitField<29, 1, bool, u32> backend_gl_layer_in_fs;
 
   static ShaderHostConfig GetCurrent();
 };
@@ -189,10 +193,18 @@ void WriteBitfieldExtractHeader(ShaderCode& out, APIType api_type,
                                 const ShaderHostConfig& host_config);
 
 void GenerateVSOutputMembers(ShaderCode& object, APIType api_type, u32 texgens,
-                             const ShaderHostConfig& host_config, std::string_view qualifier);
+                             const ShaderHostConfig& host_config, std::string_view qualifier,
+                             ShaderStage stage);
 
 void AssignVSOutputMembers(ShaderCode& object, std::string_view a, std::string_view b, u32 texgens,
                            const ShaderHostConfig& host_config);
+
+void GenerateLineOffset(ShaderCode& object, std::string_view indent0, std::string_view indent1,
+                        std::string_view pos_a, std::string_view pos_b, std::string_view sign);
+
+void GenerateVSLineExpansion(ShaderCode& object, std::string_view indent, u32 texgens);
+
+void GenerateVSPointExpansion(ShaderCode& object, std::string_view indent, u32 texgens);
 
 // We use the flag "centroid" to fix some MSAA rendering bugs. With MSAA, the
 // pixel shader will be executed for each pixel which has at least one passed sample.
@@ -220,57 +232,34 @@ void WriteSwitch(ShaderCode& out, APIType ApiType, std::string_view variable,
                  const Common::EnumMap<std::string_view, last_member>& values, int indent,
                  bool break_)
 {
-  const bool make_switch = (ApiType == APIType::D3D);
-
   // The second template argument is needed to avoid compile errors from ambiguity with multiple
   // enums with the same number of members in GCC prior to 8.  See https://godbolt.org/z/xcKaW1seW
   // and https://godbolt.org/z/hz7Yqq1P5
   using enum_type = decltype(last_member);
 
-  // {:{}} is used to indent by formatting an empty string with a variable width
-  if (make_switch)
-  {
-    out.Write("{:{}}switch ({}) {{\n", "", indent, variable);
-    for (u32 i = 0; i <= static_cast<u32>(last_member); i++)
+  // Generate a tree of if statements recursively
+  // std::function must be used because auto won't capture before initialization and thus can't be
+  // used recursively
+  std::function<void(u32, u32, u32)> BuildTree = [&](u32 cur_indent, u32 low, u32 high) {
+    // Each generated statement is for low <= x < high
+    if (high == low + 1)
     {
-      const enum_type key = static_cast<enum_type>(i);
-
-      // Assumes existence of an EnumFormatter
-      out.Write("{:{}}case {:s}:\n", "", indent, key);
+      // Down to 1 case (low <= x < low + 1 means x == low)
+      const enum_type key = static_cast<enum_type>(low);
       // Note that this indentation behaves poorly for multi-line code
-      if (!values[key].empty())
-        out.Write("{:{}}  {}\n", "", indent, values[key]);
-      if (break_)
-        out.Write("{:{}}  break;\n", "", indent);
+      out.Write("{:{}}{}  // {}\n", "", cur_indent, values[key], key);
     }
-    out.Write("{:{}}}}\n", "", indent);
-  }
-  else
-  {
-    // Generate a tree of if statements recursively
-    // std::function must be used because auto won't capture before initialization and thus can't be
-    // used recursively
-    std::function<void(u32, u32, u32)> BuildTree = [&](u32 cur_indent, u32 low, u32 high) {
-      // Each generated statement is for low <= x < high
-      if (high == low + 1)
-      {
-        // Down to 1 case (low <= x < low + 1 means x == low)
-        const enum_type key = static_cast<enum_type>(low);
-        // Note that this indentation behaves poorly for multi-line code
-        out.Write("{:{}}{}  // {}\n", "", cur_indent, values[key], key);
-      }
-      else
-      {
-        u32 mid = low + ((high - low) / 2);
-        out.Write("{:{}}if ({} < {}u) {{\n", "", cur_indent, variable, mid);
-        BuildTree(cur_indent + 2, low, mid);
-        out.Write("{:{}}}} else {{\n", "", cur_indent);
-        BuildTree(cur_indent + 2, mid, high);
-        out.Write("{:{}}}}\n", "", cur_indent);
-      }
-    };
-    BuildTree(indent, 0, static_cast<u32>(last_member) + 1);
-  }
+    else
+    {
+      u32 mid = low + ((high - low) / 2);
+      out.Write("{:{}}if ({} < {}u) {{\n", "", cur_indent, variable, mid);
+      BuildTree(cur_indent + 2, low, mid);
+      out.Write("{:{}}}} else {{\n", "", cur_indent);
+      BuildTree(cur_indent + 2, mid, high);
+      out.Write("{:{}}}}\n", "", cur_indent);
+    }
+  };
+  BuildTree(indent, 0, static_cast<u32>(last_member) + 1);
 }
 
 // Constant variable names
@@ -323,7 +312,21 @@ static const char s_shader_uniforms[] = "\tuint    components;\n"
                                         "\tuint4   xfmem_pack1[8];\n"
                                         "\tfloat4 " I_CACHED_TANGENT ";\n"
                                         "\tfloat4 " I_CACHED_BINORMAL ";\n"
+                                        "\tuint vertex_stride;\n"
+                                        "\tuint vertex_offset_rawnormal;\n"
+                                        "\tuint vertex_offset_rawtangent;\n"
+                                        "\tuint vertex_offset_rawbinormal;\n"
+                                        "\tuint vertex_offset_rawpos;\n"
+                                        "\tuint vertex_offset_posmtx;\n"
+                                        "\tuint vertex_offset_rawcolor0;\n"
+                                        "\tuint vertex_offset_rawcolor1;\n"
+                                        "\tuint4 vertex_offset_rawtex[2];\n"  // std140 is pain
                                         "\t#define xfmem_texMtxInfo(i) (xfmem_pack1[(i)].x)\n"
                                         "\t#define xfmem_postMtxInfo(i) (xfmem_pack1[(i)].y)\n"
                                         "\t#define xfmem_color(i) (xfmem_pack1[(i)].z)\n"
                                         "\t#define xfmem_alpha(i) (xfmem_pack1[(i)].w)\n";
+
+static const char s_geometry_shader_uniforms[] = "\tfloat4 " I_STEREOPARAMS ";\n"
+                                                 "\tfloat4 " I_LINEPTPARAMS ";\n"
+                                                 "\tint4 " I_TEXOFFSET ";\n"
+                                                 "\tuint vs_expand;\n";

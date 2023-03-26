@@ -36,8 +36,9 @@
 
 #include "UICommon/DiscordPresence.h"
 
+#include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/Fifo.cpp"
-#include "VideoCommon/RenderBase.h"
+#include "VideoCommon/Present.h"
 #include "VideoCommon/VideoConfig.h"
 
 static thread_local bool tls_is_host_thread = false;
@@ -76,9 +77,9 @@ void Host::SetRenderHandle(void* handle)
     return;
 
   m_render_handle = handle;
-  if (g_renderer)
+  if (g_presenter)
   {
-    g_renderer->ChangeSurface(handle);
+    g_presenter->ChangeSurface(handle);
     g_controller_interface.ChangeWindow(handle);
   }
 }
@@ -114,9 +115,11 @@ static void RunWithGPUThreadInactive(std::function<void()> f)
     // the CPU and GPU threads are the same thread, and we already checked for the GPU thread.)
 
     const bool was_running = Core::GetState() == Core::State::Running;
-    Fifo::PauseAndLock(true, was_running);
+    auto& system = Core::System::GetInstance();
+    auto& fifo = system.GetFifo();
+    fifo.PauseAndLock(system, true, was_running);
     f();
-    Fifo::PauseAndLock(false, was_running);
+    fifo.PauseAndLock(system, false, was_running);
   }
   else
   {
@@ -147,11 +150,11 @@ bool Host::GetRenderFullFocus()
 void Host::SetRenderFocus(bool focus)
 {
   m_render_focus = focus;
-  if (g_renderer && m_render_fullscreen && g_ActiveConfig.ExclusiveFullscreenEnabled())
+  if (g_gfx && m_render_fullscreen && g_ActiveConfig.ExclusiveFullscreenEnabled())
   {
     RunWithGPUThreadInactive([focus] {
       if (!Config::Get(Config::MAIN_RENDER_TO_MAIN))
-        g_renderer->SetFullscreen(focus);
+        g_gfx->SetFullscreen(focus);
     });
   }
 }
@@ -179,17 +182,16 @@ void Host::SetRenderFullscreen(bool fullscreen)
 {
   m_render_fullscreen = fullscreen;
 
-  if (g_renderer && g_renderer->IsFullscreen() != fullscreen &&
-      g_ActiveConfig.ExclusiveFullscreenEnabled())
+  if (g_gfx && g_gfx->IsFullscreen() != fullscreen && g_ActiveConfig.ExclusiveFullscreenEnabled())
   {
-    RunWithGPUThreadInactive([fullscreen] { g_renderer->SetFullscreen(fullscreen); });
+    RunWithGPUThreadInactive([fullscreen] { g_gfx->SetFullscreen(fullscreen); });
   }
 }
 
 void Host::ResizeSurface(int new_width, int new_height)
 {
-  if (g_renderer)
-    g_renderer->ResizeSurface();
+  if (g_presenter)
+    g_presenter->ResizeSurface();
 }
 
 std::vector<std::string> Host_GetPreferredLocales()
@@ -284,6 +286,30 @@ void Host_TitleChanged()
   // TODO: Not sure if the NetPlay check is needed.
   if (!NetPlay::IsNetPlayRunning())
     Discord::UpdateDiscordPresence();
+#endif
+}
+
+void Host_UpdateDiscordClientID(const std::string& client_id)
+{
+#ifdef USE_DISCORD_PRESENCE
+  Discord::UpdateClientID(client_id);
+#endif
+}
+
+bool Host_UpdateDiscordPresenceRaw(const std::string& details, const std::string& state,
+                                   const std::string& large_image_key,
+                                   const std::string& large_image_text,
+                                   const std::string& small_image_key,
+                                   const std::string& small_image_text,
+                                   const int64_t start_timestamp, const int64_t end_timestamp,
+                                   const int party_size, const int party_max)
+{
+#ifdef USE_DISCORD_PRESENCE
+  return Discord::UpdateDiscordPresenceRaw(details, state, large_image_key, large_image_text,
+                                           small_image_key, small_image_text, start_timestamp,
+                                           end_timestamp, party_size, party_max);
+#else
+  return false;
 #endif
 }
 

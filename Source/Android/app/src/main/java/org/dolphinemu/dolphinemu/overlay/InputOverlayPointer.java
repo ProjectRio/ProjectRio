@@ -7,22 +7,20 @@ import android.os.Handler;
 import android.view.MotionEvent;
 
 import org.dolphinemu.dolphinemu.NativeLibrary;
+import org.dolphinemu.dolphinemu.features.input.model.InputOverrider;
 
 import java.util.ArrayList;
 
 public class InputOverlayPointer
 {
-  public static final int DOUBLE_TAP_A = 0;
-  public static final int DOUBLE_TAP_B = 1;
-  public static final int DOUBLE_TAP_2 = 2;
-  public static final int DOUBLE_TAP_CLASSIC_A = 3;
-
   public static final int MODE_DISABLED = 0;
   public static final int MODE_FOLLOW = 1;
   public static final int MODE_DRAG = 2;
 
-  private final float[] axes = {0f, 0f};
-  private final float[] oldaxes = {0f, 0f};
+  private float mCurrentX = 0.0f;
+  private float mCurrentY = 0.0f;
+  private float mOldX = 0.0f;
+  private float mOldY = 0.0f;
 
   private float mGameCenterX;
   private float mGameCenterY;
@@ -34,9 +32,10 @@ public class InputOverlayPointer
 
   private int mMode;
   private boolean mRecenter;
+  private int mControllerIndex;
 
   private boolean doubleTap = false;
-  private int doubleTapButton;
+  private int mDoubleTapControl;
   private int trackId = -1;
 
   public static ArrayList<Integer> DOUBLE_TAP_OPTIONS = new ArrayList<>();
@@ -49,11 +48,13 @@ public class InputOverlayPointer
     DOUBLE_TAP_OPTIONS.add(NativeLibrary.ButtonType.CLASSIC_BUTTON_A);
   }
 
-  public InputOverlayPointer(Rect surfacePosition, int button, int mode, boolean recenter)
+  public InputOverlayPointer(Rect surfacePosition, int doubleTapControl, int mode, boolean recenter,
+          int controllerIndex)
   {
-    doubleTapButton = button;
+    mDoubleTapControl = doubleTapControl;
     mMode = mode;
     mRecenter = recenter;
+    mControllerIndex = controllerIndex;
 
     mGameCenterX = (surfacePosition.left + surfacePosition.right) / 2.0f;
     mGameCenterY = (surfacePosition.top + surfacePosition.bottom) / 2.0f;
@@ -107,20 +108,21 @@ public class InputOverlayPointer
         break;
     }
 
-    if (trackId == -1)
+    int eventPointerIndex = event.findPointerIndex(trackId);
+    if (trackId == -1 || eventPointerIndex == -1)
       return;
 
     if (mMode == MODE_FOLLOW)
     {
-      axes[0] = (event.getY(event.findPointerIndex(trackId)) - mGameCenterY) * mGameHeightHalfInv;
-      axes[1] = (event.getX(event.findPointerIndex(trackId)) - mGameCenterX) * mGameWidthHalfInv;
+      mCurrentX = (event.getX(eventPointerIndex) - mGameCenterX) * mGameWidthHalfInv;
+      mCurrentY = (event.getY(eventPointerIndex) - mGameCenterY) * mGameHeightHalfInv;
     }
     else if (mMode == MODE_DRAG)
     {
-      axes[0] = oldaxes[0] +
-              (event.getY(event.findPointerIndex(trackId)) - mTouchStartY) * mGameHeightHalfInv;
-      axes[1] = oldaxes[1] +
-              (event.getX(event.findPointerIndex(trackId)) - mTouchStartX) * mGameWidthHalfInv;
+      mCurrentX = mOldX +
+              (event.getX(eventPointerIndex) - mTouchStartX) * mGameWidthHalfInv;
+      mCurrentY = mOldY +
+              (event.getY(eventPointerIndex) - mTouchStartY) * mGameHeightHalfInv;
     }
   }
 
@@ -130,11 +132,10 @@ public class InputOverlayPointer
     {
       if (doubleTap)
       {
-        NativeLibrary.onGamePadEvent(NativeLibrary.TouchScreenDevice,
-                doubleTapButton, NativeLibrary.ButtonState.PRESSED);
-        new Handler()
-                .postDelayed(() -> NativeLibrary.onGamePadEvent(NativeLibrary.TouchScreenDevice,
-                        doubleTapButton, NativeLibrary.ButtonState.RELEASED), 50);
+        InputOverrider.setControlState(mControllerIndex, mDoubleTapControl, 1.0);
+        new Handler().postDelayed(() -> InputOverrider.setControlState(mControllerIndex,
+                        mDoubleTapControl, 0.0),
+                50);
       }
       else
       {
@@ -146,23 +147,23 @@ public class InputOverlayPointer
 
   private void updateOldAxes()
   {
-    oldaxes[0] = axes[0];
-    oldaxes[1] = axes[1];
+    mOldX = mCurrentX;
+    mOldY = mCurrentY;
   }
 
   private void reset()
   {
-    axes[0] = axes[1] = oldaxes[0] = oldaxes[1] = 0f;
+    mCurrentX = mCurrentY = mOldX = mOldY = 0.0f;
   }
 
-  public float[] getAxisValues()
+  public float getX()
   {
-    float[] iraxes = {0f, 0f, 0f, 0f};
-    iraxes[1] = axes[0];
-    iraxes[0] = axes[0];
-    iraxes[3] = axes[1];
-    iraxes[2] = axes[1];
-    return iraxes;
+    return mCurrentX;
+  }
+
+  public float getY()
+  {
+    return mCurrentY;
   }
 
   public void setMode(int mode)

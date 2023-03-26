@@ -32,14 +32,14 @@ PPCSymbolDB::PPCSymbolDB() : debugger{&PowerPC::debug_interface}
 PPCSymbolDB::~PPCSymbolDB() = default;
 
 // Adds the function to the list, unless it's already there
-Common::Symbol* PPCSymbolDB::AddFunction(u32 start_addr)
+Common::Symbol* PPCSymbolDB::AddFunction(const Core::CPUThreadGuard& guard, u32 start_addr)
 {
   // It's already in the list
   if (m_functions.find(start_addr) != m_functions.end())
     return nullptr;
 
   Common::Symbol symbol;
-  if (!PPCAnalyst::AnalyzeFunction(start_addr, symbol))
+  if (!PPCAnalyst::AnalyzeFunction(guard, start_addr, symbol))
     return nullptr;
 
   m_functions[start_addr] = std::move(symbol);
@@ -49,8 +49,8 @@ Common::Symbol* PPCSymbolDB::AddFunction(u32 start_addr)
   return ptr;
 }
 
-void PPCSymbolDB::AddKnownSymbol(u32 startAddr, u32 size, const std::string& name,
-                                 Common::Symbol::Type type)
+void PPCSymbolDB::AddKnownSymbol(const Core::CPUThreadGuard& guard, u32 startAddr, u32 size,
+                                 const std::string& name, Common::Symbol::Type type)
 {
   auto iter = m_functions.find(startAddr);
   if (iter != m_functions.end())
@@ -58,7 +58,7 @@ void PPCSymbolDB::AddKnownSymbol(u32 startAddr, u32 size, const std::string& nam
     // already got it, let's just update name, checksum & size to be sure.
     Common::Symbol* tempfunc = &iter->second;
     tempfunc->Rename(name);
-    tempfunc->hash = HashSignatureDB::ComputeCodeChecksum(startAddr, startAddr + size - 4);
+    tempfunc->hash = HashSignatureDB::ComputeCodeChecksum(guard, startAddr, startAddr + size - 4);
     tempfunc->type = type;
     tempfunc->size = size;
   }
@@ -71,7 +71,7 @@ void PPCSymbolDB::AddKnownSymbol(u32 startAddr, u32 size, const std::string& nam
     tf.address = startAddr;
     if (tf.type == Common::Symbol::Type::Function)
     {
-      PPCAnalyst::AnalyzeFunction(startAddr, tf, size);
+      PPCAnalyst::AnalyzeFunction(guard, startAddr, tf, size);
       // Do not truncate symbol when a size is expected
       if (size != 0 && tf.size != size)
       {
@@ -92,18 +92,20 @@ void PPCSymbolDB::AddKnownSymbol(u32 startAddr, u32 size, const std::string& nam
 Common::Symbol* PPCSymbolDB::GetSymbolFromAddr(u32 addr)
 {
   auto it = m_functions.lower_bound(addr);
-  if (it == m_functions.end())
-    return nullptr;
 
-  // If the address is exactly the start address of a symbol, we're done.
-  if (it->second.address == addr)
-    return &it->second;
-
-  // Otherwise, check whether the address is within the bounds of a symbol.
+  if (it != m_functions.end())
+  {
+    // If the address is exactly the start address of a symbol, we're done.
+    if (it->second.address == addr)
+      return &it->second;
+  }
   if (it != m_functions.begin())
+  {
+    // Otherwise, check whether the address is within the bounds of a symbol.
     --it;
-  if (addr >= it->second.address && addr < it->second.address + it->second.size)
-    return &it->second;
+    if (addr >= it->second.address && addr < it->second.address + it->second.size)
+      return &it->second;
+  }
 
   return nullptr;
 }
@@ -222,7 +224,7 @@ void PPCSymbolDB::LogFunctionCall(u32 addr)
 // This one can load both leftover map files on game discs (like Zelda), and mapfiles
 // produced by SaveSymbolMap below.
 // bad=true means carefully load map files that might not be from exactly the right version
-bool PPCSymbolDB::LoadMap(const std::string& filename, bool bad)
+bool PPCSymbolDB::LoadMap(const Core::CPUThreadGuard& guard, const std::string& filename, bool bad)
 {
   File::IOFile f(filename, "r");
   if (!f)
@@ -250,7 +252,7 @@ bool PPCSymbolDB::LoadMap(const std::string& filename, bool bad)
       continue;
 
     // Support CodeWarrior and Dolphin map
-    if (StringEndsWith(line, " section layout\n") || strcmp(temp, ".text") == 0 ||
+    if (std::string_view{line}.ends_with(" section layout\n") || strcmp(temp, ".text") == 0 ||
         strcmp(temp, ".init") == 0)
     {
       section_name = temp;
@@ -282,7 +284,7 @@ bool PPCSymbolDB::LoadMap(const std::string& filename, bool bad)
     //    3] _stack_addr found as linker generated symbol
     // ...
     //           10] EXILock(func, global) found in exi.a EXIBios.c
-    if (StringEndsWith(temp, "]"))
+    if (std::string_view{temp}.ends_with(']'))
       continue;
 
     // TODO - Handle/Write a parser for:
@@ -298,7 +300,7 @@ bool PPCSymbolDB::LoadMap(const std::string& filename, bool bad)
       constexpr auto is_hex_str = [](const std::string& s) {
         return !s.empty() && s.find_first_not_of("0123456789abcdefABCDEF") == std::string::npos;
       };
-      const std::string stripped_line(StripSpaces(line));
+      const std::string stripped_line(StripWhitespace(line));
       std::istringstream iss(stripped_line);
       iss.imbue(std::locale::classic());
       std::string word;
@@ -405,8 +407,8 @@ bool PPCSymbolDB::LoadMap(const std::string& filename, bool bad)
     if (strlen(name) > 0)
     {
       // Can't compute the checksum if not in RAM
-      bool good = !bad && PowerPC::HostIsInstructionRAMAddress(vaddress) &&
-                  PowerPC::HostIsInstructionRAMAddress(vaddress + size - 4);
+      bool good = !bad && PowerPC::HostIsInstructionRAMAddress(guard, vaddress) &&
+                  PowerPC::HostIsInstructionRAMAddress(guard, vaddress + size - 4);
       if (!good)
       {
         // check for BLR before function
@@ -421,10 +423,10 @@ bool PPCSymbolDB::LoadMap(const std::string& filename, bool bad)
       if (good)
       {
         ++good_count;
-        if (section_name == ".text" || section_name == ".init")
-          AddKnownSymbol(vaddress, size, name, Common::Symbol::Type::Function);
-        else
-          AddKnownSymbol(vaddress, size, name, Common::Symbol::Type::Data);
+        const Common::Symbol::Type type = section_name == ".text" || section_name == ".init" ?
+                                              Common::Symbol::Type::Function :
+                                              Common::Symbol::Type::Data;
+        AddKnownSymbol(guard, vaddress, size, name, type);
       }
       else
       {
@@ -483,7 +485,7 @@ bool PPCSymbolDB::SaveSymbolMap(const std::string& filename) const
 // Notes:
 //  - Dolphin doesn't load back code maps
 //  - It's a custom code map format
-bool PPCSymbolDB::SaveCodeMap(const std::string& filename) const
+bool PPCSymbolDB::SaveCodeMap(const Core::CPUThreadGuard& guard, const std::string& filename) const
 {
   constexpr int SYMBOL_NAME_LIMIT = 30;
   File::IOFile f(filename, "w");
@@ -513,7 +515,7 @@ bool PPCSymbolDB::SaveCodeMap(const std::string& filename) const
     // Write the code
     for (u32 address = symbol.address; address < next_address; address += 4)
     {
-      const std::string disasm = debugger->Disassemble(address);
+      const std::string disasm = debugger->Disassemble(&guard, address);
       f.WriteString(fmt::format("{0:08x} {1:<{2}.{3}} {4}\n", address, symbol.name,
                                 SYMBOL_NAME_LIMIT, SYMBOL_NAME_LIMIT, disasm));
     }

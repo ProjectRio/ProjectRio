@@ -55,8 +55,10 @@ extern const Info<bool> MAIN_SKIP_IPL;
 extern const Info<PowerPC::CPUCore> MAIN_CPU_CORE;
 extern const Info<bool> MAIN_JIT_FOLLOW_BRANCH;
 extern const Info<bool> MAIN_FASTMEM;
+extern const Info<bool> MAIN_ACCURATE_CPU_CACHE;
 // Should really be in the DSP section, but we're kind of stuck with bad decisions made in the past.
 extern const Info<bool> MAIN_DSP_HLE;
+extern const Info<int> MAIN_MAX_FALLBACK;
 extern const Info<int> MAIN_TIMING_VARIANCE;
 extern const Info<bool> MAIN_CPU_THREAD;
 extern const Info<bool> MAIN_SYNC_ON_SKIP_IDLE;
@@ -75,6 +77,9 @@ const Info<std::string>& GetInfoForMemcardPath(ExpansionInterface::Slot slot);
 extern const Info<std::string> MAIN_AGP_CART_A_PATH;
 extern const Info<std::string> MAIN_AGP_CART_B_PATH;
 const Info<std::string>& GetInfoForAGPCartPath(ExpansionInterface::Slot slot);
+extern const Info<std::string> MAIN_GCI_FOLDER_A_PATH;
+extern const Info<std::string> MAIN_GCI_FOLDER_B_PATH;
+const Info<std::string>& GetInfoForGCIPath(ExpansionInterface::Slot slot);
 extern const Info<std::string> MAIN_GCI_FOLDER_A_PATH_OVERRIDE;
 extern const Info<std::string> MAIN_GCI_FOLDER_B_PATH_OVERRIDE;
 const Info<std::string>& GetInfoForGCIPathOverride(ExpansionInterface::Slot slot);
@@ -86,15 +91,19 @@ const Info<ExpansionInterface::EXIDeviceType>& GetInfoForEXIDevice(ExpansionInte
 extern const Info<std::string> MAIN_BBA_MAC;
 extern const Info<std::string> MAIN_BBA_XLINK_IP;
 extern const Info<bool> MAIN_BBA_XLINK_CHAT_OSD;
+extern const Info<std::string> MAIN_BBA_BUILTIN_DNS;
+extern const Info<std::string> MAIN_BBA_BUILTIN_IP;
 const Info<SerialInterface::SIDevices>& GetInfoForSIDevice(int channel);
 const Info<bool>& GetInfoForAdapterRumble(int channel);
 const Info<bool>& GetInfoForSimulateKonga(int channel);
 extern const Info<bool> MAIN_WII_SD_CARD;
+extern const Info<bool> MAIN_WII_SD_CARD_ENABLE_FOLDER_SYNC;
 extern const Info<bool> MAIN_WII_KEYBOARD;
 extern const Info<bool> MAIN_WIIMOTE_CONTINUOUS_SCANNING;
 extern const Info<bool> MAIN_WIIMOTE_ENABLE_SPEAKER;
 extern const Info<bool> MAIN_CONNECT_WIIMOTES_FOR_CONTROLLER_INTERFACE;
 extern const Info<bool> MAIN_MMU;
+extern const Info<bool> MAIN_PAUSE_ON_PANIC;
 extern const Info<int> MAIN_BB_DUMP_PORT;
 extern const Info<bool> MAIN_SYNC_GPU;
 extern const Info<int> MAIN_SYNC_GPU_MAX_DISTANCE;
@@ -176,7 +185,8 @@ extern const Info<std::string> MAIN_DUMP_PATH;
 extern const Info<std::string> MAIN_LOAD_PATH;
 extern const Info<std::string> MAIN_RESOURCEPACK_PATH;
 extern const Info<std::string> MAIN_FS_PATH;
-extern const Info<std::string> MAIN_SD_PATH;
+extern const Info<std::string> MAIN_WII_SD_CARD_IMAGE_PATH;
+extern const Info<std::string> MAIN_WII_SD_CARD_SYNC_FOLDER_PATH;
 extern const Info<std::string> MAIN_WFS_PATH;
 extern const Info<bool> MAIN_SHOW_LAG;
 extern const Info<bool> MAIN_SHOW_FRAME_COUNT;
@@ -204,6 +214,7 @@ extern const Info<bool> MAIN_NETWORK_SSL_DUMP_WRITE;
 extern const Info<bool> MAIN_NETWORK_SSL_VERIFY_CERTIFICATES;
 extern const Info<bool> MAIN_NETWORK_SSL_DUMP_ROOT_CA;
 extern const Info<bool> MAIN_NETWORK_SSL_DUMP_PEER_CERT;
+extern const Info<bool> MAIN_NETWORK_DUMP_BBA;
 extern const Info<bool> MAIN_NETWORK_DUMP_AS_PCAP;
 extern const Info<int> MAIN_NETWORK_TIMEOUT;
 
@@ -226,7 +237,6 @@ extern const Info<ShowCursor> MAIN_SHOW_CURSOR;
 
 extern const Info<bool> MAIN_LOCK_CURSOR;
 extern const Info<std::string> MAIN_INTERFACE_LANGUAGE;
-extern const Info<bool> MAIN_EXTENDED_FPS_INFO;
 extern const Info<bool> MAIN_SHOW_ACTIVE_TITLE;
 extern const Info<bool> MAIN_USE_BUILT_IN_TITLE_DATABASE;
 extern const Info<std::string> MAIN_THEME_NAME;
@@ -331,15 +341,35 @@ extern const Info<std::string> MAIN_USB_PASSTHROUGH_DEVICES;
 std::set<std::pair<u16, u16>> GetUSBDeviceWhitelist();
 void SetUSBDeviceWhitelist(const std::set<std::pair<u16, u16>>& devices);
 
+// Main.EmulatedUSBDevices
+
+extern const Info<bool> MAIN_EMULATE_SKYLANDER_PORTAL;
+
 // GameCube path utility functions
 
 // Replaces NTSC-K with some other region, and doesn't replace non-NTSC-K regions
 DiscIO::Region ToGameCubeRegion(DiscIO::Region region);
+
 // The region argument must be valid for GameCube (i.e. must not be NTSC-K)
-const char* GetDirectoryForRegion(DiscIO::Region region);
+enum class RegionDirectoryStyle
+{
+  Legacy,
+  Modern,
+};
+const char* GetDirectoryForRegion(DiscIO::Region region,
+                                  RegionDirectoryStyle style = RegionDirectoryStyle::Legacy);
+
 std::string GetBootROMPath(const std::string& region_directory);
-std::string GetMemcardPath(ExpansionInterface::Slot slot, DiscIO::Region region,
+// Builds the memory card according to the configuration with the given region and size. If the
+// given region is std::nullopt, the region in the configured path is used if there is one, or the
+// fallback region otherwise.
+std::string GetMemcardPath(ExpansionInterface::Slot slot, std::optional<DiscIO::Region> region,
                            u16 size_mb = 0x80);
 std::string GetMemcardPath(std::string configured_filename, ExpansionInterface::Slot slot,
-                           DiscIO::Region region, u16 size_mb = 0x80);
+                           std::optional<DiscIO::Region> region, u16 size_mb = 0x80);
+bool IsDefaultMemcardPathConfigured(ExpansionInterface::Slot slot);
+std::string GetGCIFolderPath(ExpansionInterface::Slot slot, std::optional<DiscIO::Region> region);
+std::string GetGCIFolderPath(std::string configured_folder, ExpansionInterface::Slot slot,
+                             std::optional<DiscIO::Region> region);
+bool IsDefaultGCIFolderPathConfigured(ExpansionInterface::Slot slot);
 }  // namespace Config

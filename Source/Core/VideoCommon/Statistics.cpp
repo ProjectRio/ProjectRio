@@ -8,11 +8,29 @@
 
 #include <imgui.h>
 
+#include "Core/DolphinAnalytics.h"
+#include "Core/HW/SystemTimers.h"
+
 #include "VideoCommon/BPFunctions.h"
 #include "VideoCommon/VideoCommon.h"
 #include "VideoCommon/VideoConfig.h"
+#include "VideoCommon/VideoEvents.h"
 
 Statistics g_stats;
+
+static Common::EventHook s_before_frame_event =
+    BeforeFrameEvent::Register([] { g_stats.ResetFrame(); }, "Statistics::ResetFrame");
+
+static Common::EventHook s_after_frame_event = AfterFrameEvent::Register(
+    [] {
+      DolphinAnalytics::PerformanceSample perf_sample;
+      perf_sample.speed_ratio = SystemTimers::GetEstimatedEmulationPerformance();
+      perf_sample.num_prims = g_stats.this_frame.num_prims + g_stats.this_frame.num_dl_prims;
+      perf_sample.num_draw_calls = g_stats.this_frame.num_draw_calls;
+      DolphinAnalytics::Instance().ReportPerformanceInfo(std::move(perf_sample));
+    },
+    "Statistics::PerformanceSample");
+
 static bool clear_scissors;
 
 void Statistics::ResetFrame()
@@ -93,6 +111,8 @@ void Statistics::Display() const
   draw_statistic("Vertex Loaders", "%d", num_vertex_loaders);
   draw_statistic("EFB peeks:", "%d", this_frame.num_efb_peeks);
   draw_statistic("EFB pokes:", "%d", this_frame.num_efb_pokes);
+  draw_statistic("Draw dones:", "%d", this_frame.num_draw_done);
+  draw_statistic("Tokens:", "%d/%d", this_frame.num_token, this_frame.num_token_int);
 
   ImGui::Columns(1);
 
@@ -336,12 +356,12 @@ void Statistics::DisplayScissor()
 
     // Visualization of where things are updated on screen with this specific scissor
     ImGui::TableNextColumn();
-    float scale = ImGui::GetTextLineHeight() / EFB_HEIGHT;
+    float scale_height = ImGui::GetTextLineHeight() / EFB_HEIGHT;
     if (show_raw_scissors)
-      scale += ImGui::GetTextLineHeightWithSpacing() / EFB_HEIGHT;
+      scale_height += ImGui::GetTextLineHeightWithSpacing() / EFB_HEIGHT;
     ImVec2 p2 = ImGui::GetCursorScreenPos();
     // Use a height of 1 since we want this to span two table rows (if possible)
-    ImGui::Dummy(ImVec2(EFB_WIDTH * scale, 1));
+    ImGui::Dummy(ImVec2(EFB_WIDTH * scale_height, 1));
     for (size_t i = 0; i < info.m_result.size(); i++)
     {
       // The last entry in the sorted list of results is the one that is used by hardware backends
@@ -350,11 +370,12 @@ void Statistics::DisplayScissor()
       const ImU32 new_col = (col & ~IM_COL32_A_MASK) | (new_alpha << IM_COL32_A_SHIFT);
 
       const auto& r = info.m_result[i];
-      draw_list->AddRectFilled(ImVec2(p2.x + r.rect.left * scale, p2.y + r.rect.top * scale),
-                               ImVec2(p2.x + r.rect.right * scale, p2.y + r.rect.bottom * scale),
-                               new_col);
+      draw_list->AddRectFilled(
+          ImVec2(p2.x + r.rect.left * scale_height, p2.y + r.rect.top * scale_height),
+          ImVec2(p2.x + r.rect.right * scale_height, p2.y + r.rect.bottom * scale_height), new_col);
     }
-    draw_list->AddRect(p2, ImVec2(p2.x + EFB_WIDTH * scale, p2.y + EFB_HEIGHT * scale), light_grey);
+    draw_list->AddRect(
+        p2, ImVec2(p2.x + EFB_WIDTH * scale_height, p2.y + EFB_HEIGHT * scale_height), light_grey);
     ImGui::SameLine();
     ImGui::Text("%d", int(info.m_result.size()));
 
@@ -428,7 +449,7 @@ void Statistics::DisplayScissor()
           draw_scissor_table_header();
           for (size_t i = 0; i < scissors.size(); i++)
             draw_scissor_table_row(i);
-          for (size_t i = scissors.size(); i < scissor_expected_count; i++)
+          for (size_t i = scissors.size(); i < static_cast<size_t>(scissor_expected_count); i++)
             scissor_table_skip_row(i);
           ImGui::EndTable();
         }
@@ -440,7 +461,7 @@ void Statistics::DisplayScissor()
           draw_viewport_table_header();
           for (size_t i = 0; i < scissors.size(); i++)
             draw_viewport_table_row(i);
-          for (size_t i = scissors.size(); i < scissor_expected_count; i++)
+          for (size_t i = scissors.size(); i < static_cast<size_t>(scissor_expected_count); i++)
             viewport_table_skip_row(i);
           ImGui::EndTable();
         }

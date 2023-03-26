@@ -59,6 +59,7 @@ void JitBaseBlockCache::Clear()
 #endif
   m_jit.js.fifoWriteAddresses.clear();
   m_jit.js.pairedQuantizeAddresses.clear();
+  m_jit.js.noSpeculativeConstantsAddresses.clear();
   for (auto& e : block_map)
   {
     DestroyBlock(e.second);
@@ -95,7 +96,7 @@ JitBlock* JitBaseBlockCache::AllocateBlock(u32 em_address)
   JitBlock& b = block_map.emplace(physical_address, JitBlock())->second;
   b.effectiveAddress = em_address;
   b.physicalAddress = physical_address;
-  b.msrBits = MSR.Hex & JIT_CACHE_MSR_MASK;
+  b.msrBits = m_jit.m_ppc_state.msr.Hex & JIT_CACHE_MSR_MASK;
   b.linkData.clear();
   b.fast_block_map_index = 0;
   return &b;
@@ -167,10 +168,14 @@ JitBlock* JitBaseBlockCache::GetBlockFromStartAddress(u32 addr, u32 msr)
 
 const u8* JitBaseBlockCache::Dispatch()
 {
-  JitBlock* block = fast_block_map[FastLookupIndexForAddress(PC)];
+  const auto& ppc_state = m_jit.m_ppc_state;
+  JitBlock* block = fast_block_map[FastLookupIndexForAddress(ppc_state.pc)];
 
-  if (!block || block->effectiveAddress != PC || block->msrBits != (MSR.Hex & JIT_CACHE_MSR_MASK))
-    block = MoveBlockIntoFastCache(PC, MSR.Hex & JIT_CACHE_MSR_MASK);
+  if (!block || block->effectiveAddress != ppc_state.pc ||
+      block->msrBits != (ppc_state.msr.Hex & JIT_CACHE_MSR_MASK))
+  {
+    block = MoveBlockIntoFastCache(ppc_state.pc, ppc_state.msr.Hex & JIT_CACHE_MSR_MASK);
+  }
 
   if (!block)
     return nullptr;
@@ -255,6 +260,7 @@ void JitBaseBlockCache::InvalidateICacheInternal(u32 physical_address, u32 addre
       {
         m_jit.js.fifoWriteAddresses.erase(i);
         m_jit.js.pairedQuantizeAddresses.erase(i);
+        m_jit.js.noSpeculativeConstantsAddresses.erase(i);
       }
     }
   }

@@ -53,7 +53,7 @@ static std::vector<u8> ReadHexString(std::string_view sv)
 {
   if ((sv.size() % 2) == 1)
     return {};
-  if (StringBeginsWith(sv, "0x") || StringBeginsWith(sv, "0X"))
+  if (sv.starts_with("0x") || sv.starts_with("0X"))
     sv = sv.substr(2);
 
   std::vector<u8> result;
@@ -172,9 +172,10 @@ std::optional<Disc> ParseString(std::string_view xml, std::string xml_path)
     for (const auto& patch_subnode : patch_node.children())
     {
       const std::string_view patch_name(patch_subnode.name());
-      if (patch_name == "file")
+      if (patch_name == "file" || patch_name == "dolphin_sys_file")
       {
-        auto& file = patch.m_file_patches.emplace_back();
+        auto& file = patch_name == "dolphin_sys_file" ? patch.m_sys_file_patches.emplace_back() :
+                                                        patch.m_file_patches.emplace_back();
         file.m_disc = patch_subnode.attribute("disc").as_string();
         file.m_external = patch_subnode.attribute("external").as_string();
         file.m_resize = patch_subnode.attribute("resize").as_bool(true);
@@ -183,9 +184,11 @@ std::optional<Disc> ParseString(std::string_view xml, std::string xml_path)
         file.m_fileoffset = patch_subnode.attribute("fileoffset").as_uint(0);
         file.m_length = patch_subnode.attribute("length").as_uint(0);
       }
-      else if (patch_name == "folder")
+      else if (patch_name == "folder" || patch_name == "dolphin_sys_folder")
       {
-        auto& folder = patch.m_folder_patches.emplace_back();
+        auto& folder = patch_name == "dolphin_sys_folder" ?
+                           patch.m_sys_folder_patches.emplace_back() :
+                           patch.m_folder_patches.emplace_back();
         folder.m_disc = patch_subnode.attribute("disc").as_string();
         folder.m_external = patch_subnode.attribute("external").as_string();
         folder.m_resize = patch_subnode.attribute("resize").as_bool(true);
@@ -242,7 +245,7 @@ bool Disc::IsValidForGame(const std::string& game_id, std::optional<u16> revisio
   const int disc_number_int = std::optional<int>(disc_number).value_or(-1);
   const int revision_int = std::optional<int>(revision).value_or(-1);
 
-  if (m_game_filter.m_game && !StringBeginsWith(game_id_full, *m_game_filter.m_game))
+  if (m_game_filter.m_game && !game_id_full.starts_with(*m_game_filter.m_game))
     return false;
   if (m_game_filter.m_developer && game_developer != *m_game_filter.m_developer)
     return false;
@@ -273,7 +276,7 @@ std::vector<Patch> Disc::GeneratePatches(const std::string& game_id) const
           bool replaced = false;
           for (const auto& r : replacements)
           {
-            if (StringBeginsWith(sv, r.first))
+            if (sv.starts_with(r.first))
             {
               for (char c : r.second)
                 result.push_back(c);

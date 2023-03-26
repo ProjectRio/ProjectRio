@@ -11,6 +11,11 @@
 #include "DiscIO/DirectoryBlob.h"
 #include "DiscIO/RiivolutionParser.h"
 
+namespace Core
+{
+class CPUThreadGuard;
+}
+
 namespace DiscIO::Riivolution
 {
 struct SavegameRedirect
@@ -65,11 +70,19 @@ private:
   std::string m_patch_root;
 };
 
-void ApplyPatchesToFiles(const std::vector<Patch>& patches,
+enum class PatchIndex
+{
+  FileSystem,
+  DolphinSysFiles,
+};
+
+void ApplyPatchesToFiles(const std::vector<Patch>& patches, PatchIndex index,
                          std::vector<DiscIO::FSTBuilderNode>* fst,
                          DiscIO::FSTBuilderNode* dol_node);
-void ApplyGeneralMemoryPatches(const std::vector<Patch>& patches);
-void ApplyApploaderMemoryPatches(const std::vector<Patch>& patches, u32 ram_address,
+void ApplyGeneralMemoryPatches(const Core::CPUThreadGuard& guard,
+                               const std::vector<Patch>& patches);
+void ApplyApploaderMemoryPatches(const Core::CPUThreadGuard& guard,
+                                 const std::vector<Patch>& patches, u32 ram_address,
                                  u32 ram_length);
 std::optional<SavegameRedirect>
 ExtractSavegameRedirect(const std::vector<Patch>& riivolution_patches);

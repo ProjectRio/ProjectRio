@@ -22,12 +22,13 @@
 
 // NOTE: Qt likes to be case-sensitive here even though it shouldn't be thus this ugly regex hack
 static const QStringList game_filters{
-    QStringLiteral("*.[gG][cC][mM]"), QStringLiteral("*.[iI][sS][oO]"),
-    QStringLiteral("*.[tT][gG][cC]"), QStringLiteral("*.[cC][iI][sS][oO]"),
-    QStringLiteral("*.[gG][cC][zZ]"), QStringLiteral("*.[wW][bB][fF][sS]"),
-    QStringLiteral("*.[wW][iI][aA]"), QStringLiteral("*.[rR][vV][zZ]"),
-    QStringLiteral("*.[wW][aA][dD]"), QStringLiteral("*.[eE][lL][fF]"),
-    QStringLiteral("*.[dD][oO][lL]"), QStringLiteral("*.[jJ][sS][oO][nN]")};
+    QStringLiteral("*.[gG][cC][mM]"),    QStringLiteral("*.[iI][sS][oO]"),
+    QStringLiteral("*.[tT][gG][cC]"),    QStringLiteral("*.[cC][iI][sS][oO]"),
+    QStringLiteral("*.[gG][cC][zZ]"),    QStringLiteral("*.[wW][bB][fF][sS]"),
+    QStringLiteral("*.[wW][iI][aA]"),    QStringLiteral("*.[rR][vV][zZ]"),
+    QStringLiteral("hif_000000.nfs"),    QStringLiteral("*.[wW][aA][dD]"),
+    QStringLiteral("*.[eE][lL][fF]"),    QStringLiteral("*.[dD][oO][lL]"),
+    QStringLiteral("*.[jJ][sS][oO][nN]")};
 
 GameTracker::GameTracker(QObject* parent) : QFileSystemWatcher(parent)
 {
@@ -36,7 +37,7 @@ GameTracker::GameTracker(QObject* parent) : QFileSystemWatcher(parent)
 
   connect(qApp, &QApplication::aboutToQuit, this, [this] {
     m_processing_halted = true;
-    m_load_thread.Cancel();
+    m_load_thread.Shutdown(true);
   });
   connect(this, &QFileSystemWatcher::directoryChanged, this, &GameTracker::UpdateDirectory);
   connect(this, &QFileSystemWatcher::fileChanged, this, &GameTracker::UpdateFile);
@@ -54,7 +55,7 @@ GameTracker::GameTracker(QObject* parent) : QFileSystemWatcher(parent)
     m_load_thread.EmplaceItem(Command{CommandType::UpdateMetadata, {}});
   });
 
-  m_load_thread.Reset([this](Command command) {
+  m_load_thread.Reset("GameList Tracker", [this](Command command) {
     switch (command.type)
     {
     case CommandType::LoadCache:
@@ -88,12 +89,15 @@ GameTracker::GameTracker(QObject* parent) : QFileSystemWatcher(parent)
       m_cache.Clear(UICommon::GameFileCache::DeleteOnDisk::Yes);
       break;
     case CommandType::BeginRefresh:
+      m_refresh_in_progress = true;
       QueueOnObject(this, [] { Settings::Instance().NotifyRefreshGameListStarted(); });
       for (auto& file : m_tracked_files.keys())
         emit GameRemoved(file.toStdString());
       m_tracked_files.clear();
       break;
     case CommandType::EndRefresh:
+      m_refresh_in_progress = false;
+      m_cache.Save();
       QueueOnObject(this, [] { Settings::Instance().NotifyRefreshGameListComplete(); });
       break;
     }
@@ -199,7 +203,7 @@ void GameTracker::RemoveDirectory(const QString& dir)
 void GameTracker::RefreshAll()
 {
   m_processing_halted = true;
-  m_load_thread.Clear();
+  m_load_thread.Cancel();
   m_load_thread.EmplaceItem(Command{CommandType::ResumeProcessing, {}});
 
   if (m_needs_purge)
@@ -355,7 +359,7 @@ void GameTracker::LoadGame(const QString& path)
     auto game = m_cache.AddOrGet(converted_path, &cache_changed);
     if (game)
       emit GameLoaded(std::move(game));
-    if (cache_changed)
+    if (cache_changed && !m_refresh_in_progress)
       m_cache.Save();
   }
 }

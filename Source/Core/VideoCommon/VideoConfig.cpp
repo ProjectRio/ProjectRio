@@ -8,12 +8,28 @@
 #include "Common/CPUDetect.h"
 #include "Common/CommonTypes.h"
 #include "Common/StringUtil.h"
+
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/Config/MainSettings.h"
+#include "Core/ConfigManager.h"
 #include "Core/Core.h"
 #include "Core/Movie.h"
+#include "Core/System.h"
+
+#include "VideoCommon/AbstractGfx.h"
+#include "VideoCommon/BPFunctions.h"
 #include "VideoCommon/DriverDetails.h"
+#include "VideoCommon/FramebufferManager.h"
+#include "VideoCommon/FreeLookCamera.h"
+#include "VideoCommon/GraphicsModSystem/Config/GraphicsMod.h"
+#include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModManager.h"
 #include "VideoCommon/OnScreenDisplay.h"
+#include "VideoCommon/PixelShaderManager.h"
+#include "VideoCommon/Present.h"
+#include "VideoCommon/ShaderGenCommon.h"
+#include "VideoCommon/TextureCacheBase.h"
+#include "VideoCommon/VertexManagerBase.h"
+
 #include "VideoCommon/VideoCommon.h"
 
 VideoConfig g_Config;
@@ -55,6 +71,8 @@ void VideoConfig::Refresh()
 
   bVSync = Config::Get(Config::GFX_VSYNC);
   iAdapter = Config::Get(Config::GFX_ADAPTER);
+  iManuallyUploadBuffers = Config::Get(Config::GFX_MTL_MANUALLY_UPLOAD_BUFFERS);
+  iUsePresentDrawable = Config::Get(Config::GFX_MTL_USE_PRESENT_DRAWABLE);
 
   bWidescreenHack = Config::Get(Config::GFX_WIDESCREEN_HACK);
   aspect_mode = Config::Get(Config::GFX_ASPECT_RATIO);
@@ -65,6 +83,13 @@ void VideoConfig::Refresh()
   bShowBatterFielder = Config::Get(Config::GFX_SHOW_BATTER_FIELDER);
   bTrainingModeOverlay = Config::Get(Config::GFX_TRAINING_MODE);
   bDraftTimer = Config::Get(Config::GFX_DRAFT_TIMER);
+  bShowFTimes = Config::Get(Config::GFX_SHOW_FTIMES);
+  bShowVPS = Config::Get(Config::GFX_SHOW_VPS);
+  bShowVTimes = Config::Get(Config::GFX_SHOW_VTIMES);
+  bShowGraphs = Config::Get(Config::GFX_SHOW_GRAPHS);
+  bShowSpeed = Config::Get(Config::GFX_SHOW_SPEED);
+  bShowSpeedColors = Config::Get(Config::GFX_SHOW_SPEED_COLORS);
+  iPerfSampleUSec = Config::Get(Config::GFX_PERF_SAMP_WINDOW) * 1000;
   bShowNetPlayPing = Config::Get(Config::GFX_SHOW_NETPLAY_PING);
   bShowNetPlayMessages = Config::Get(Config::GFX_SHOW_NETPLAY_MESSAGES);
   bLogRenderTimeToFile = Config::Get(Config::GFX_LOG_RENDER_TIME_TO_FILE);
@@ -88,6 +113,7 @@ void VideoConfig::Refresh()
   iBitrateKbps = Config::Get(Config::GFX_BITRATE_KBPS);
   bInternalResolutionFrameDumps = Config::Get(Config::GFX_INTERNAL_RESOLUTION_FRAME_DUMPS);
   bEnableGPUTextureDecoding = Config::Get(Config::GFX_ENABLE_GPU_TEXTURE_DECODING);
+  bPreferVSForLinePointExpansion = Config::Get(Config::GFX_PREFER_VS_FOR_LINE_POINT_EXPANSION);
   bEnablePixelLighting = Config::Get(Config::GFX_ENABLE_PIXEL_LIGHTING);
   bFastDepthCalc = Config::Get(Config::GFX_FAST_DEPTH_CALC);
   iMultisamples = Config::Get(Config::GFX_MSAA);
@@ -106,14 +132,9 @@ void VideoConfig::Refresh()
   iShaderCompilationMode = Config::Get(Config::GFX_SHADER_COMPILATION_MODE);
   iShaderCompilerThreads = Config::Get(Config::GFX_SHADER_COMPILER_THREADS);
   iShaderPrecompilerThreads = Config::Get(Config::GFX_SHADER_PRECOMPILER_THREADS);
+  bCPUCull = Config::Get(Config::GFX_CPU_CULL);
 
-  bDumpObjects = Config::Get(Config::GFX_SW_DUMP_OBJECTS);
-  bDumpTevStages = Config::Get(Config::GFX_SW_DUMP_TEV_STAGES);
-  bDumpTevTextureFetches = Config::Get(Config::GFX_SW_DUMP_TEV_TEX_FETCHES);
-  drawStart = Config::Get(Config::GFX_SW_DRAW_START);
-  drawEnd = Config::Get(Config::GFX_SW_DRAW_END);
-
-  bForceFiltering = Config::Get(Config::GFX_ENHANCE_FORCE_FILTERING);
+  texture_filtering_mode = Config::Get(Config::GFX_ENHANCE_FORCE_TEXTURE_FILTERING);
   iMaxAnisotropy = Config::Get(Config::GFX_ENHANCE_MAX_ANISOTROPY);
   sPostProcessingShader = Config::Get(Config::GFX_ENHANCE_POST_SHADER);
   bForceTrueColor = Config::Get(Config::GFX_ENHANCE_FORCE_TRUE_COLOR);
@@ -139,15 +160,21 @@ void VideoConfig::Refresh()
   bDisableCopyToVRAM = Config::Get(Config::GFX_HACK_DISABLE_COPY_TO_VRAM);
   bDeferEFBCopies = Config::Get(Config::GFX_HACK_DEFER_EFB_COPIES);
   bImmediateXFB = Config::Get(Config::GFX_HACK_IMMEDIATE_XFB);
-  bSkipPresentingDuplicateXFBs = Config::Get(Config::GFX_HACK_SKIP_DUPLICATE_XFBS);
+  bVISkip = Config::Get(Config::GFX_HACK_VI_SKIP);
+  bSkipPresentingDuplicateXFBs = bVISkip || Config::Get(Config::GFX_HACK_SKIP_DUPLICATE_XFBS);
   bCopyEFBScaled = Config::Get(Config::GFX_HACK_COPY_EFB_SCALED);
   bEFBEmulateFormatChanges = Config::Get(Config::GFX_HACK_EFB_EMULATE_FORMAT_CHANGES);
   bVertexRounding = Config::Get(Config::GFX_HACK_VERTEX_ROUNDING);
   iEFBAccessTileSize = Config::Get(Config::GFX_HACK_EFB_ACCESS_TILE_SIZE);
   iMissingColorValue = Config::Get(Config::GFX_HACK_MISSING_COLOR_VALUE);
   bFastTextureSampling = Config::Get(Config::GFX_HACK_FAST_TEXTURE_SAMPLING);
+#ifdef __APPLE__
+  bNoMipmapping = Config::Get(Config::GFX_HACK_NO_MIPMAPPING);
+#endif
 
   bPerfQueriesEnable = Config::Get(Config::GFX_PERF_QUERIES_ENABLE);
+
+  bGraphicMods = Config::Get(Config::GFX_MODS_ENABLE);
 }
 
 void VideoConfig::VerifyValidity()
@@ -180,8 +207,8 @@ bool VideoConfig::UsingUberShaders() const
 
 static u32 GetNumAutoShaderCompilerThreads()
 {
-  // Automatic number. We use clamp(cpus - 3, 1, 4).
-  return static_cast<u32>(std::min(std::max(cpu_info.num_cores - 3, 1), 4));
+  // Automatic number.
+  return static_cast<u32>(std::clamp(cpu_info.num_cores - 3, 1, 4));
 }
 
 static u32 GetNumAutoShaderPreCompilerThreads()
@@ -219,3 +246,117 @@ u32 VideoConfig::GetShaderPrecompilerThreads() const
   else
     return 1;
 }
+
+void CheckForConfigChanges()
+{
+  const ShaderHostConfig old_shader_host_config = ShaderHostConfig::GetCurrent();
+  const StereoMode old_stereo = g_ActiveConfig.stereo_mode;
+  const u32 old_multisamples = g_ActiveConfig.iMultisamples;
+  const int old_anisotropy = g_ActiveConfig.iMaxAnisotropy;
+  const int old_efb_access_tile_size = g_ActiveConfig.iEFBAccessTileSize;
+  const auto old_texture_filtering_mode = g_ActiveConfig.texture_filtering_mode;
+  const bool old_vsync = g_ActiveConfig.bVSyncActive;
+  const bool old_bbox = g_ActiveConfig.bBBoxEnable;
+  const int old_efb_scale = g_ActiveConfig.iEFBScale;
+  const u32 old_game_mod_changes =
+      g_ActiveConfig.graphics_mod_config ? g_ActiveConfig.graphics_mod_config->GetChangeCount() : 0;
+  const bool old_graphics_mods_enabled = g_ActiveConfig.bGraphicMods;
+  const AspectMode old_suggested_aspect_mode = g_ActiveConfig.suggested_aspect_mode;
+  const bool old_widescreen_hack = g_ActiveConfig.bWidescreenHack;
+  const auto old_post_processing_shader = g_ActiveConfig.sPostProcessingShader;
+
+  UpdateActiveConfig();
+  FreeLook::UpdateActiveConfig();
+  g_vertex_manager->OnConfigChange();
+
+  g_freelook_camera.SetControlType(FreeLook::GetActiveConfig().camera_config.control_type);
+
+  if (g_ActiveConfig.bGraphicMods && !old_graphics_mods_enabled)
+  {
+    g_ActiveConfig.graphics_mod_config = GraphicsModGroupConfig(SConfig::GetInstance().GetGameID());
+    g_ActiveConfig.graphics_mod_config->Load();
+  }
+
+  if (g_ActiveConfig.graphics_mod_config &&
+      (old_game_mod_changes != g_ActiveConfig.graphics_mod_config->GetChangeCount()))
+  {
+    g_graphics_mod_manager->Load(*g_ActiveConfig.graphics_mod_config);
+  }
+
+  // Update texture cache settings with any changed options.
+  g_texture_cache->OnConfigChanged(g_ActiveConfig);
+
+  // EFB tile cache doesn't need to notify the backend.
+  if (old_efb_access_tile_size != g_ActiveConfig.iEFBAccessTileSize)
+    g_framebuffer_manager->SetEFBCacheTileSize(std::max(g_ActiveConfig.iEFBAccessTileSize, 0));
+
+  // Determine which (if any) settings have changed.
+  ShaderHostConfig new_host_config = ShaderHostConfig::GetCurrent();
+  u32 changed_bits = 0;
+  if (old_shader_host_config.bits != new_host_config.bits)
+    changed_bits |= CONFIG_CHANGE_BIT_HOST_CONFIG;
+  if (old_stereo != g_ActiveConfig.stereo_mode)
+    changed_bits |= CONFIG_CHANGE_BIT_STEREO_MODE;
+  if (old_multisamples != g_ActiveConfig.iMultisamples)
+    changed_bits |= CONFIG_CHANGE_BIT_MULTISAMPLES;
+  if (old_anisotropy != g_ActiveConfig.iMaxAnisotropy)
+    changed_bits |= CONFIG_CHANGE_BIT_ANISOTROPY;
+  if (old_texture_filtering_mode != g_ActiveConfig.texture_filtering_mode)
+    changed_bits |= CONFIG_CHANGE_BIT_FORCE_TEXTURE_FILTERING;
+  if (old_vsync != g_ActiveConfig.bVSyncActive)
+    changed_bits |= CONFIG_CHANGE_BIT_VSYNC;
+  if (old_bbox != g_ActiveConfig.bBBoxEnable)
+    changed_bits |= CONFIG_CHANGE_BIT_BBOX;
+  if (old_efb_scale != g_ActiveConfig.iEFBScale)
+    changed_bits |= CONFIG_CHANGE_BIT_TARGET_SIZE;
+  if (old_suggested_aspect_mode != g_ActiveConfig.suggested_aspect_mode)
+    changed_bits |= CONFIG_CHANGE_BIT_ASPECT_RATIO;
+  if (old_widescreen_hack != g_ActiveConfig.bWidescreenHack)
+    changed_bits |= CONFIG_CHANGE_BIT_ASPECT_RATIO;
+  if (old_post_processing_shader != g_ActiveConfig.sPostProcessingShader)
+    changed_bits |= CONFIG_CHANGE_BIT_POST_PROCESSING_SHADER;
+
+  // No changes?
+  if (changed_bits == 0)
+    return;
+
+  float old_scale = g_framebuffer_manager->GetEFBScale();
+
+  // Framebuffer changed?
+  if (changed_bits & (CONFIG_CHANGE_BIT_MULTISAMPLES | CONFIG_CHANGE_BIT_STEREO_MODE |
+                      CONFIG_CHANGE_BIT_TARGET_SIZE))
+  {
+    g_framebuffer_manager->RecreateEFBFramebuffer();
+  }
+
+  if (old_scale != g_framebuffer_manager->GetEFBScale())
+  {
+    auto& system = Core::System::GetInstance();
+    auto& pixel_shader_manager = system.GetPixelShaderManager();
+    pixel_shader_manager.Dirty();
+  }
+
+  // Reload shaders if host config has changed.
+  if (changed_bits & (CONFIG_CHANGE_BIT_HOST_CONFIG | CONFIG_CHANGE_BIT_MULTISAMPLES))
+  {
+    OSD::AddMessage("Video config changed, reloading shaders.", OSD::Duration::NORMAL);
+    g_vertex_manager->InvalidatePipelineObject();
+    g_shader_cache->SetHostConfig(new_host_config);
+    g_shader_cache->Reload();
+    g_framebuffer_manager->RecompileShaders();
+  }
+
+  // Viewport and scissor rect have to be reset since they will be scaled differently.
+  if (changed_bits & CONFIG_CHANGE_BIT_TARGET_SIZE)
+  {
+    BPFunctions::SetScissorAndViewport();
+  }
+
+  // Notify all listeners
+  ConfigChangedEvent::Trigger(changed_bits);
+
+  // TODO: Move everything else to the ConfigChanged event
+}
+
+static Common::EventHook s_check_config_event =
+    AfterFrameEvent::Register([] { CheckForConfigChanges(); }, "CheckForConfigChanges");

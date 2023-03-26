@@ -6,10 +6,14 @@
 #include "Common/Common.h"
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
+#include "Common/ScopeGuard.h"
 
+#include "Core/Config/FreeLookSettings.h"
 #include "Core/ConfigManager.h"
+#include "Core/Core.h"
 #include "Core/FreeLookConfig.h"
 
+#include "InputCommon/ControlReference/ControlReference.h"
 #include "InputCommon/ControllerEmu/ControlGroup/Buttons.h"
 #include "InputCommon/ControllerEmu/ControlGroup/IMUGyroscope.h"
 #include "InputCommon/InputConfig.h"
@@ -116,6 +120,7 @@ void FreeLookController::LoadDefaults(const ControllerInterface& ciface)
 {
   EmulatedController::LoadDefaults(ciface);
 
+#ifndef ANDROID
   auto hotkey_string = [](std::vector<std::string> inputs) {
     return "@(" + JoinStrings(inputs, "+") + ')';
   };
@@ -190,6 +195,7 @@ void FreeLookController::LoadDefaults(const ControllerInterface& ciface)
   m_rotation_gyro->SetControlExpression(GyroButtons::YawRight,
                                         "if(`Click 1`,`RelativeMouse X+` * 0.10, 0)");
 #endif
+#endif
 }
 
 ControllerEmu::ControlGroup* FreeLookController::GetGroup(FreeLookGroup group) const
@@ -226,6 +232,11 @@ void FreeLookController::Update()
 void FreeLookController::UpdateInput(CameraControllerInput* camera_controller)
 {
   const auto lock = GetStateLock();
+  // Preserve the old controller gate state
+  const auto old_gate = ControlReference::GetInputGate();
+  Common::ScopeGuard gate_guard{[old_gate] { ControlReference::SetInputGate(old_gate); }};
+  // Switch to the free look focus gate
+  Core::UpdateInputGate(!Config::Get(Config::FREE_LOOK_BACKGROUND_INPUT));
 
   float dt = 1.0;
   if (m_last_free_look_rotate_time)

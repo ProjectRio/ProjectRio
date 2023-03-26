@@ -23,8 +23,8 @@ public:
   static std::unique_ptr<DXTexture> Create(const TextureConfig& config, std::string_view name);
   static std::unique_ptr<DXTexture> CreateAdopted(ID3D12Resource* resource);
 
-  void Load(u32 level, u32 width, u32 height, u32 row_length, const u8* buffer,
-            size_t buffer_size) override;
+  void Load(u32 level, u32 width, u32 height, u32 row_length, const u8* buffer, size_t buffer_size,
+            u32 layer) override;
   void CopyRectangleFromTexture(const AbstractTexture* src,
                                 const MathUtil::Rectangle<int>& src_rect, u32 src_layer,
                                 u32 src_level, const MathUtil::Rectangle<int>& dst_rect,
@@ -37,7 +37,7 @@ public:
   const DescriptorHandle& GetSRVDescriptor() const { return m_srv_descriptor; }
   const DescriptorHandle& GetUAVDescriptor() const { return m_uav_descriptor; }
   D3D12_RESOURCE_STATES GetState() const { return m_state; }
-  u32 CalcSubresource(u32 level, u32 layer) const { return level + layer * m_config.layers; }
+  u32 CalcSubresource(u32 level, u32 layer) const { return level + layer * m_config.levels; }
 
   void TransitionToState(D3D12_RESOURCE_STATES state) const;
 

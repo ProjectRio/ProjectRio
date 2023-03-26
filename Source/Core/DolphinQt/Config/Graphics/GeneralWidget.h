@@ -49,12 +49,10 @@ private:
   GraphicsBool* m_enable_fullscreen;
 
   // Options
-  GraphicsBool* m_show_fps;
   GraphicsBool* m_show_batter_fielder;
   GraphicsBool* m_training_mode;
   GraphicsBool* m_draft_timer;
   GraphicsBool* m_show_ping;
-  GraphicsBool* m_log_render_time;
   GraphicsBool* m_autoadjust_window_size;
   GraphicsBool* m_show_messages;
   GraphicsBool* m_render_main_window;

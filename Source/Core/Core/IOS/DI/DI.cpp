@@ -21,14 +21,25 @@
 #include "Core/HW/WII_IPC.h"
 #include "Core/IOS/ES/ES.h"
 #include "Core/IOS/ES/Formats.h"
+#include "Core/System.h"
 #include "DiscIO/Volume.h"
 
 template <u32 addr>
 class RegisterWrapper
 {
 public:
-  operator u32() const { return Memory::mmio_mapping->Read<u32>(addr); }
-  void operator=(u32 rhs) { Memory::mmio_mapping->Write(addr, rhs); }
+  operator u32() const
+  {
+    auto& system = Core::System::GetInstance();
+    auto& memory = system.GetMemory();
+    return memory.GetMMIOMapping()->Read<u32>(addr);
+  }
+  void operator=(u32 rhs)
+  {
+    auto& system = Core::System::GetInstance();
+    auto& memory = system.GetMemory();
+    memory.GetMMIOMapping()->Write(addr, rhs);
+  }
 };
 static RegisterWrapper<0x0D806000> DISR;
 static RegisterWrapper<0x0D806004> DICVR;
@@ -53,7 +64,7 @@ DIDevice::DIDevice(Kernel& ios, const std::string& device_name) : Device(ios, de
 
 void DIDevice::DoState(PointerWrap& p)
 {
-  DoStateShared(p);
+  Device::DoState(p);
   p.Do(m_commands_to_execute);
   p.Do(m_executing_command);
   p.Do(m_current_partition);
@@ -76,7 +87,9 @@ std::optional<IPCReply> DIDevice::IOCtl(const IOCtlRequest& request)
   // asynchronously. The rest are also treated as async to match this.  Only one command can be
   // executed at a time, so commands are queued until DVDInterface is ready to handle them.
 
-  const u8 command = Memory::Read_U8(request.buffer_in);
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
+  const u8 command = memory.Read_U8(request.buffer_in);
   if (request.request != command)
   {
     WARN_LOG_FMT(IOS_DI,
@@ -113,8 +126,8 @@ void DIDevice::ProcessQueuedIOCtl()
   auto finished = StartIOCtl(request);
   if (finished)
   {
-    CoreTiming::ScheduleEvent(IPC_OVERHEAD_TICKS, s_finish_executing_di_command,
-                              static_cast<u64>(finished.value()));
+    Core::System::GetInstance().GetCoreTiming().ScheduleEvent(
+        IPC_OVERHEAD_TICKS, s_finish_executing_di_command, static_cast<u64>(finished.value()));
     return;
   }
 }
@@ -128,7 +141,9 @@ std::optional<DIDevice::DIResult> DIDevice::WriteIfFits(const IOCtlRequest& requ
   }
   else
   {
-    Memory::Write_U32(value, request.buffer_out);
+    auto& system = Core::System::GetInstance();
+    auto& memory = system.GetMemory();
+    memory.Write_U32(value, request.buffer_out);
     return DIResult::Success;
   }
 }
@@ -152,6 +167,9 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
     return DIResult::SecurityError;
   }
 
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
+
   // DVDInterface's ExecuteCommand handles most of the work for most of these.
   // The IOCtl callback is used to generate a reply afterwards.
   switch (static_cast<DIIoctl>(request.request))
@@ -169,7 +187,7 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
     return StartDMATransfer(0x20, request);
     // TODO: Include an additional read that happens on Wii discs, or at least
     // emulate its side effect of disabling DTK configuration
-    // if (Memory::Read_U32(request.buffer_out + 24) == 0x5d1c9ea3) { // Wii Magic
+    // if (memory.Read_U32(request.buffer_out + 24) == 0x5d1c9ea3) { // Wii Magic
     //   if (!m_has_read_encryption_info) {
     //     // Read 0x44 (=> 0x60) bytes starting from offset 8 or byte 0x20;
     //     // byte 0x60 is disable hashing and byte 0x61 is disable encryption
@@ -177,8 +195,8 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
     // }
   case DIIoctl::DVDLowRead:
   {
-    const u32 length = Memory::Read_U32(request.buffer_in + 4);
-    const u32 position = Memory::Read_U32(request.buffer_in + 8);
+    const u32 length = memory.Read_U32(request.buffer_in + 4);
+    const u32 position = memory.Read_U32(request.buffer_in + 8);
     INFO_LOG_FMT(IOS_DI, "DVDLowRead: offset {:#010x} (byte {:#011x}), length {:#x}", position,
                  static_cast<u64>(position) << 2, length);
     if (m_current_partition == DiscIO::PARTITION_NONE)
@@ -196,8 +214,8 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
       return DIResult::SecurityError;
     }
     m_last_length = position;  // An actual mistake in IOS
-    DVDInterface::PerformDecryptingRead(position, length, request.buffer_out, m_current_partition,
-                                        DVDInterface::ReplyType::IOS);
+    system.GetDVDInterface().PerformDecryptingRead(position, length, request.buffer_out,
+                                                   m_current_partition, DVD::ReplyType::IOS);
     return {};
   }
   case DIIoctl::DVDLowWaitForCoverClose:
@@ -220,7 +238,7 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
     return DIResult::BadArgument;
   case DIIoctl::DVDLowReadDvdPhysical:
   {
-    const u8 position = Memory::Read_U8(request.buffer_in + 7);
+    const u8 position = memory.Read_U8(request.buffer_in + 7);
     INFO_LOG_FMT(IOS_DI, "DVDLowReadDvdPhysical: position {:#04x}", position);
     DICMDBUF0 = 0xAD000000 | (position << 8);
     DICMDBUF1 = 0;
@@ -229,7 +247,7 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
   }
   case DIIoctl::DVDLowReadDvdCopyright:
   {
-    const u8 position = Memory::Read_U8(request.buffer_in + 7);
+    const u8 position = memory.Read_U8(request.buffer_in + 7);
     INFO_LOG_FMT(IOS_DI, "DVDLowReadDvdCopyright: position {:#04x}", position);
     DICMDBUF0 = 0xAD010000 | (position << 8);
     DICMDBUF1 = 0;
@@ -238,7 +256,7 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
   }
   case DIIoctl::DVDLowReadDvdDiscKey:
   {
-    const u8 position = Memory::Read_U8(request.buffer_in + 7);
+    const u8 position = memory.Read_U8(request.buffer_in + 7);
     INFO_LOG_FMT(IOS_DI, "DVDLowReadDvdDiscKey: position {:#04x}", position);
     DICMDBUF0 = 0xAD020000 | (position << 8);
     DICMDBUF1 = 0;
@@ -256,12 +274,12 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
   }
   case DIIoctl::DVDLowMaskCoverInterrupt:
     INFO_LOG_FMT(IOS_DI, "DVDLowMaskCoverInterrupt");
-    DVDInterface::SetInterruptEnabled(DVDInterface::DIInterruptType::CVRINT, false);
+    system.GetDVDInterface().SetInterruptEnabled(DVD::DIInterruptType::CVRINT, false);
     DolphinAnalytics::Instance().ReportGameQuirk(GameQuirk::USES_DI_INTERRUPT_MASK_COMMAND);
     return DIResult::Success;
   case DIIoctl::DVDLowClearCoverInterrupt:
     DEBUG_LOG_FMT(IOS_DI, "DVDLowClearCoverInterrupt");
-    DVDInterface::ClearInterrupt(DVDInterface::DIInterruptType::CVRINT);
+    system.GetDVDInterface().ClearInterrupt(DVD::DIInterruptType::CVRINT);
     return DIResult::Success;
   case DIIoctl::DVDLowUnmaskStatusInterrupts:
     INFO_LOG_FMT(IOS_DI, "DVDLowUnmaskStatusInterrupts");
@@ -269,18 +287,20 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
     // Dummied out
     return DIResult::Success;
   case DIIoctl::DVDLowGetCoverStatus:
+  {
     // TODO: handle resetting case
-    INFO_LOG_FMT(IOS_DI, "DVDLowGetCoverStatus: Disc {}Inserted",
-                 DVDInterface::IsDiscInside() ? "" : "Not ");
-    return WriteIfFits(request, DVDInterface::IsDiscInside() ? 2 : 1);
+    const bool is_disc_inside = system.GetDVDInterface().IsDiscInside();
+    INFO_LOG_FMT(IOS_DI, "DVDLowGetCoverStatus: Disc {}Inserted", is_disc_inside ? "" : "Not ");
+    return WriteIfFits(request, is_disc_inside ? 2 : 1);
+  }
   case DIIoctl::DVDLowUnmaskCoverInterrupt:
     INFO_LOG_FMT(IOS_DI, "DVDLowUnmaskCoverInterrupt");
-    DVDInterface::SetInterruptEnabled(DVDInterface::DIInterruptType::CVRINT, true);
+    system.GetDVDInterface().SetInterruptEnabled(DVD::DIInterruptType::CVRINT, true);
     DolphinAnalytics::Instance().ReportGameQuirk(GameQuirk::USES_DI_INTERRUPT_MASK_COMMAND);
     return DIResult::Success;
   case DIIoctl::DVDLowReset:
   {
-    const bool spinup = Memory::Read_U32(request.buffer_in + 4);
+    const bool spinup = memory.Read_U32(request.buffer_in + 4);
 
     // The GPIO *disables* spinning up the drive.  Normally handled via syscall 0x4e.
     const u32 old_gpio = HW_GPIO_OUT;
@@ -318,8 +338,8 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
     return DIResult::Success;
   case DIIoctl::DVDLowUnencryptedRead:
   {
-    const u32 length = Memory::Read_U32(request.buffer_in + 4);
-    const u32 position = Memory::Read_U32(request.buffer_in + 8);
+    const u32 length = memory.Read_U32(request.buffer_in + 4);
+    const u32 position = memory.Read_U32(request.buffer_in + 8);
     const u32 end = position + (length >> 2);  // a 32-bit offset
     INFO_LOG_FMT(IOS_DI, "DVDLowUnencryptedRead: offset {:#010x} (byte {:#011x}), length {:#x}",
                  position, static_cast<u64>(position) << 2, length);
@@ -344,7 +364,7 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
           DIMAR = request.buffer_out;
           m_last_length = length;
           DILENGTH = length;
-          DVDInterface::ForceOutOfBoundsRead(DVDInterface::ReplyType::IOS);
+          system.GetDVDInterface().ForceOutOfBoundsRead(DVD::ReplyType::IOS);
           return {};
         }
         else
@@ -395,8 +415,8 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
   }
   case DIIoctl::DVDLowReportKey:
   {
-    const u8 param1 = Memory::Read_U8(request.buffer_in + 7);
-    const u32 param2 = Memory::Read_U32(request.buffer_in + 8);
+    const u8 param1 = memory.Read_U8(request.buffer_in + 7);
+    const u32 param2 = memory.Read_U32(request.buffer_in + 8);
     INFO_LOG_FMT(IOS_DI, "DVDLowReportKey: param1 {:#04x}, param2 {:#08x}", param1, param2);
     DICMDBUF0 = 0xA4000000 | (param1 << 16);
     DICMDBUF1 = param2 & 0xFFFFFF;
@@ -405,7 +425,7 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
   }
   case DIIoctl::DVDLowSeek:
   {
-    const u32 position = Memory::Read_U32(request.buffer_in + 4);  // 32-bit offset
+    const u32 position = memory.Read_U32(request.buffer_in + 4);  // 32-bit offset
     INFO_LOG_FMT(IOS_DI, "DVDLowSeek: position {:#010x}, translated to {:#010x}", position,
                  position);  // TODO: do partition translation!
     DICMDBUF0 = 0xAB000000;
@@ -414,10 +434,10 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
   }
   case DIIoctl::DVDLowReadDvd:
   {
-    const u8 flag1 = Memory::Read_U8(request.buffer_in + 7);
-    const u8 flag2 = Memory::Read_U8(request.buffer_in + 11);
-    const u32 length = Memory::Read_U32(request.buffer_in + 12);
-    const u32 position = Memory::Read_U32(request.buffer_in + 16);
+    const u8 flag1 = memory.Read_U8(request.buffer_in + 7);
+    const u8 flag2 = memory.Read_U8(request.buffer_in + 11);
+    const u32 length = memory.Read_U32(request.buffer_in + 12);
+    const u32 position = memory.Read_U32(request.buffer_in + 16);
     INFO_LOG_FMT(IOS_DI, "DVDLowReadDvd({}, {}): position {:#08x}, length {:#08x}", flag1, flag2,
                  position, length);
     DICMDBUF0 = 0xD0000000 | ((flag1 & 1) << 7) | ((flag2 & 1) << 6);
@@ -427,9 +447,9 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
   }
   case DIIoctl::DVDLowReadDvdConfig:
   {
-    const u8 flag1 = Memory::Read_U8(request.buffer_in + 7);
-    const u8 param2 = Memory::Read_U8(request.buffer_in + 11);
-    const u32 position = Memory::Read_U32(request.buffer_in + 12);
+    const u8 flag1 = memory.Read_U8(request.buffer_in + 7);
+    const u8 param2 = memory.Read_U8(request.buffer_in + 11);
+    const u32 position = memory.Read_U32(request.buffer_in + 12);
     INFO_LOG_FMT(IOS_DI, "DVDLowReadDvdConfig({}, {}): position {:#08x}", flag1, param2, position);
     DICMDBUF0 = 0xD1000000 | ((flag1 & 1) << 16) | param2;
     DICMDBUF1 = position & 0xFFFFFF;
@@ -442,8 +462,8 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
     return StartImmediateTransfer(request);
   case DIIoctl::DVDLowOffset:
   {
-    const u8 flag = Memory::Read_U8(request.buffer_in + 7);
-    const u32 offset = Memory::Read_U32(request.buffer_in + 8);
+    const u8 flag = memory.Read_U8(request.buffer_in + 7);
+    const u32 offset = memory.Read_U32(request.buffer_in + 8);
     INFO_LOG_FMT(IOS_DI, "DVDLowOffset({}): offset {:#010x}", flag, offset);
     DICMDBUF0 = 0xD9000000 | ((flag & 1) << 16);
     DICMDBUF1 = offset;
@@ -463,15 +483,15 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
     return StartImmediateTransfer(request);
   case DIIoctl::DVDLowSetMaximumRotation:
   {
-    const u8 speed = Memory::Read_U8(request.buffer_in + 7);
+    const u8 speed = memory.Read_U8(request.buffer_in + 7);
     INFO_LOG_FMT(IOS_DI, "DVDLowSetMaximumRotation: speed {}", speed);
     DICMDBUF0 = 0xDD000000 | ((speed & 3) << 16);
     return StartImmediateTransfer(request, false);
   }
   case DIIoctl::DVDLowSerMeasControl:
   {
-    const u8 flag1 = Memory::Read_U8(request.buffer_in + 7);
-    const u8 flag2 = Memory::Read_U8(request.buffer_in + 11);
+    const u8 flag1 = memory.Read_U8(request.buffer_in + 7);
+    const u8 flag2 = memory.Read_U8(request.buffer_in + 11);
     INFO_LOG_FMT(IOS_DI, "DVDLowSerMeasControl({}, {})", flag1, flag2);
     DICMDBUF0 = 0xDF000000 | ((flag1 & 1) << 17) | ((flag2 & 1) << 16);
     return StartDMATransfer(0x20, request);
@@ -482,9 +502,9 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
     return StartImmediateTransfer(request);
   case DIIoctl::DVDLowAudioStream:
   {
-    const u8 mode = Memory::Read_U8(request.buffer_in + 7);
-    const u32 length = Memory::Read_U32(request.buffer_in + 8);
-    const u32 position = Memory::Read_U32(request.buffer_in + 12);
+    const u8 mode = memory.Read_U8(request.buffer_in + 7);
+    const u32 length = memory.Read_U32(request.buffer_in + 8);
+    const u32 position = memory.Read_U32(request.buffer_in + 12);
     INFO_LOG_FMT(IOS_DI, "DVDLowAudioStream({}): offset {:#010x} (byte {:#011x}), length {:#x}",
                  mode, position, static_cast<u64>(position) << 2, length);
     DICMDBUF0 = 0xE1000000 | ((mode & 3) << 16);
@@ -494,7 +514,7 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
   }
   case DIIoctl::DVDLowRequestAudioStatus:
   {
-    const u8 mode = Memory::Read_U8(request.buffer_in + 7);
+    const u8 mode = memory.Read_U8(request.buffer_in + 7);
     INFO_LOG_FMT(IOS_DI, "DVDLowRequestAudioStatus({})", mode);
     DICMDBUF0 = 0xE2000000 | ((mode & 3) << 16);
     DICMDBUF1 = 0;
@@ -504,8 +524,8 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
   }
   case DIIoctl::DVDLowStopMotor:
   {
-    const u8 eject = Memory::Read_U8(request.buffer_in + 7);
-    const u8 kill = Memory::Read_U8(request.buffer_in + 11);
+    const u8 eject = memory.Read_U8(request.buffer_in + 7);
+    const u8 kill = memory.Read_U8(request.buffer_in + 11);
     INFO_LOG_FMT(IOS_DI, "DVDLowStopMotor({}, {})", eject, kill);
     DICMDBUF0 = 0xE3000000 | ((eject & 1) << 17) | ((kill & 1) << 20);
     DICMDBUF1 = 0;
@@ -513,8 +533,8 @@ std::optional<DIDevice::DIResult> DIDevice::StartIOCtl(const IOCtlRequest& reque
   }
   case DIIoctl::DVDLowAudioBufferConfig:
   {
-    const u8 enable = Memory::Read_U8(request.buffer_in + 7);
-    const u8 buffer_size = Memory::Read_U8(request.buffer_in + 11);
+    const u8 enable = memory.Read_U8(request.buffer_in + 7);
+    const u8 buffer_size = memory.Read_U8(request.buffer_in + 11);
     INFO_LOG_FMT(IOS_DI, "DVDLowAudioBufferConfig: {}, buffer size {}",
                  enable ? "enabled" : "disabled", buffer_size);
     DICMDBUF0 = 0xE4000000 | ((enable & 1) << 16) | (buffer_size & 0xf);
@@ -561,7 +581,7 @@ std::optional<DIDevice::DIResult> DIDevice::StartDMATransfer(u32 command_length,
   m_last_length = command_length;
   DILENGTH = command_length;
 
-  DVDInterface::ExecuteCommand(DVDInterface::ReplyType::IOS);
+  Core::System::GetInstance().GetDVDInterface().ExecuteCommand(DVD::ReplyType::IOS);
   // Reply will be posted when done by FinishIOCtl.
   return {};
 }
@@ -579,7 +599,7 @@ std::optional<DIDevice::DIResult> DIDevice::StartImmediateTransfer(const IOCtlRe
 
   m_executing_command->m_copy_diimmbuf = write_to_buf;
 
-  DVDInterface::ExecuteCommand(DVDInterface::ReplyType::IOS);
+  Core::System::GetInstance().GetDVDInterface().ExecuteCommand(DVD::ReplyType::IOS);
   // Reply will be posted when done by FinishIOCtl.
   return {};
 }
@@ -594,15 +614,15 @@ static std::shared_ptr<DIDevice> GetDevice()
   return std::static_pointer_cast<DIDevice>(di);
 }
 
-void DIDevice::InterruptFromDVDInterface(DVDInterface::DIInterruptType interrupt_type)
+void DIDevice::InterruptFromDVDInterface(DVD::DIInterruptType interrupt_type)
 {
   DIResult result;
   switch (interrupt_type)
   {
-  case DVDInterface::DIInterruptType::TCINT:
+  case DVD::DIInterruptType::TCINT:
     result = DIResult::Success;
     break;
-  case DVDInterface::DIInterruptType::DEINT:
+  case DVD::DIInterruptType::DEINT:
     result = DIResult::DriveError;
     break;
   default:
@@ -624,7 +644,7 @@ void DIDevice::InterruptFromDVDInterface(DVDInterface::DIInterruptType interrupt
   }
 }
 
-void DIDevice::FinishDICommandCallback(u64 userdata, s64 ticksbehind)
+void DIDevice::FinishDICommandCallback(Core::System& system, u64 userdata, s64 ticksbehind)
 {
   const DIResult result = static_cast<DIResult>(userdata);
 
@@ -643,9 +663,12 @@ void DIDevice::FinishDICommand(DIResult result)
     return;
   }
 
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
+
   IOCtlRequest request{m_executing_command->m_request_address};
   if (m_executing_command->m_copy_diimmbuf)
-    Memory::Write_U32(DIIMMBUF, request.buffer_out);
+    memory.Write_U32(DIIMMBUF, request.buffer_out);
 
   m_ios.EnqueueIPCReply(request, static_cast<s32>(result));
 
@@ -672,7 +695,11 @@ std::optional<IPCReply> DIDevice::IOCtlV(const IOCtlVRequest& request)
                   request.in_vectors[0].size);
     return IPCReply{static_cast<s32>(DIResult::BadArgument)};
   }
-  const u8 command = Memory::Read_U8(request.in_vectors[0].address);
+
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
+
+  const u8 command = memory.Read_U8(request.in_vectors[0].address);
   if (request.request != command)
   {
     WARN_LOG_FMT(
@@ -708,18 +735,19 @@ std::optional<IPCReply> DIDevice::IOCtlV(const IOCtlVRequest& request)
     }
 
     const u64 partition_offset =
-        static_cast<u64>(Memory::Read_U32(request.in_vectors[0].address + 4)) << 2;
+        static_cast<u64>(memory.Read_U32(request.in_vectors[0].address + 4)) << 2;
     ChangePartition(DiscIO::Partition(partition_offset));
 
     INFO_LOG_FMT(IOS_DI, "DVDLowOpenPartition: partition_offset {:#011x}", partition_offset);
 
     // Read TMD to the buffer
-    const ES::TMDReader tmd = DVDThread::GetTMD(m_current_partition);
+    auto& dvd_thread = system.GetDVDThread();
+    const ES::TMDReader tmd = dvd_thread.GetTMD(m_current_partition);
     const std::vector<u8>& raw_tmd = tmd.GetBytes();
-    Memory::CopyToEmu(request.io_vectors[0].address, raw_tmd.data(), raw_tmd.size());
+    memory.CopyToEmu(request.io_vectors[0].address, raw_tmd.data(), raw_tmd.size());
 
-    ReturnCode es_result = m_ios.GetES()->DIVerify(tmd, DVDThread::GetTicket(m_current_partition));
-    Memory::Write_U32(es_result, request.io_vectors[1].address);
+    ReturnCode es_result = m_ios.GetES()->DIVerify(tmd, dvd_thread.GetTicket(m_current_partition));
+    memory.Write_U32(es_result, request.io_vectors[1].address);
 
     return_value = DIResult::Success;
     break;
@@ -789,12 +817,13 @@ void DIDevice::ResetDIRegisters()
 {
   // Clear transfer complete and error interrupts (normally r/z, but here we just directly write
   // zero)
-  DVDInterface::ClearInterrupt(DVDInterface::DIInterruptType::TCINT);
-  DVDInterface::ClearInterrupt(DVDInterface::DIInterruptType::DEINT);
+  auto& di = Core::System::GetInstance().GetDVDInterface();
+  di.ClearInterrupt(DVD::DIInterruptType::TCINT);
+  di.ClearInterrupt(DVD::DIInterruptType::DEINT);
   // Enable transfer complete and error interrupts, and disable cover interrupt
-  DVDInterface::SetInterruptEnabled(DVDInterface::DIInterruptType::TCINT, true);
-  DVDInterface::SetInterruptEnabled(DVDInterface::DIInterruptType::DEINT, true);
-  DVDInterface::SetInterruptEnabled(DVDInterface::DIInterruptType::CVRINT, false);
+  di.SetInterruptEnabled(DVD::DIInterruptType::TCINT, true);
+  di.SetInterruptEnabled(DVD::DIInterruptType::DEINT, true);
+  di.SetInterruptEnabled(DVD::DIInterruptType::CVRINT, false);
   // Close the current partition, if there is one
   ChangePartition(DiscIO::PARTITION_NONE);
 }

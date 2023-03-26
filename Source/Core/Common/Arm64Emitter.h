@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <bit>
 #include <cstring>
 #include <functional>
 #include <optional>
@@ -309,6 +310,18 @@ enum class ShiftType
   ROR = 3,
 };
 
+enum class ExtendSpecifier
+{
+  UXTB = 0x0,
+  UXTH = 0x1,
+  UXTW = 0x2, /* Also LSL on 32bit width */
+  UXTX = 0x3, /* Also LSL on 64bit width */
+  SXTB = 0x4,
+  SXTH = 0x5,
+  SXTW = 0x6,
+  SXTX = 0x7,
+};
+
 enum class IndexType
 {
   Unsigned,
@@ -405,18 +418,6 @@ private:
     Width64Bit,
   };
 
-  enum class ExtendSpecifier
-  {
-    UXTB = 0x0,
-    UXTH = 0x1,
-    UXTW = 0x2, /* Also LSL on 32bit width */
-    UXTX = 0x3, /* Also LSL on 64bit width */
-    SXTB = 0x4,
-    SXTH = 0x5,
-    SXTW = 0x6,
-    SXTX = 0x7,
-  };
-
   enum class TypeSpecifier
   {
     ExtendedReg,
@@ -463,6 +464,15 @@ public:
     }
     m_shifttype = ShiftType::LSL;
   }
+  ArithOption(ARM64Reg Rd, ExtendSpecifier extend_type, u32 shift = 0)
+  {
+    m_destReg = Rd;
+    m_width = Is64Bit(Rd) ? WidthSpecifier::Width64Bit : WidthSpecifier::Width32Bit;
+    m_extend = extend_type;
+    m_type = TypeSpecifier::ExtendedReg;
+    m_shifttype = ShiftType::LSL;
+    m_shift = shift;
+  }
   ArithOption(ARM64Reg Rd, ShiftType shift_type, u32 shift)
   {
     m_destReg = Rd;
@@ -474,12 +484,14 @@ public:
       m_width = WidthSpecifier::Width64Bit;
       if (shift == 64)
         m_shift = 0;
+      m_extend = ExtendSpecifier::UXTX;
     }
     else
     {
       m_width = WidthSpecifier::Width32Bit;
       if (shift == 32)
         m_shift = 0;
+      m_extend = ExtendSpecifier::UXTW;
     }
   }
   ARM64Reg GetReg() const { return m_destReg; }
@@ -509,8 +521,6 @@ struct LogicalImm
 
   constexpr LogicalImm(u64 value, u32 width)
   {
-    bool negate = false;
-
     // Logical immediates are encoded using parameters n, imm_s and imm_r using
     // the following table:
     //
@@ -526,28 +536,6 @@ struct LogicalImm
     // A pattern is constructed of size bits, where the least significant S+1 bits
     // are set. The pattern is rotated right by R, and repeated across a 32 or
     // 64-bit value, depending on destination register width.
-    //
-    // Put another way: the basic format of a logical immediate is a single
-    // contiguous stretch of 1 bits, repeated across the whole word at intervals
-    // given by a power of 2. To identify them quickly, we first locate the
-    // lowest stretch of 1 bits, then the next 1 bit above that; that combination
-    // is different for every logical immediate, so it gives us all the
-    // information we need to identify the only logical immediate that our input
-    // could be, and then we simply check if that's the value we actually have.
-    //
-    // (The rotation parameter does give the possibility of the stretch of 1 bits
-    // going 'round the end' of the word. To deal with that, we observe that in
-    // any situation where that happens the bitwise NOT of the value is also a
-    // valid logical immediate. So we simply invert the input whenever its low bit
-    // is set, and then we know that the rotated case can't arise.)
-
-    if (value & 1)
-    {
-      // If the low bit is 1, negate the value, and set a flag to remember that we
-      // did (so that we can adjust the return values appropriately).
-      negate = true;
-      value = ~value;
-    }
 
     constexpr int kWRegSizeInBits = 32;
 
@@ -558,156 +546,42 @@ struct LogicalImm
       // as a logical immediate will also be the correct encoding of the 32-bit
       // value.
 
-      // The most-significant 32 bits may not be zero (ie. negate is true) so
-      // shift the value left before duplicating it.
       value <<= kWRegSizeInBits;
       value |= value >> kWRegSizeInBits;
     }
 
-    // The basic analysis idea: imagine our input word looks like this.
-    //
-    //    0011111000111110001111100011111000111110001111100011111000111110
-    //                                                          c  b    a
-    //                                                          |<--d-->|
-    //
-    // We find the lowest set bit (as an actual power-of-2 value, not its index)
-    // and call it a. Then we add a to our original number, which wipes out the
-    // bottommost stretch of set bits and replaces it with a 1 carried into the
-    // next zero bit. Then we look for the new lowest set bit, which is in
-    // position b, and subtract it, so now our number is just like the original
-    // but with the lowest stretch of set bits completely gone. Now we find the
-    // lowest set bit again, which is position c in the diagram above. Then we'll
-    // measure the distance d between bit positions a and c (using CLZ), and that
-    // tells us that the only valid logical immediate that could possibly be equal
-    // to this number is the one in which a stretch of bits running from a to just
-    // below b is replicated every d bits.
-    u64 a = Common::LargestPowerOf2Divisor(value);
-    u64 value_plus_a = value + a;
-    u64 b = Common::LargestPowerOf2Divisor(value_plus_a);
-    u64 value_plus_a_minus_b = value_plus_a - b;
-    u64 c = Common::LargestPowerOf2Divisor(value_plus_a_minus_b);
-
-    int d = 0, clz_a = 0, out_n = 0;
-    u64 mask = 0;
-
-    if (c != 0)
+    if (value == 0 || (~value) == 0)
     {
-      // The general case, in which there is more than one stretch of set bits.
-      // Compute the repeat distance d, and set up a bitmask covering the basic
-      // unit of repetition (i.e. a word with the bottom d bits set). Also, in all
-      // of these cases the N bit of the output will be zero.
-      clz_a = Common::CountLeadingZeros(a);
-      int clz_c = Common::CountLeadingZeros(c);
-      d = clz_a - clz_c;
-      mask = ((UINT64_C(1) << d) - 1);
-      out_n = 0;
-    }
-    else
-    {
-      // Handle degenerate cases.
-      //
-      // If any of those 'find lowest set bit' operations didn't find a set bit at
-      // all, then the word will have been zero thereafter, so in particular the
-      // last lowest_set_bit operation will have returned zero. So we can test for
-      // all the special case conditions in one go by seeing if c is zero.
-      if (a == 0)
-      {
-        // The input was zero (or all 1 bits, which will come to here too after we
-        // inverted it at the start of the function), which is invalid.
-        return;
-      }
-      else
-      {
-        // Otherwise, if c was zero but a was not, then there's just one stretch
-        // of set bits in our word, meaning that we have the trivial case of
-        // d == 64 and only one 'repetition'. Set up all the same variables as in
-        // the general case above, and set the N bit in the output.
-        clz_a = Common::CountLeadingZeros(a);
-        d = 64;
-        mask = ~UINT64_C(0);
-        out_n = 1;
-      }
-    }
-
-    // If the repeat period d is not a power of two, it can't be encoded.
-    if (!MathUtil::IsPow2<u64>(d))
+      valid = false;
       return;
-
-    // If the bit stretch (b - a) does not fit within the mask derived from the
-    // repeat period, then fail.
-    if (((b - a) & ~mask) != 0)
-      return;
-
-    // The only possible option is b - a repeated every d bits. Now we're going to
-    // actually construct the valid logical immediate derived from that
-    // specification, and see if it equals our original input.
-    //
-    // To repeat a value every d bits, we multiply it by a number of the form
-    // (1 + 2^d + 2^(2d) + ...), i.e. 0x0001000100010001 or similar. These can
-    // be derived using a table lookup on CLZ(d).
-    constexpr std::array<u64, 6> multipliers = {{
-        0x0000000000000001UL,
-        0x0000000100000001UL,
-        0x0001000100010001UL,
-        0x0101010101010101UL,
-        0x1111111111111111UL,
-        0x5555555555555555UL,
-    }};
-
-    const int multiplier_idx = Common::CountLeadingZeros((u64)d) - 57;
-
-    // Ensure that the index to the multipliers array is within bounds.
-    DEBUG_ASSERT((multiplier_idx >= 0) &&
-                 (static_cast<size_t>(multiplier_idx) < multipliers.size()));
-
-    const u64 multiplier = multipliers[multiplier_idx];
-    const u64 candidate = (b - a) * multiplier;
-
-    // The candidate pattern doesn't match our input value, so fail.
-    if (value != candidate)
-      return;
-
-    // We have a match! This is a valid logical immediate, so now we have to
-    // construct the bits and pieces of the instruction encoding that generates
-    // it.
-    n = out_n;
-
-    // Count the set bits in our basic stretch. The special case of clz(0) == -1
-    // makes the answer come out right for stretches that reach the very top of
-    // the word (e.g. numbers like 0xffffc00000000000).
-    const int clz_b = (b == 0) ? -1 : Common::CountLeadingZeros(b);
-    s = clz_a - clz_b;
-
-    // Decide how many bits to rotate right by, to put the low bit of that basic
-    // stretch in position a.
-    if (negate)
-    {
-      // If we inverted the input right at the start of this function, here's
-      // where we compensate: the number of set bits becomes the number of clear
-      // bits, and the rotation count is based on position b rather than position
-      // a (since b is the location of the 'lowest' 1 bit after inversion).
-      s = d - s;
-      r = (clz_b + 1) & (d - 1);
-    }
-    else
-    {
-      r = (clz_a + 1) & (d - 1);
     }
 
-    // Now we're done, except for having to encode the S output in such a way that
+    // Normalize value, rotating it such that the LSB is 1:
+    // If LSB is already one, we mask away the trailing sequence of ones and
+    // pick the next sequence of ones. This ensures we get a complete element
+    // that has not been cut-in-half due to rotation across the word boundary.
+
+    const int rotation = std::countr_zero(value & (value + 1));
+    const u64 normalized = std::rotr(value, rotation);
+
+    const int element_size = std::countr_zero(normalized & (normalized + 1));
+    const int ones = std::countr_one(normalized);
+
+    // Check the value is repeating; also ensures element size is a power of two.
+
+    if (std::rotr(value, element_size) != value)
+    {
+      valid = false;
+      return;
+    }
+
+    // Now we're done. We just have to encode the S output in such a way that
     // it gives both the number of set bits and the length of the repeated
-    // segment. The s field is encoded like this:
-    //
-    //     imms    size        S
-    //    ssssss    64    UInt(ssssss)
-    //    0sssss    32    UInt(sssss)
-    //    10ssss    16    UInt(ssss)
-    //    110sss     8    UInt(sss)
-    //    1110ss     4    UInt(ss)
-    //    11110s     2    UInt(s)
-    //
-    // So we 'or' (-d << 1) with our computed s to form imms.
-    s = ((-d << 1) | (s - 1)) & 0x3f;
+    // segment.
+
+    r = static_cast<u8>((element_size - rotation) & (element_size - 1));
+    s = static_cast<u8>((((~element_size + 1) << 1) | (ones - 1)) & 0x3f);
+    n = Common::ExtractBit<6>(element_size);
 
     valid = true;
   }
@@ -1138,12 +1012,20 @@ public:
   void MOVP2R(ARM64Reg Rd, P* ptr)
   {
     ASSERT_MSG(DYNA_REC, Is64Bit(Rd), "Can't store pointers in 32-bit registers");
-    MOVI2R(Rd, (uintptr_t)ptr);
+    MOVI2R(Rd, reinterpret_cast<uintptr_t>(ptr));
+  }
+  template <class P>
+  // Given an address, stores the page address into a register and returns the page-relative offset
+  s32 MOVPage2R(ARM64Reg Rd, P* ptr)
+  {
+    ASSERT_MSG(DYNA_REC, Is64Bit(Rd), "Can't store pointers in 32-bit registers");
+    MOVI2R(Rd, reinterpret_cast<uintptr_t>(ptr) & ~0xFFFULL);
+    return static_cast<s32>(reinterpret_cast<uintptr_t>(ptr) & 0xFFFULL);
   }
 
-  // Wrapper around AND x, y, imm etc.
-  // If you are sure the imm will work, preferably construct a LogicalImm directly instead,
-  // since that is constexpr and thus can be done at compile-time for constant values.
+  // Wrappers around bitwise operations with an immediate. If you're sure an imm can be encoded
+  // without a scratch register, preferably construct a LogicalImm directly instead,
+  // since that is constexpr and thus can be done at compile time for constant values.
   void ANDI2R(ARM64Reg Rd, ARM64Reg Rn, u64 imm, ARM64Reg scratch);
   void ANDSI2R(ARM64Reg Rd, ARM64Reg Rn, u64 imm, ARM64Reg scratch);
   void TSTI2R(ARM64Reg Rn, u64 imm, ARM64Reg scratch)
@@ -1153,6 +1035,7 @@ public:
   void ORRI2R(ARM64Reg Rd, ARM64Reg Rn, u64 imm, ARM64Reg scratch);
   void EORI2R(ARM64Reg Rd, ARM64Reg Rn, u64 imm, ARM64Reg scratch);
 
+  // Wrappers around arithmetic operations with an immediate.
   void ADDI2R_internal(ARM64Reg Rd, ARM64Reg Rn, u64 imm, bool negative, bool flags,
                        ARM64Reg scratch);
   void ADDI2R(ARM64Reg Rd, ARM64Reg Rn, u64 imm, ARM64Reg scratch = ARM64Reg::INVALID_REG);
@@ -1249,6 +1132,13 @@ public:
   void FMOV(ARM64Reg Rd, ARM64Reg Rn, bool top = false);  // Also generalized move between GPR/FP
   void FRECPE(ARM64Reg Rd, ARM64Reg Rn);
   void FRSQRTE(ARM64Reg Rd, ARM64Reg Rn);
+
+  // Scalar - pairwise
+  void FADDP(ARM64Reg Rd, ARM64Reg Rn);
+  void FMAXP(ARM64Reg Rd, ARM64Reg Rn);
+  void FMINP(ARM64Reg Rd, ARM64Reg Rn);
+  void FMAXNMP(ARM64Reg Rd, ARM64Reg Rn);
+  void FMINNMP(ARM64Reg Rd, ARM64Reg Rn);
 
   // Scalar - 2 Source
   void ADD(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm);
@@ -1367,9 +1257,18 @@ public:
   void TRN2(u8 size, ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm);
   void ZIP2(u8 size, ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm);
 
-  // Shift by immediate
+  // Extract
+  void EXT(ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm, u32 index);
+
+  // Scalar shift by immediate
+  void SHL(ARM64Reg Rd, ARM64Reg Rn, u32 shift);
+  void URSHR(ARM64Reg Rd, ARM64Reg Rn, u32 shift);
+
+  // Vector shift by immediate
+  void SHL(u8 src_size, ARM64Reg Rd, ARM64Reg Rn, u32 shift);
   void SSHLL(u8 src_size, ARM64Reg Rd, ARM64Reg Rn, u32 shift);
   void SSHLL2(u8 src_size, ARM64Reg Rd, ARM64Reg Rn, u32 shift);
+  void URSHR(u8 src_size, ARM64Reg Rd, ARM64Reg Rn, u32 shift);
   void USHLL(u8 src_size, ARM64Reg Rd, ARM64Reg Rn, u32 shift);
   void USHLL2(u8 src_size, ARM64Reg Rd, ARM64Reg Rn, u32 shift);
   void SHRN(u8 dest_size, ARM64Reg Rd, ARM64Reg Rn, u32 shift);
@@ -1407,6 +1306,7 @@ private:
   void EmitThreeSame(bool U, u32 size, u32 opcode, ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm);
   void EmitCopy(bool Q, u32 op, u32 imm5, u32 imm4, ARM64Reg Rd, ARM64Reg Rn);
   void EmitScalar2RegMisc(bool U, u32 size, u32 opcode, ARM64Reg Rd, ARM64Reg Rn);
+  void EmitScalarPairwise(bool U, u32 size, u32 opcode, ARM64Reg Rd, ARM64Reg Rn);
   void Emit2RegMisc(bool Q, bool U, u32 size, u32 opcode, ARM64Reg Rd, ARM64Reg Rn);
   void EmitLoadStoreSingleStructure(bool L, bool R, u32 opcode, bool S, u32 size, ARM64Reg Rt,
                                     ARM64Reg Rn);
@@ -1419,9 +1319,10 @@ private:
   void EmitCompare(bool M, bool S, u32 op, u32 opcode2, ARM64Reg Rn, ARM64Reg Rm);
   void EmitCondSelect(bool M, bool S, CCFlags cond, ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm);
   void EmitPermute(u32 size, u32 op, ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm);
+  void EmitExtract(u32 imm4, u32 op, ARM64Reg Rd, ARM64Reg Rn, ARM64Reg Rm);
   void EmitScalarImm(bool M, bool S, u32 type, u32 imm5, ARM64Reg Rd, u32 imm8);
-  void EmitShiftImm(bool Q, bool U, u32 immh, u32 immb, u32 opcode, ARM64Reg Rd, ARM64Reg Rn);
-  void EmitScalarShiftImm(bool U, u32 immh, u32 immb, u32 opcode, ARM64Reg Rd, ARM64Reg Rn);
+  void EmitShiftImm(bool Q, bool U, u32 imm, u32 opcode, ARM64Reg Rd, ARM64Reg Rn);
+  void EmitScalarShiftImm(bool U, u32 imm, u32 opcode, ARM64Reg Rd, ARM64Reg Rn);
   void EmitLoadStoreMultipleStructure(u32 size, bool L, u32 opcode, ARM64Reg Rt, ARM64Reg Rn);
   void EmitLoadStoreMultipleStructurePost(u32 size, bool L, u32 opcode, ARM64Reg Rt, ARM64Reg Rn,
                                           ARM64Reg Rm);

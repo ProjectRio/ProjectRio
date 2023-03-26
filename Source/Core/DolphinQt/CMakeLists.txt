@@ -3,11 +3,11 @@ if(POLICY CMP0084)
   cmake_policy(SET CMP0084 NEW)
 endif()
 
-if (NOT QT_DIR AND MSVC)
+if (MSVC)
   if(_M_ARM_64)
-    set(QT_DIR "${CMAKE_SOURCE_DIR}/Externals/Qt/Qt6.3.0/ARM64/lib/cmake/Qt6")
+    list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/Externals/Qt/Qt6.3.0/ARM64")
   else()
-    set(QT_DIR "${CMAKE_SOURCE_DIR}/Externals/Qt/Qt6.3.0/x64/lib/cmake/Qt6")
+    list(APPEND CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/Externals/Qt/Qt6.3.0/x64")
   endif()
 endif()
 
@@ -33,41 +33,6 @@ add_executable(dolphin-emu
   CheatSearchWidget.h
   CheatsManager.cpp
   CheatsManager.h
-  ConvertDialog.cpp
-  ConvertDialog.h
-  DiscordHandler.cpp
-  DiscordHandler.h
-  DiscordJoinRequestDialog.cpp
-  DiscordJoinRequestDialog.h
-  FIFO/FIFOPlayerWindow.cpp
-  FIFO/FIFOPlayerWindow.h
-  FIFO/FIFOAnalyzer.cpp
-  FIFO/FIFOAnalyzer.h
-  Host.cpp
-  Host.h
-  HotkeyScheduler.cpp
-  HotkeyScheduler.h
-  Main.cpp
-  MainWindow.cpp
-  MainWindow.h
-  MenuBar.cpp
-  MenuBar.h
-  NKitWarningDialog.cpp
-  NKitWarningDialog.h
-  RenderWidget.cpp
-  RenderWidget.h
-  Resources.cpp
-  Resources.h
-  SearchBar.cpp
-  SearchBar.h
-  Settings.cpp
-  Settings.h
-  ToolBar.cpp
-  ToolBar.h
-  Translation.cpp
-  Translation.h
-  WiiUpdate.cpp
-  WiiUpdate.h
   Config/AddLocalPlayers.cpp
   Config/AddLocalPlayers.h
   Config/ARCodeWidget.cpp
@@ -78,12 +43,12 @@ add_executable(dolphin-emu
   Config/CheatWarningWidget.h
   Config/CommonControllersWidget.cpp
   Config/CommonControllersWidget.h
+  Config/ControllerInterface/ControllerInterfaceWindow.cpp
+  Config/ControllerInterface/ControllerInterfaceWindow.h
   Config/ControllerInterface/DualShockUDPClientAddServerDialog.cpp
   Config/ControllerInterface/DualShockUDPClientAddServerDialog.h
   Config/ControllerInterface/DualShockUDPClientWidget.cpp
   Config/ControllerInterface/DualShockUDPClientWidget.h
-  Config/ControllerInterface/ControllerInterfaceWindow.cpp
-  Config/ControllerInterface/ControllerInterfaceWindow.h
   Config/ControllerInterface/ServerStringValidator.cpp
   Config/ControllerInterface/ServerStringValidator.h
   Config/ControllersWindow.cpp
@@ -94,14 +59,14 @@ add_executable(dolphin-emu
   Config/FreeLookWidget.h
   Config/FreeLookWindow.cpp
   Config/FreeLookWindow.h
-  Config/GamecubeControllersWidget.cpp
-  Config/GamecubeControllersWidget.h
   Config/GameConfigEdit.cpp
   Config/GameConfigEdit.h
   Config/GameConfigHighlighter.cpp
   Config/GameConfigHighlighter.h
   Config/GameConfigWidget.cpp
   Config/GameConfigWidget.h
+  Config/GamecubeControllersWidget.cpp
+  Config/GamecubeControllersWidget.h
   Config/GeckoCodeWidget.cpp
   Config/GeckoCodeWidget.h
   Config/Graphics/AdvancedWidget.cpp
@@ -129,8 +94,10 @@ add_executable(dolphin-emu
   Config/Graphics/HacksWidget.h
   Config/Graphics/PostProcessingConfigWindow.cpp
   Config/Graphics/PostProcessingConfigWindow.h
-  Config/Graphics/SoftwareRendererWidget.cpp
-  Config/Graphics/SoftwareRendererWidget.h
+  Config/GraphicsModListWidget.cpp
+  Config/GraphicsModListWidget.h
+  Config/GraphicsModWarningWidget.cpp
+  Config/GraphicsModWarningWidget.h
   Config/InfoWidget.cpp
   Config/InfoWidget.h
   Config/LocalPlayersWindow.cpp
@@ -223,6 +190,10 @@ add_executable(dolphin-emu
   Config/VerifyWidget.h
   Config/WiimoteControllersWidget.cpp
   Config/WiimoteControllersWidget.h
+  ConvertDialog.cpp
+  ConvertDialog.h
+  Debugger/BreakpointDialog.cpp
+  Debugger/BreakpointDialog.h
   Debugger/BreakpointWidget.cpp
   Debugger/BreakpointWidget.h
   Debugger/CodeDiffDialog.cpp
@@ -239,8 +210,6 @@ add_executable(dolphin-emu
   Debugger/MemoryWidget.h
   Debugger/NetworkWidget.cpp
   Debugger/NetworkWidget.h
-  Debugger/NewBreakpointDialog.cpp
-  Debugger/NewBreakpointDialog.h
   Debugger/PatchInstructionDialog.cpp
   Debugger/PatchInstructionDialog.h
   Debugger/RegisterColumn.cpp
@@ -251,6 +220,14 @@ add_executable(dolphin-emu
   Debugger/ThreadWidget.h
   Debugger/WatchWidget.cpp
   Debugger/WatchWidget.h
+  DiscordHandler.cpp
+  DiscordHandler.h
+  DiscordJoinRequestDialog.cpp
+  DiscordJoinRequestDialog.h
+  FIFO/FIFOAnalyzer.cpp
+  FIFO/FIFOAnalyzer.h
+  FIFO/FIFOPlayerWindow.cpp
+  FIFO/FIFOPlayerWindow.h
   GameList/GameList.cpp
   GameList/GameList.h
   GameList/GameListModel.cpp
@@ -265,14 +242,21 @@ add_executable(dolphin-emu
   GCMemcardCreateNewDialog.h
   GCMemcardManager.cpp
   GCMemcardManager.h
-  QtUtils/BlockUserInputFilter.cpp
-  QtUtils/BlockUserInputFilter.h
+  Host.cpp
+  Host.h
+  HotkeyScheduler.cpp
+  HotkeyScheduler.h
+  Main.cpp
+  MainWindow.cpp
+  MainWindow.h
+  MenuBar.cpp
+  MenuBar.h
   NetPlay/ChunkedProgressDialog.cpp
   NetPlay/ChunkedProgressDialog.h
+  NetPlay/GameDigestDialog.cpp
+  NetPlay/GameDigestDialog.h
   NetPlay/GameListDialog.cpp
   NetPlay/GameListDialog.h
-  NetPlay/MD5Dialog.cpp
-  NetPlay/MD5Dialog.h
   NetPlay/NetPlayBrowser.cpp
   NetPlay/NetPlayBrowser.h
   NetPlay/NetPlayDialog.cpp
@@ -281,6 +265,14 @@ add_executable(dolphin-emu
   NetPlay/NetPlaySetupDialog.h
   NetPlay/PadMappingDialog.cpp
   NetPlay/PadMappingDialog.h
+  NANDRepairDialog.cpp
+  NANDRepairDialog.h
+  NKitWarningDialog.cpp
+  NKitWarningDialog.h
+  QtUtils/AspectRatioWidget.cpp
+  QtUtils/AspectRatioWidget.h
+  QtUtils/BlockUserInputFilter.cpp
+  QtUtils/BlockUserInputFilter.h
   QtUtils/DolphinFileDialog.cpp
   QtUtils/DolphinFileDialog.h
   QtUtils/DoubleClickEventFilter.cpp
@@ -291,13 +283,15 @@ add_executable(dolphin-emu
   QtUtils/FileOpenEventFilter.h
   QtUtils/FlowLayout.cpp
   QtUtils/FlowLayout.h
+  QtUtils/ImageConverter.cpp
+  QtUtils/ImageConverter.h
   QtUtils/ModalMessageBox.cpp
   QtUtils/ModalMessageBox.h
+  QtUtils/NonDefaultQPushButton.cpp
+  QtUtils/NonDefaultQPushButton.h
   QtUtils/ParallelProgressDialog.h
   QtUtils/PartiallyClosableTabWidget.cpp
   QtUtils/PartiallyClosableTabWidget.h
-  QtUtils/ImageConverter.cpp
-  QtUtils/ImageConverter.h
   QtUtils/SignalBlocking.h
   QtUtils/UTF8CodePointCountValidator.cpp
   QtUtils/UTF8CodePointCountValidator.h
@@ -307,14 +301,18 @@ add_executable(dolphin-emu
   QtUtils/WinIconHelper.h
   QtUtils/WrapInScrollArea.cpp
   QtUtils/WrapInScrollArea.h
-  QtUtils/AspectRatioWidget.cpp
-  QtUtils/AspectRatioWidget.h
-  QtUtils/NonDefaultQPushButton.cpp
-  QtUtils/NonDefaultQPushButton.h
+  RenderWidget.cpp
+  RenderWidget.h
   ResourcePackManager.cpp
   ResourcePackManager.h
+  Resources.cpp
+  Resources.h
   RiivolutionBootWidget.cpp
   RiivolutionBootWidget.h
+  SearchBar.cpp
+  SearchBar.h
+  Settings.cpp
+  Settings.h
   Settings/AdvancedPane.cpp
   Settings/AdvancedPane.h
   Settings/AudioPane.cpp
@@ -329,26 +327,40 @@ add_executable(dolphin-emu
   Settings/InterfacePane.h
   Settings/PathPane.cpp
   Settings/PathPane.h
-  Settings/WiiPane.cpp
-  Settings/WiiPane.h
   Settings/USBDeviceAddToWhitelistDialog.cpp
   Settings/USBDeviceAddToWhitelistDialog.h
+  Settings/WiiPane.cpp
+  Settings/WiiPane.h
+  SkylanderPortal/SkylanderPortalWindow.cpp
+  SkylanderPortal/SkylanderPortalWindow.h
   TAS/GCTASInputWindow.cpp
   TAS/GCTASInputWindow.h
-  TAS/WiiTASInputWindow.cpp
-  TAS/WiiTASInputWindow.h
+  TAS/GBATASInputWindow.cpp
+  TAS/GBATASInputWindow.h
+  TAS/IRWidget.cpp
+  TAS/IRWidget.h
+  TAS/StickWidget.cpp
+  TAS/StickWidget.h
   TAS/TASCheckBox.cpp
   TAS/TASCheckBox.h
+  TAS/TASControlState.cpp
+  TAS/TASControlState.h
   TAS/TASInputWindow.cpp
   TAS/TASInputWindow.h
   TAS/TASSlider.cpp
   TAS/TASSlider.h
-  TAS/StickWidget.cpp
-  TAS/StickWidget.h
-  TAS/IRWidget.cpp
-  TAS/IRWidget.h
+  TAS/TASSpinBox.cpp
+  TAS/TASSpinBox.h
+  TAS/WiiTASInputWindow.cpp
+  TAS/WiiTASInputWindow.h
+  ToolBar.cpp
+  ToolBar.h
+  Translation.cpp
+  Translation.h
   Updater.cpp
   Updater.h
+  WiiUpdate.cpp
+  WiiUpdate.h
 )
 
 if (NOT WIN32)
@@ -377,6 +389,7 @@ PRIVATE
   Qt${QT_VERSION_MAJOR}::Widgets
   uicommon
   imgui
+  implot
 )
 
 if (WIN32)
@@ -397,6 +410,9 @@ if (MSVC)
   target_compile_options(dolphin-emu PRIVATE "${qtGui}")
   target_compile_options(dolphin-emu PRIVATE "${qtGuiPriv}")
   target_compile_options(dolphin-emu PRIVATE "${qtWidgets}")
+
+  # Qt 6.3.0 headers use std::aligned_storage instead of alignas
+  target_compile_definitions(dolphin-emu PRIVATE _SILENCE_CXX23_ALIGNED_STORAGE_DEPRECATION_WARNING)
 
   if ("${QT_VERSION_MAJOR}" GREATER_EQUAL 6)
     # Qt6 requires RTTI
@@ -609,18 +625,18 @@ if(APPLE)
     add_custom_command(TARGET dolphin-emu
       POST_BUILD COMMAND
       /usr/bin/codesign -f -s "${MACOS_CODE_SIGNING_IDENTITY}" --deep --options=runtime --entitlements "${CMAKE_SOURCE_DIR}/Source/Core/DolphinQt/DolphinEmu$<$<CONFIG:Debug>:Debug>.entitlements" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Dolphin.app" || true)
-    
+
     # Code sign builds for build systems that do have release/debug variants (Xcode)
     add_custom_command(TARGET dolphin-emu
       POST_BUILD COMMAND
       /usr/bin/codesign -f -s "${MACOS_CODE_SIGNING_IDENTITY}" --deep --options=runtime --entitlements "${CMAKE_SOURCE_DIR}/Source/Core/DolphinQt/DolphinEmuDebug.entitlements" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}/Dolphin.app" || true)
-      
+
     add_custom_command(TARGET dolphin-emu
       POST_BUILD COMMAND
       /usr/bin/codesign -f -s "${MACOS_CODE_SIGNING_IDENTITY}" --deep --options=runtime --entitlements "${CMAKE_SOURCE_DIR}/Source/Core/DolphinQt/DolphinEmu.entitlements" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}/Dolphin.app" || true)
   endif()
 else()
-  install(TARGETS dolphin-emu RUNTIME DESTINATION ${bindir})
+  install(TARGETS dolphin-emu RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND STEAM)
@@ -640,8 +656,9 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND STEAM)
 
   add_custom_command(TARGET dolphin-emu POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lib"
+    COMMAND cp "${QT_DIR}/../../LICENSE.*" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lib"
     COMMAND cp -P "${QT_DIR}/../../*.so*" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/lib"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory "${QT_DIR}/../../../plugins/platforms" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/platforms"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${QT_DIR}/../../../plugins" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/plugins"
   )
 
   # Copy qt.conf

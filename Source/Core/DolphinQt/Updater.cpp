@@ -3,6 +3,7 @@
 
 #include "DolphinQt/Updater.h"
 
+#include <cstdlib>
 #include <utility>
 
 #include <QCheckBox>
@@ -30,40 +31,29 @@ Updater::Updater(QWidget* parent, std::string update_track, std::string hash_ove
 
 void Updater::run()
 {
-  AutoUpdateChecker::CheckForUpdate(m_update_track, m_hash_override);
+  AutoUpdateChecker::CheckForUpdate(m_update_track, m_hash_override,
+                                    AutoUpdateChecker::CheckType::Automatic);
 }
 
-bool Updater::CheckForUpdate()
+void Updater::CheckForUpdate()
 {
-  m_update_available = false;
-  AutoUpdateChecker::CheckForUpdate(m_update_track, m_hash_override);
-
-  return m_update_available;
+  AutoUpdateChecker::CheckForUpdate(m_update_track, m_hash_override,
+                                    AutoUpdateChecker::CheckType::Manual);
 }
 
 void Updater::MarkDownToRichText(std::string &str)
 {
-  std::string markdownNewLine = "\r\n";
-  std::string RichTextNewLine = "<br/>";
-
-  size_t start_pos = 0;
-  while ((start_pos = str.find(markdownNewLine, start_pos)) != std::string::npos)
+  if (std::getenv("DOLPHIN_UPDATE_SERVER_URL"))
   {
-    str.replace(start_pos, markdownNewLine.length(), RichTextNewLine);
-    start_pos += RichTextNewLine.length();
+    TriggerUpdate(info, AutoUpdateChecker::RestartMode::RESTART_AFTER_UPDATE);
+    RunOnObject(m_parent, [this] {
+      m_parent->close();
+      return 0;
+    });
+    return;
   }
 
-  start_pos = 0;
-  while ((start_pos = str.find("*", start_pos)) != std::string::npos)
-  {
-    str.erase(start_pos, 1);
-  }
-}
-
-void Updater::OnUpdateAvailable(std::string version, std::string info)
-{
-  // bool later = false;
-  m_update_available = true;
+  bool later = false;
 
   MarkDownToRichText(info);
 

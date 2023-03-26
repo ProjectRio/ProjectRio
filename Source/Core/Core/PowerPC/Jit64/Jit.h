@@ -17,6 +17,8 @@
 // ----------
 #pragma once
 
+#include <optional>
+
 #include <rangeset/rangesizeset.h>
 
 #include "Common/CommonTypes.h"
@@ -41,15 +43,18 @@ struct CodeOp;
 class Jit64 : public JitBase, public QuantizedMemoryRoutines
 {
 public:
-  Jit64();
+  explicit Jit64(Core::System& system);
+  Jit64(const Jit64&) = delete;
+  Jit64(Jit64&&) = delete;
+  Jit64& operator=(const Jit64&) = delete;
+  Jit64& operator=(Jit64&&) = delete;
   ~Jit64() override;
 
   void Init() override;
   void Shutdown() override;
 
   bool HandleFault(uintptr_t access_address, SContext* ctx) override;
-  bool HandleStackFault() override;
-  bool BackPatch(u32 emAddress, SContext* ctx);
+  bool BackPatch(SContext* ctx);
 
   void EnableOptimization();
   void EnableBlockLink();
@@ -126,8 +131,9 @@ public:
   void FinalizeSingleResult(Gen::X64Reg output, const Gen::OpArg& input, bool packed = true,
                             bool duplicate = false);
   void FinalizeDoubleResult(Gen::X64Reg output, const Gen::OpArg& input);
-  void HandleNaNs(UGeckoInstruction inst, Gen::X64Reg xmm_out, Gen::X64Reg xmm_in,
-                  Gen::X64Reg clobber);
+  void HandleNaNs(UGeckoInstruction inst, Gen::X64Reg xmm, Gen::X64Reg clobber,
+                  std::optional<Gen::OpArg> Ra, std::optional<Gen::OpArg> Rb,
+                  std::optional<Gen::OpArg> Rc);
 
   void MultiplyImmediate(u32 imm, int a, int d, bool overflow);
 
@@ -252,10 +258,9 @@ private:
 
   bool HandleFunctionHooking(u32 address);
 
-  void AllocStack();
-  void FreeStack();
-
   void ResetFreeMemoryRanges();
+
+  static void ImHere(Jit64& jit);
 
   JitBlockCache blocks{*this};
   TrampolineCache trampolines{*this};
@@ -265,12 +270,12 @@ private:
 
   Jit64AsmRoutineManager asm_routines{*this};
 
-  bool m_enable_blr_optimization = false;
-  bool m_cleanup_after_stackfault = false;
-  u8* m_stack = nullptr;
-
   HyoutaUtilities::RangeSizeSet<u8*> m_free_ranges_near;
   HyoutaUtilities::RangeSizeSet<u8*> m_free_ranges_far;
+
+  const bool m_im_here_debug = false;
+  const bool m_im_here_log = false;
+  std::map<u32, int> m_been_here;
 };
 
 void LogGeneratedX86(size_t size, const PPCAnalyst::CodeBuffer& code_buffer, const u8* normalEntry,

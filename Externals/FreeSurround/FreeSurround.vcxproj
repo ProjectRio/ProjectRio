@@ -15,9 +15,9 @@
     <Import Project="$(VSPropsDir)ClDisableAllWarnings.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+  <ItemDefinitionGroup>
     <ClCompile>
-      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>

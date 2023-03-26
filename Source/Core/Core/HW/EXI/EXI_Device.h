@@ -11,6 +11,10 @@
 
 class PointerWrap;
 
+namespace Core
+{
+class System;
+}
 namespace Memcard
 {
 struct HeaderData;
@@ -37,12 +41,14 @@ enum class EXIDeviceType : int
   EthernetXLink,
   // Only used on Apple devices.
   EthernetTapServer,
+  EthernetBuiltIn,
   None = 0xFF
 };
 
 class IEXIDevice
 {
 public:
+  explicit IEXIDevice(Core::System& system);
   virtual ~IEXIDevice() = default;
 
   // Immediate copy functions
@@ -68,18 +74,22 @@ public:
   // such.
   EXIDeviceType m_device_type = EXIDeviceType::None;
 
+protected:
+  Core::System& m_system;
+
 private:
   // Byte transfer function for this device
   virtual void TransferByte(u8& byte);
 };
 
-std::unique_ptr<IEXIDevice> EXIDevice_Create(EXIDeviceType device_type, int channel_num,
+std::unique_ptr<IEXIDevice> EXIDevice_Create(Core::System& system, EXIDeviceType device_type,
+                                             int channel_num,
                                              const Memcard::HeaderData& memcard_header_data);
 }  // namespace ExpansionInterface
 
 template <>
 struct fmt::formatter<ExpansionInterface::EXIDeviceType>
-    : EnumFormatter<ExpansionInterface::EXIDeviceType::EthernetTapServer>
+    : EnumFormatter<ExpansionInterface::EXIDeviceType::EthernetBuiltIn>
 {
   static constexpr array_type names = {
       _trans("Dummy"),
@@ -95,6 +105,7 @@ struct fmt::formatter<ExpansionInterface::EXIDeviceType>
       _trans("Advance Game Port"),
       _trans("Broadband Adapter (XLink Kai)"),
       _trans("Broadband Adapter (tapserver)"),
+      _trans("Broadband Adapter (HLE)"),
   };
 
   constexpr formatter() : EnumFormatter(names) {}

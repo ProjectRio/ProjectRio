@@ -71,6 +71,18 @@ void AdvancedPane::CreateLayout()
   //    "Enables the Memory Management Unit, needed for some games. (ON = Compatible, OFF = Fast)"));
   //cpu_options_group_layout->addWidget(m_enable_mmu_checkbox);
 
+  m_pause_on_panic_checkbox = new QCheckBox(tr("Pause on Panic"));
+  m_pause_on_panic_checkbox->setToolTip(
+      tr("Pauses the emulation if a Read/Write or Unknown Instruction panic occurs.\nEnabling will "
+         "affect performance.\nThe performance impact is the same as having Enable MMU on."));
+  cpu_options_group_layout->addWidget(m_pause_on_panic_checkbox);
+
+  m_accurate_cpu_cache_checkbox = new QCheckBox(tr("Enable Write-Back Cache (slow)"));
+  m_accurate_cpu_cache_checkbox->setToolTip(
+      tr("Enables emulation of the CPU write-back cache.\nEnabling will have a significant impact "
+         "on performance.\nThis should be left disabled unless absolutely needed."));
+  cpu_options_group_layout->addWidget(m_accurate_cpu_cache_checkbox);
+
   auto* clock_override = new QGroupBox(tr("Clock Override"));
   auto* clock_override_layout = new QVBoxLayout();
   clock_override->setLayout(clock_override_layout);
@@ -183,6 +195,12 @@ void AdvancedPane::ConnectLayout()
   //connect(m_enable_mmu_checkbox, &QCheckBox::toggled, this,
   //        [](bool checked) { Config::SetBaseOrCurrent(Config::MAIN_MMU, checked); });
 
+  connect(m_pause_on_panic_checkbox, &QCheckBox::toggled, this,
+          [](bool checked) { Config::SetBaseOrCurrent(Config::MAIN_PAUSE_ON_PANIC, checked); });
+
+  connect(m_accurate_cpu_cache_checkbox, &QCheckBox::toggled, this,
+          [](bool checked) { Config::SetBaseOrCurrent(Config::MAIN_ACCURATE_CPU_CACHE, checked); });
+
   m_cpu_clock_override_checkbox->setChecked(Config::Get(Config::MAIN_OVERCLOCK_ENABLE));
   connect(m_cpu_clock_override_checkbox, &QCheckBox::toggled, [this](bool enable_clock_override) {
     Config::SetBaseOrCurrent(Config::MAIN_OVERCLOCK_ENABLE, enable_clock_override);
@@ -248,6 +266,12 @@ void AdvancedPane::Update()
 
   //m_enable_mmu_checkbox->setChecked(Config::Get(Config::MAIN_MMU));
   //m_enable_mmu_checkbox->setEnabled(!running);
+
+  m_pause_on_panic_checkbox->setChecked(Config::Get(Config::MAIN_PAUSE_ON_PANIC));
+  m_pause_on_panic_checkbox->setEnabled(!running);
+
+  m_accurate_cpu_cache_checkbox->setChecked(Config::Get(Config::MAIN_ACCURATE_CPU_CACHE));
+  m_accurate_cpu_cache_checkbox->setEnabled(!running);
 
   QFont bf = font();
   bf.setBold(Config::GetActiveLayerForConfig(Config::MAIN_OVERCLOCK_ENABLE) !=

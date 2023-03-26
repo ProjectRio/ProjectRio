@@ -11,6 +11,11 @@ NumericSettingBase::NumericSettingBase(const NumericSettingDetails& details) : m
 {
 }
 
+const char* NumericSettingBase::GetININame() const
+{
+  return m_details.ini_name;
+}
+
 const char* NumericSettingBase::GetUIName() const
 {
   return m_details.ui_name;
@@ -24,6 +29,11 @@ const char* NumericSettingBase::GetUISuffix() const
 const char* NumericSettingBase::GetUIDescription() const
 {
   return m_details.ui_description;
+}
+
+SettingVisibility NumericSettingBase::GetVisibility() const
+{
+  return m_details.visibility;
 }
 
 template <>

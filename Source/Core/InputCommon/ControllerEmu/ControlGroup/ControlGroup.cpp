@@ -32,7 +32,8 @@ void ControlGroup::AddVirtualNotchSetting(SettingValue<double>* value, double ma
   AddSetting(value,
              {_trans("Virtual Notches"),
               // i18n: The degrees symbol.
-              _trans("°"), _trans("Snap the thumbstick position to the nearest octagonal axis.")},
+              _trans("°"), _trans("Snap the thumbstick position to the nearest octagonal axis."),
+              nullptr, SettingVisibility::Advanced},
              0, 0, max_virtual_notch_deg);
 }
 
@@ -56,7 +57,7 @@ void ControlGroup::LoadConfig(IniFile::Section* sec, const std::string& defdev,
 
   // enabled
   if (default_value != DefaultValue::AlwaysEnabled)
-    sec->Get(group + "Enabled", &enabled, default_value == DefaultValue::Enabled);
+    sec->Get(group + "Enabled", &enabled, default_value != DefaultValue::Disabled);
 
   for (auto& setting : numeric_settings)
     setting->LoadFromIni(*sec, group);
@@ -108,7 +109,7 @@ void ControlGroup::SaveConfig(IniFile::Section* sec, const std::string& defdev,
   const std::string group(base + name + "/");
 
   // enabled
-  sec->Set(group + "Enabled", enabled, true);
+  sec->Set(group + "Enabled", enabled, default_value != DefaultValue::Disabled);
 
   for (auto& setting : numeric_settings)
     setting->SaveToIni(*sec, group);

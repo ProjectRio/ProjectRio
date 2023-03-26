@@ -13,8 +13,6 @@ add_library(discio
   DiscScrubber.h
   DiscUtils.cpp
   DiscUtils.h
-  DriveBlob.cpp
-  DriveBlob.h
   Enums.cpp
   Enums.h
   FileBlob.cpp
@@ -30,12 +28,16 @@ add_library(discio
   MultithreadedCompressor.h
   NANDImporter.cpp
   NANDImporter.h
+  NFSBlob.cpp
+  NFSBlob.h
   RiivolutionParser.cpp
   RiivolutionParser.h
   RiivolutionPatcher.cpp
   RiivolutionPatcher.h
   ScrubbedBlob.cpp
   ScrubbedBlob.h
+  SplitFileBlob.cpp
+  SplitFileBlob.h
   TGCBlob.cpp
   TGCBlob.h
   Volume.cpp
@@ -68,8 +70,8 @@ target_link_libraries(discio
 PUBLIC
   core
   BZip2::BZip2
-  lzma
-  zstd
+  LibLZMA::LibLZMA
+  zstd::zstd
 
 PRIVATE
   fmt::fmt

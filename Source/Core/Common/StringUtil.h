@@ -6,6 +6,7 @@
 #include <cstdarg>
 #include <cstddef>
 #include <cstdlib>
+#include <filesystem>
 #include <iomanip>
 #include <limits>
 #include <locale>
@@ -15,11 +16,6 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-
-#ifdef _MSC_VER
-#include <filesystem>
-#define HAS_STD_FILESYSTEM
-#endif
 
 std::string StringFromFormatV(const char* format, va_list args);
 
@@ -46,12 +42,15 @@ inline void CharArrayFromFormat(char (&out)[Count], const char* format, ...)
 // Good
 std::string ArrayToString(const u8* data, u32 size, int line_len = 20, bool spaces = true);
 
+std::string_view StripWhitespace(std::string_view s);
 std::string_view StripSpaces(std::string_view s);
 std::string_view StripQuotes(std::string_view s);
 
 std::string ReplaceAll(std::string result, std::string_view src, std::string_view dest);
 
 void ReplaceBreaksWithSpaces(std::string& str);
+
+void TruncateToCString(std::string* s);
 
 bool TryParse(const std::string& str, bool* output);
 
@@ -170,10 +169,8 @@ std::string WithUnifiedPathSeparators(std::string path);
 // This requires forward slashes to be used for the path separators, even on Windows.
 std::string PathToFileName(std::string_view path);
 
-bool StringBeginsWith(std::string_view str, std::string_view begin);
-bool StringEndsWith(std::string_view str, std::string_view end);
 void StringPopBackIf(std::string* s, char c);
-size_t StringUTF8CodePointCount(const std::string& str);
+size_t StringUTF8CodePointCount(std::string_view str);
 
 std::string CP1252ToUTF8(std::string_view str);
 std::string SHIFTJISToUTF8(std::string_view str);
@@ -211,10 +208,8 @@ inline std::string UTF8ToTStr(std::string_view str)
 
 #endif
 
-#ifdef HAS_STD_FILESYSTEM
 std::filesystem::path StringToPath(std::string_view path);
 std::string PathToString(const std::filesystem::path& path);
-#endif
 
 // Thousand separator. Turns 12345678 into 12,345,678
 template <typename I>
@@ -269,4 +264,5 @@ inline char ToUpper(char ch)
 }
 void ToLower(std::string* str);
 void ToUpper(std::string* str);
+bool CaseInsensitiveEquals(std::string_view a, std::string_view b);
 }  // namespace Common

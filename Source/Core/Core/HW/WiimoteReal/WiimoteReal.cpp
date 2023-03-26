@@ -131,6 +131,11 @@ void ProcessWiimotePool()
   }
 }
 
+bool IsScannerReady()
+{
+  return s_wiimote_scanner.IsReady();
+}
+
 void AddWiimoteToPool(std::unique_ptr<Wiimote> wiimote)
 {
   // Our real wiimote class requires an index.
@@ -450,7 +455,22 @@ Report& Wiimote::ProcessReadQueue(bool repeat_last_data_report)
   return m_last_input_report;
 }
 
-void Wiimote::Update()
+u8 Wiimote::GetWiimoteDeviceIndex() const
+{
+  return m_bt_device_index;
+}
+
+void Wiimote::SetWiimoteDeviceIndex(u8 index)
+{
+  m_bt_device_index = index;
+}
+
+void Wiimote::PrepareInput(WiimoteEmu::DesiredWiimoteState* target_state)
+{
+  // Nothing to do here on real Wiimotes.
+}
+
+void Wiimote::Update(const WiimoteEmu::DesiredWiimoteState& target_state)
 {
   // Wii remotes send input at 200hz once a Wii enables "sniff mode" on the connection.
   // PC bluetooth stacks do not enable sniff mode causing remotes to send input at only 100hz.
@@ -475,7 +495,7 @@ void Wiimote::Update()
                     u32(rpt.size() - REPORT_HID_HEADER_SIZE));
 }
 
-bool Wiimote::IsButtonPressed()
+ButtonData Wiimote::GetCurrentlyPressedButtons()
 {
   Report& rpt = m_last_input_report;
   if (rpt.size() >= 4)
@@ -489,10 +509,10 @@ bool Wiimote::IsButtonPressed()
       ButtonData buttons = {};
       builder->GetCoreData(&buttons);
 
-      return buttons.hex != 0;
+      return buttons;
     }
   }
-  return false;
+  return ButtonData{};
 }
 
 void Wiimote::Prepare()

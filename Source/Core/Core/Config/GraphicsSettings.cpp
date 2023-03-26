@@ -31,6 +31,13 @@ const Info<bool> GFX_SHOW_BATTER_FIELDER{{System::GFX, "Settings", "ShowBatterFi
 const Info<bool> GFX_TRAINING_MODE{{System::GFX, "Settings", "TrainingModeOverlay"}, false};
 const Info<bool> GFX_DRAFT_TIMER{{System::GFX, "Settings", "DraftTimer"}, true};
 const Info<bool> GFX_SHOW_NETPLAY_PING{{System::GFX, "Settings", "ShowNetPlayPing"}, true};
+const Info<bool> GFX_SHOW_FTIMES{{System::GFX, "Settings", "ShowFTimes"}, false};
+const Info<bool> GFX_SHOW_VPS{{System::GFX, "Settings", "ShowVPS"}, false};
+const Info<bool> GFX_SHOW_VTIMES{{System::GFX, "Settings", "ShowVTimes"}, false};
+const Info<bool> GFX_SHOW_GRAPHS{{System::GFX, "Settings", "ShowGraphs"}, false};
+const Info<bool> GFX_SHOW_SPEED{{System::GFX, "Settings", "ShowSpeed"}, false};
+const Info<bool> GFX_SHOW_SPEED_COLORS{{System::GFX, "Settings", "ShowSpeedColors"}, true};
+const Info<int> GFX_PERF_SAMP_WINDOW{{System::GFX, "Settings", "PerfSampWindowMS"}, 1000};
 const Info<bool> GFX_SHOW_NETPLAY_MESSAGES{{System::GFX, "Settings", "ShowNetPlayMessages"}, false};
 const Info<bool> GFX_LOG_RENDER_TIME_TO_FILE{{System::GFX, "Settings", "LogRenderTimeToFile"},
                                              false};
@@ -73,17 +80,10 @@ const Info<bool> GFX_BORDERLESS_FULLSCREEN{{System::GFX, "Settings", "Borderless
 const Info<bool> GFX_ENABLE_VALIDATION_LAYER{{System::GFX, "Settings", "EnableValidationLayer"},
                                              false};
 
-#if defined(ANDROID)
-const Info<bool> GFX_BACKEND_MULTITHREADING{{System::GFX, "Settings", "BackendMultithreading"},
-                                            false};
-const Info<int> GFX_COMMAND_BUFFER_EXECUTE_INTERVAL{
-    {System::GFX, "Settings", "CommandBufferExecuteInterval"}, 0};
-#else
 const Info<bool> GFX_BACKEND_MULTITHREADING{{System::GFX, "Settings", "BackendMultithreading"},
                                             true};
 const Info<int> GFX_COMMAND_BUFFER_EXECUTE_INTERVAL{
     {System::GFX, "Settings", "CommandBufferExecuteInterval"}, 100};
-#endif
 
 const Info<bool> GFX_SHADER_CACHE{{System::GFX, "Settings", "ShaderCache"}, true};
 const Info<bool> GFX_WAIT_FOR_SHADERS_BEFORE_STARTING{
@@ -95,20 +95,28 @@ const Info<int> GFX_SHADER_PRECOMPILER_THREADS{
     {System::GFX, "Settings", "ShaderPrecompilerThreads"}, -1};
 const Info<bool> GFX_SAVE_TEXTURE_CACHE_TO_STATE{
     {System::GFX, "Settings", "SaveTextureCacheToState"}, true};
+const Info<bool> GFX_PREFER_VS_FOR_LINE_POINT_EXPANSION{
+    {System::GFX, "Settings", "PreferVSForLinePointExpansion"}, false};
+const Info<bool> GFX_CPU_CULL{{System::GFX, "Settings", "CPUCull"}, false};
+
+const Info<TriState> GFX_MTL_MANUALLY_UPLOAD_BUFFERS{
+    {System::GFX, "Settings", "ManuallyUploadBuffers"}, TriState::Auto};
+const Info<TriState> GFX_MTL_USE_PRESENT_DRAWABLE{
+    {System::GFX, "Settings", "MTLUsePresentDrawable"}, TriState::Auto};
 
 const Info<bool> GFX_SW_DUMP_OBJECTS{{System::GFX, "Settings", "SWDumpObjects"}, false};
 const Info<bool> GFX_SW_DUMP_TEV_STAGES{{System::GFX, "Settings", "SWDumpTevStages"}, false};
 const Info<bool> GFX_SW_DUMP_TEV_TEX_FETCHES{{System::GFX, "Settings", "SWDumpTevTexFetches"},
                                              false};
-const Info<int> GFX_SW_DRAW_START{{System::GFX, "Settings", "SWDrawStart"}, 0};
-const Info<int> GFX_SW_DRAW_END{{System::GFX, "Settings", "SWDrawEnd"}, 100000};
 
 const Info<bool> GFX_PREFER_GLES{{System::GFX, "Settings", "PreferGLES"}, false};
 
+const Info<bool> GFX_MODS_ENABLE{{System::GFX, "Settings", "EnableMods"}, false};
+
 // Graphics.Enhancements
 
-const Info<bool> GFX_ENHANCE_FORCE_FILTERING{{System::GFX, "Enhancements", "ForceFiltering"},
-                                             false};
+const Info<TextureFilteringMode> GFX_ENHANCE_FORCE_TEXTURE_FILTERING{
+    {System::GFX, "Enhancements", "ForceTextureFiltering"}, TextureFilteringMode::Default};
 const Info<int> GFX_ENHANCE_MAX_ANISOTROPY{{System::GFX, "Enhancements", "MaxAnisotropy"}, 0};
 const Info<std::string> GFX_ENHANCE_POST_SHADER{
     {System::GFX, "Enhancements", "PostProcessingShader"}, ""};
@@ -153,10 +161,14 @@ const Info<bool> GFX_HACK_COPY_EFB_SCALED{{System::GFX, "Hacks", "EFBScaledCopy"
 const Info<bool> GFX_HACK_EFB_EMULATE_FORMAT_CHANGES{
     {System::GFX, "Hacks", "EFBEmulateFormatChanges"}, false};
 const Info<bool> GFX_HACK_VERTEX_ROUNDING{{System::GFX, "Hacks", "VertexRounding"}, false};
+const Info<bool> GFX_HACK_VI_SKIP{{System::GFX, "Hacks", "VISkip"}, false};
 const Info<u32> GFX_HACK_MISSING_COLOR_VALUE{{System::GFX, "Hacks", "MissingColorValue"},
                                              0xFFFFFFFF};
 const Info<bool> GFX_HACK_FAST_TEXTURE_SAMPLING{{System::GFX, "Hacks", "FastTextureSampling"},
                                                 true};
+#ifdef __APPLE__
+const Info<bool> GFX_HACK_NO_MIPMAPPING{{System::GFX, "Hacks", "NoMipmapping"}, false};
+#endif
 
 // Graphics.GameSpecific
 

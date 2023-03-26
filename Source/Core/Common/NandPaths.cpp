@@ -41,6 +41,12 @@ std::string GetTicketFileName(u64 title_id, std::optional<FromWhichRoot> from)
                      static_cast<u32>(title_id >> 32), static_cast<u32>(title_id));
 }
 
+std::string GetV1TicketFileName(u64 title_id, std::optional<FromWhichRoot> from)
+{
+  return fmt::format("{}/ticket/{:08x}/{:08x}.tv1", RootUserPath(from),
+                     static_cast<u32>(title_id >> 32), static_cast<u32>(title_id));
+}
+
 std::string GetTitlePath(u64 title_id, std::optional<FromWhichRoot> from)
 {
   return fmt::format("{}/title/{:08x}/{:08x}", RootUserPath(from), static_cast<u32>(title_id >> 32),
@@ -70,7 +76,7 @@ std::string GetMiiDatabasePath(std::optional<FromWhichRoot> from)
 bool IsTitlePath(const std::string& path, std::optional<FromWhichRoot> from, u64* title_id)
 {
   std::string expected_prefix = RootUserPath(from) + "/title/";
-  if (!StringBeginsWith(path, expected_prefix))
+  if (!path.starts_with(expected_prefix))
   {
     return false;
   }

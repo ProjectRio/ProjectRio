@@ -56,6 +56,8 @@ add_library(inputcommon
   ControllerInterface/ControllerInterface.h
   ControllerInterface/CoreDevice.cpp
   ControllerInterface/CoreDevice.h
+  ControllerInterface/InputBackend.cpp
+  ControllerInterface/InputBackend.h
   ControllerInterface/MappingCommon.cpp
   ControllerInterface/MappingCommon.h
   ControllerInterface/Wiimote/WiimoteController.cpp
@@ -79,7 +81,7 @@ PUBLIC
 
 PRIVATE
   fmt::fmt
-  png
+  ${spng_target}
 )
 
 if(WIN32)
@@ -124,6 +126,9 @@ elseif(APPLE)
     ${FORCEFEEDBACK_LIBRARY}
     ${IOK_LIBRARY}
   )
+  target_compile_options(inputcommon PRIVATE
+    -fobjc-arc
+  )
 elseif(X11_FOUND)
   target_sources(inputcommon PRIVATE
     ControllerInterface/Xlib/XInput2.cpp
@@ -138,10 +143,11 @@ elseif(ANDROID)
   target_sources(inputcommon PRIVATE
     ControllerInterface/Android/Android.cpp
     ControllerInterface/Android/Android.h
-    ControllerInterface/Touch/ButtonManager.cpp
-    ControllerInterface/Touch/ButtonManager.h
-    ControllerInterface/Touch/Touchscreen.cpp
-    ControllerInterface/Touch/Touchscreen.h
+    ControllerInterface/Touch/InputOverrider.cpp
+    ControllerInterface/Touch/InputOverrider.h
+  )
+  target_link_libraries(inputcommon PRIVATE
+    androidcommon
   )
 endif()
 
@@ -174,32 +180,12 @@ if(UNIX)
   )
 endif()
 
-if(ENABLE_SDL)
-  find_package(SDL2)
-  if(SDL2_FOUND)
-    message(STATUS "Using shared SDL2")
-    set(SDL_TARGET SDL2::SDL2)
-  else()
-    # SDL2 not found, try SDL
-    find_package(SDL)
-    if(SDL_FOUND)
-      message(STATUS "Using shared SDL")
-      add_library(System_SDL INTERFACE)
-      target_include_directories(System_SDL INTERFACE ${SDL_INCLUDE_DIR})
-      target_link_libraries(System_SDL INTERFACE ${SDL_LIBRARY})
-      set(SDL_TARGET System_SDL)
-    endif()
-  endif()
-  if(SDL_TARGET AND TARGET ${SDL_TARGET})
-    target_sources(inputcommon PRIVATE
-      ControllerInterface/SDL/SDL.cpp
-      ControllerInterface/SDL/SDL.h
-    )
-    target_link_libraries(inputcommon PRIVATE ${SDL_TARGET})
-    target_compile_definitions(inputcommon PRIVATE "CIFACE_USE_SDL=1")
-  else()
-    message(STATUS "SDL NOT found, disabling SDL input")
-  endif()
+if(SDL2_FOUND)
+  target_sources(inputcommon PRIVATE
+    ControllerInterface/SDL/SDL.cpp
+    ControllerInterface/SDL/SDL.h
+  )
+  target_link_libraries(inputcommon PRIVATE SDL2::SDL2)
 endif()
 
 if(MSVC)

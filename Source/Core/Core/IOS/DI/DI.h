@@ -15,9 +15,13 @@
 class CBoot;
 class PointerWrap;
 
-namespace DVDInterface
+namespace DVD
 {
 enum class DIInterruptType : int;
+}
+namespace Core
+{
+class System;
 }
 namespace CoreTiming
 {
@@ -36,7 +40,7 @@ class DIDevice : public Device
 public:
   DIDevice(Kernel& ios, const std::string& device_name);
 
-  static void InterruptFromDVDInterface(DVDInterface::DIInterruptType interrupt_type);
+  static void InterruptFromDVDInterface(DVD::DIInterruptType interrupt_type);
   static DiscIO::Partition GetCurrentPartition();
 
   void DoState(PointerWrap& p) override;
@@ -128,7 +132,7 @@ private:
   void ChangePartition(const DiscIO::Partition partition);
   void InitializeIfFirstTime();
   void ResetDIRegisters();
-  static void FinishDICommandCallback(u64 userdata, s64 ticksbehind);
+  static void FinishDICommandCallback(Core::System& system, u64 userdata, s64 ticksbehind);
   void FinishDICommand(DIResult result);
 
   static CoreTiming::EventType* s_finish_executing_di_command;

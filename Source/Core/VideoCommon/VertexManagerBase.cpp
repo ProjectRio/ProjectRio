@@ -7,7 +7,6 @@
 #include <cmath>
 #include <memory>
 
-#include "Common/BitSet.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/EnumMap.h"
@@ -16,20 +15,24 @@
 
 #include "Core/ConfigManager.h"
 #include "Core/DolphinAnalytics.h"
+#include "Core/System.h"
 
+#include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/BPMemory.h"
 #include "VideoCommon/BoundingBox.h"
 #include "VideoCommon/DataReader.h"
 #include "VideoCommon/FramebufferManager.h"
 #include "VideoCommon/GeometryShaderManager.h"
+#include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModActionData.h"
+#include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModManager.h"
 #include "VideoCommon/IndexGenerator.h"
 #include "VideoCommon/NativeVertexFormat.h"
 #include "VideoCommon/OpcodeDecoding.h"
 #include "VideoCommon/PerfQueryBase.h"
 #include "VideoCommon/PixelShaderManager.h"
-#include "VideoCommon/RenderBase.h"
 #include "VideoCommon/Statistics.h"
 #include "VideoCommon/TextureCacheBase.h"
+#include "VideoCommon/TextureInfo.h"
 #include "VideoCommon/VertexLoaderManager.h"
 #include "VideoCommon/VertexShaderManager.h"
 #include "VideoCommon/VideoBackendBase.h"
@@ -101,7 +104,9 @@ VertexManagerBase::~VertexManagerBase() = default;
 
 bool VertexManagerBase::Initialize()
 {
+  m_frame_end_event = AfterFrameEvent::Register([this] { OnEndFrame(); }, "VertexManagerBase");
   m_index_generator.Init();
+  m_cpu_cull.Init();
   return true;
 }
 
@@ -113,6 +118,13 @@ u32 VertexManagerBase::GetRemainingSize() const
 void VertexManagerBase::AddIndices(OpcodeDecoder::Primitive primitive, u32 num_vertices)
 {
   m_index_generator.AddIndices(primitive, num_vertices);
+}
+
+bool VertexManagerBase::AreAllVerticesCulled(VertexLoaderBase* loader,
+                                             OpcodeDecoder::Primitive primitive, const u8* src,
+                                             u32 count)
+{
+  return m_cpu_cull.AreAllVerticesCulled(loader, primitive, src, count);
 }
 
 DataReader VertexManagerBase::PrepareForAdditionalData(OpcodeDecoder::Primitive primitive,
@@ -138,26 +150,11 @@ DataReader VertexManagerBase::PrepareForAdditionalData(OpcodeDecoder::Primitive 
   }
 
   // Check for size in buffer, if the buffer gets full, call Flush()
-  if (!m_is_flushed &&
-      (count > m_index_generator.GetRemainingIndices() || count > GetRemainingIndices(primitive) ||
-       needed_vertex_bytes > GetRemainingSize()))
+  if (!m_is_flushed && (count > m_index_generator.GetRemainingIndices(primitive) ||
+                        count > GetRemainingIndices(primitive) ||
+                        needed_vertex_bytes > GetRemainingSize())) [[unlikely]]
   {
     Flush();
-
-    if (count > m_index_generator.GetRemainingIndices())
-    {
-      ERROR_LOG_FMT(VIDEO, "Too little remaining index values. Use 32-bit or reset them on flush.");
-    }
-    if (count > GetRemainingIndices(primitive))
-    {
-      ERROR_LOG_FMT(VIDEO, "VertexManager: Buffer not large enough for all indices! "
-                           "Increase MAXIBUFFERSIZE or we need primitive breaking after all.");
-    }
-    if (needed_vertex_bytes > GetRemainingSize())
-    {
-      ERROR_LOG_FMT(VIDEO, "VertexManager: Buffer not large enough for all vertices! "
-                           "Increase MAXVBUFFERSIZE or we need primitive breaking after all.");
-    }
   }
 
   m_cull_all = cullall;
@@ -180,6 +177,33 @@ DataReader VertexManagerBase::PrepareForAdditionalData(OpcodeDecoder::Primitive 
     m_is_flushed = false;
   }
 
+  // Now that we've reset the buffer, there should be enough space. It's possible that we still
+  // won't have enough space in a few rare cases, such as vertex shader line/point expansion with a
+  // ton of lines in one draw command, in which case we will either need to add support for
+  // splitting a single draw command into multiple draws or using bigger indices.
+  ASSERT_MSG(VIDEO, count <= m_index_generator.GetRemainingIndices(primitive),
+             "VertexManager: Too few remaining index values ({} > {}). "
+             "32-bit indices or primitive breaking needed.",
+             count, m_index_generator.GetRemainingIndices(primitive));
+  ASSERT_MSG(VIDEO, count <= GetRemainingIndices(primitive),
+             "VertexManager: Buffer not large enough for all indices! ({} > {}) "
+             "Increase MAXIBUFFERSIZE or we need primitive breaking after all.",
+             count, GetRemainingIndices(primitive));
+  ASSERT_MSG(VIDEO, needed_vertex_bytes <= GetRemainingSize(),
+             "VertexManager: Buffer not large enough for all vertices! ({} > {}) "
+             "Increase MAXVBUFFERSIZE or we need primitive breaking after all.",
+             needed_vertex_bytes, GetRemainingSize());
+
+  return DataReader(m_cur_buffer_pointer, m_end_buffer_pointer);
+}
+
+DataReader VertexManagerBase::DisableCullAll(u32 stride)
+{
+  if (m_cull_all)
+  {
+    m_cull_all = false;
+    ResetBuffer(stride);
+  }
   return DataReader(m_cur_buffer_pointer, m_end_buffer_pointer);
 }
 
@@ -192,7 +216,55 @@ u32 VertexManagerBase::GetRemainingIndices(OpcodeDecoder::Primitive primitive) c
 {
   const u32 index_len = MAXIBUFFERSIZE - m_index_generator.GetIndexLen();
 
-  if (g_Config.backend_info.bSupportsPrimitiveRestart)
+  if (primitive >= Primitive::GX_DRAW_LINES)
+  {
+    if (g_Config.UseVSForLinePointExpand())
+    {
+      if (g_Config.backend_info.bSupportsPrimitiveRestart)
+      {
+        switch (primitive)
+        {
+        case Primitive::GX_DRAW_LINES:
+          return index_len / 5 * 2;
+        case Primitive::GX_DRAW_LINE_STRIP:
+          return index_len / 5 + 1;
+        case Primitive::GX_DRAW_POINTS:
+          return index_len / 5;
+        default:
+          return 0;
+        }
+      }
+      else
+      {
+        switch (primitive)
+        {
+        case Primitive::GX_DRAW_LINES:
+          return index_len / 6 * 2;
+        case Primitive::GX_DRAW_LINE_STRIP:
+          return index_len / 6 + 1;
+        case Primitive::GX_DRAW_POINTS:
+          return index_len / 6;
+        default:
+          return 0;
+        }
+      }
+    }
+    else
+    {
+      switch (primitive)
+      {
+      case Primitive::GX_DRAW_LINES:
+        return index_len;
+      case Primitive::GX_DRAW_LINE_STRIP:
+        return index_len / 2 + 1;
+      case Primitive::GX_DRAW_POINTS:
+        return index_len;
+      default:
+        return 0;
+      }
+    }
+  }
+  else if (g_Config.backend_info.bSupportsPrimitiveRestart)
   {
     switch (primitive)
     {
@@ -205,15 +277,6 @@ u32 VertexManagerBase::GetRemainingIndices(OpcodeDecoder::Primitive primitive) c
       return index_len / 1 - 1;
     case Primitive::GX_DRAW_TRIANGLE_FAN:
       return index_len / 6 * 4 + 1;
-
-    case Primitive::GX_DRAW_LINES:
-      return index_len;
-    case Primitive::GX_DRAW_LINE_STRIP:
-      return index_len / 2 + 1;
-
-    case Primitive::GX_DRAW_POINTS:
-      return index_len;
-
     default:
       return 0;
     }
@@ -231,15 +294,6 @@ u32 VertexManagerBase::GetRemainingIndices(OpcodeDecoder::Primitive primitive) c
       return index_len / 3 + 2;
     case Primitive::GX_DRAW_TRIANGLE_FAN:
       return index_len / 3 + 2;
-
-    case Primitive::GX_DRAW_LINES:
-      return index_len;
-    case Primitive::GX_DRAW_LINE_STRIP:
-      return index_len / 2 + 1;
-
-    case Primitive::GX_DRAW_POINTS:
-      return index_len;
-
     default:
       return 0;
     }
@@ -271,13 +325,13 @@ void VertexManagerBase::CommitBuffer(u32 num_vertices, u32 vertex_stride, u32 nu
 void VertexManagerBase::DrawCurrentBatch(u32 base_index, u32 num_indices, u32 base_vertex)
 {
   // If bounding box is enabled, we need to flush any changes first, then invalidate what we have.
-  if (g_renderer->IsBBoxEnabled() && g_ActiveConfig.bBBoxEnable &&
+  if (g_bounding_box->IsEnabled() && g_ActiveConfig.bBBoxEnable &&
       g_ActiveConfig.backend_info.bSupportsBBox)
   {
-    g_renderer->BBoxFlush();
+    g_bounding_box->Flush();
   }
 
-  g_renderer->DrawIndexed(base_index, num_indices, base_vertex);
+  g_gfx->DrawIndexed(base_index, num_indices, base_vertex);
 }
 
 void VertexManagerBase::UploadUniforms()
@@ -286,9 +340,13 @@ void VertexManagerBase::UploadUniforms()
 
 void VertexManagerBase::InvalidateConstants()
 {
-  VertexShaderManager::dirty = true;
-  GeometryShaderManager::dirty = true;
-  PixelShaderManager::dirty = true;
+  auto& system = Core::System::GetInstance();
+  auto& vertex_shader_manager = system.GetVertexShaderManager();
+  auto& geometry_shader_manager = system.GetGeometryShaderManager();
+  auto& pixel_shader_manager = system.GetPixelShaderManager();
+  vertex_shader_manager.dirty = true;
+  geometry_shader_manager.dirty = true;
+  pixel_shader_manager.dirty = true;
 }
 
 void VertexManagerBase::UploadUtilityUniforms(const void* uniforms, u32 uniforms_size)
@@ -337,7 +395,7 @@ bool VertexManagerBase::UploadTexelBuffer(const void* data, u32 data_size, Texel
   return false;
 }
 
-void VertexManagerBase::LoadTextures()
+BitSet32 VertexManagerBase::UsedTextures() const
 {
   BitSet32 usedtextures;
   for (u32 i = 0; i < bpmem.genMode.numtevstages + 1u; ++i)
@@ -349,10 +407,7 @@ void VertexManagerBase::LoadTextures()
       if (bpmem.tevind[i].IsActive() && bpmem.tevind[i].bt < bpmem.genMode.numindstages)
         usedtextures[bpmem.tevindref.getTexMap(bpmem.tevind[i].bt)] = true;
 
-  for (unsigned int i : usedtextures)
-    g_texture_cache->Load(i);
-
-  g_texture_cache->BindTextures(usedtextures);
+  return usedtextures;
 }
 
 void VertexManagerBase::Flush()
@@ -361,6 +416,12 @@ void VertexManagerBase::Flush()
     return;
 
   m_is_flushed = true;
+
+  if (m_draw_counter == 0)
+  {
+    // This is more or less the start of the Frame
+    BeforeFrameEvent::Trigger();
+  }
 
   if (xfmem.numTexGen.numTexGens != bpmem.genMode.numtexgens ||
       xfmem.numChan.numColorChans != bpmem.genMode.numcolchans)
@@ -453,9 +514,37 @@ void VertexManagerBase::Flush()
     }
   }
 
+  auto& system = Core::System::GetInstance();
+  auto& pixel_shader_manager = system.GetPixelShaderManager();
+  auto& geometry_shader_manager = system.GetGeometryShaderManager();
+  auto& vertex_shader_manager = system.GetVertexShaderManager();
+
   CalculateBinormals(VertexLoaderManager::GetCurrentVertexFormat());
   // Calculate ZSlope for zfreeze
-  VertexShaderManager::SetConstants();
+  const auto used_textures = UsedTextures();
+  std::vector<std::string> texture_names;
+  if (!m_cull_all)
+  {
+    if (!g_ActiveConfig.bGraphicMods)
+    {
+      for (const u32 i : used_textures)
+      {
+        g_texture_cache->Load(TextureInfo::FromStage(i));
+      }
+    }
+    else
+    {
+      for (const u32 i : used_textures)
+      {
+        const auto cache_entry = g_texture_cache->Load(TextureInfo::FromStage(i));
+        if (cache_entry)
+        {
+          texture_names.push_back(cache_entry->texture_info_name);
+        }
+      }
+    }
+  }
+  vertex_shader_manager.SetConstants(texture_names);
   if (!bpmem.genMode.zfreeze)
   {
     // Must be done after VertexShaderManager::SetConstants()
@@ -463,28 +552,53 @@ void VertexManagerBase::Flush()
   }
   else if (m_zslope.dirty && !m_cull_all)  // or apply any dirty ZSlopes
   {
-    PixelShaderManager::SetZSlope(m_zslope.dfdx, m_zslope.dfdy, m_zslope.f0);
+    pixel_shader_manager.SetZSlope(m_zslope.dfdx, m_zslope.dfdy, m_zslope.f0);
     m_zslope.dirty = false;
   }
 
   if (!m_cull_all)
   {
+    for (const auto& texture_name : texture_names)
+    {
+      bool skip = false;
+      GraphicsModActionData::DrawStarted draw_started{&skip};
+      for (const auto action : g_graphics_mod_manager->GetDrawStartedActions(texture_name))
+      {
+        action->OnDrawStarted(&draw_started);
+      }
+      if (skip == true)
+        return;
+    }
+
     // Now the vertices can be flushed to the GPU. Everything following the CommitBuffer() call
     // must be careful to not upload any utility vertices, as the binding will be lost otherwise.
     const u32 num_indices = m_index_generator.GetIndexLen();
+    if (num_indices == 0)
+      return;
     u32 base_vertex, base_index;
     CommitBuffer(m_index_generator.GetNumVerts(),
                  VertexLoaderManager::GetCurrentVertexFormat()->GetVertexStride(), num_indices,
                  &base_vertex, &base_index);
 
+    if (g_ActiveConfig.backend_info.api_type != APIType::D3D &&
+        g_ActiveConfig.UseVSForLinePointExpand() &&
+        (m_current_primitive_type == PrimitiveType::Points ||
+         m_current_primitive_type == PrimitiveType::Lines))
+    {
+      // VS point/line expansion puts the vertex id at gl_VertexID << 2
+      // That means the base vertex has to be adjusted to match
+      // (The shader adds this after shifting right on D3D, so no need to do this)
+      base_vertex <<= 2;
+    }
+
     // Texture loading can cause palettes to be applied (-> uniforms -> draws).
     // Palette application does not use vertices, only a full-screen quad, so this is okay.
     // Same with GPU texture decoding, which uses compute shaders.
-    LoadTextures();
+    g_texture_cache->BindTextures(used_textures);
 
     // Now we can upload uniforms, as nothing else will override them.
-    GeometryShaderManager::SetConstants();
-    PixelShaderManager::SetConstants();
+    geometry_shader_manager.SetConstants(m_current_primitive_type);
+    pixel_shader_manager.SetConstants();
     UploadUniforms();
 
     // Update the pipeline, or compile one if needed.
@@ -492,7 +606,7 @@ void VertexManagerBase::Flush()
     UpdatePipelineObject();
     if (m_current_pipeline_object)
     {
-      g_renderer->SetPipeline(m_current_pipeline_object);
+      g_gfx->SetPipeline(m_current_pipeline_object);
       if (PerfQueryBase::ShouldEmulate())
         g_perf_query->EnableQuery(bpmem.zcontrol.early_ztest ? PQG_ZCOMP_ZCOMPLOC : PQG_ZCOMP);
 
@@ -523,13 +637,11 @@ void VertexManagerBase::DoState(PointerWrap& p)
   {
     // Flush old vertex data before loading state.
     Flush();
-
-    // Clear all caches that touch RAM
-    // (? these don't appear to touch any emulation state that gets saved. moved to on load only.)
-    VertexLoaderManager::MarkAllDirty();
   }
 
   p.Do(m_zslope);
+  p.Do(VertexLoaderManager::tangent_cache);
+  p.Do(VertexLoaderManager::binormal_cache);
 }
 
 void VertexManagerBase::CalculateZSlope(NativeVertexFormat* format)
@@ -555,6 +667,8 @@ void VertexManagerBase::CalculateZSlope(NativeVertexFormat* format)
   // Lookup vertices of the last rendered triangle and software-transform them
   // This allows us to determine the depth slope, which will be used if z-freeze
   // is enabled in the following flush.
+  auto& system = Core::System::GetInstance();
+  auto& vertex_shader_manager = system.GetVertexShaderManager();
   for (unsigned int i = 0; i < 3; ++i)
   {
     // If this vertex format has per-vertex position matrix IDs, look it up.
@@ -564,8 +678,8 @@ void VertexManagerBase::CalculateZSlope(NativeVertexFormat* format)
     if (vert_decl.position.components == 2)
       VertexLoaderManager::position_cache[2 - i][2] = 0;
 
-    VertexShaderManager::TransformToClipSpace(&VertexLoaderManager::position_cache[2 - i][0],
-                                              &out[i * 4], mtxIdx);
+    vertex_shader_manager.TransformToClipSpace(&VertexLoaderManager::position_cache[2 - i][0],
+                                               &out[i * 4], mtxIdx);
 
     // Transform to Screenspace
     float inv_w = 1.0f / out[3 + i * 4];
@@ -609,15 +723,17 @@ void VertexManagerBase::CalculateBinormals(NativeVertexFormat* format)
   VertexLoaderManager::tangent_cache[3] = 0;
   VertexLoaderManager::binormal_cache[3] = 0;
 
-  if (VertexShaderManager::constants.cached_tangent != VertexLoaderManager::tangent_cache)
+  auto& system = Core::System::GetInstance();
+  auto& vertex_shader_manager = system.GetVertexShaderManager();
+  if (vertex_shader_manager.constants.cached_tangent != VertexLoaderManager::tangent_cache)
   {
-    VertexShaderManager::constants.cached_tangent = VertexLoaderManager::tangent_cache;
-    VertexShaderManager::dirty = true;
+    vertex_shader_manager.constants.cached_tangent = VertexLoaderManager::tangent_cache;
+    vertex_shader_manager.dirty = true;
   }
-  if (VertexShaderManager::constants.cached_binormal != VertexLoaderManager::binormal_cache)
+  if (vertex_shader_manager.constants.cached_binormal != VertexLoaderManager::binormal_cache)
   {
-    VertexShaderManager::constants.cached_binormal = VertexLoaderManager::binormal_cache;
-    VertexShaderManager::dirty = true;
+    vertex_shader_manager.constants.cached_binormal = VertexLoaderManager::binormal_cache;
+    vertex_shader_manager.dirty = true;
   }
 }
 
@@ -753,9 +869,25 @@ void VertexManagerBase::UpdatePipelineObject()
   }
 }
 
+void VertexManagerBase::OnConfigChange()
+{
+  // Reload index generator function tables in case VS expand config changed
+  m_index_generator.Init();
+}
+
 void VertexManagerBase::OnDraw()
 {
   m_draw_counter++;
+
+  // If the last efb copy was too close to the one before it, don't forget about it until the next
+  // efb copy happens (which might not be for a long time)
+  u32 diff = m_draw_counter - m_last_efb_copy_draw_counter;
+  if (m_unflushed_efb_copy && diff > MINIMUM_DRAW_CALLS_PER_COMMAND_BUFFER_FOR_READBACK)
+  {
+    g_gfx->Flush();
+    m_unflushed_efb_copy = false;
+    m_last_efb_copy_draw_counter = m_draw_counter;
+  }
 
   // If we didn't have any CPU access last frame, do nothing.
   if (m_scheduled_command_buffer_kicks.empty() || !m_allow_background_execution)
@@ -767,7 +899,9 @@ void VertexManagerBase::OnDraw()
                          m_scheduled_command_buffer_kicks.end(), m_draw_counter))
   {
     // Kick a command buffer on the background thread.
-    g_renderer->Flush();
+    g_gfx->Flush();
+    m_unflushed_efb_copy = false;
+    m_last_efb_copy_draw_counter = m_draw_counter;
   }
 }
 
@@ -794,9 +928,13 @@ void VertexManagerBase::OnEFBCopyToRAM()
   const u32 diff = m_draw_counter - m_last_efb_copy_draw_counter;
   m_last_efb_copy_draw_counter = m_draw_counter;
   if (diff < MINIMUM_DRAW_CALLS_PER_COMMAND_BUFFER_FOR_READBACK)
+  {
+    m_unflushed_efb_copy = true;
     return;
+  }
 
-  g_renderer->Flush();
+  m_unflushed_efb_copy = false;
+  g_gfx->Flush();
 }
 
 void VertexManagerBase::OnEndFrame()
@@ -857,4 +995,10 @@ void VertexManagerBase::OnEndFrame()
 #endif
 
   m_cpu_accesses_this_frame.clear();
+
+  // We invalidate the pipeline object at the start of the frame.
+  // This is for the rare case where only a single pipeline configuration is used,
+  // and hybrid ubershaders have compiled the specialized shader, but without any
+  // state changes the specialized shader will not take over.
+  InvalidatePipelineObject();
 }

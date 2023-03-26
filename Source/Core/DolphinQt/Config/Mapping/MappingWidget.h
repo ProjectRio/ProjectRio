@@ -9,8 +9,6 @@
 #include <QString>
 #include <QWidget>
 
-constexpr int WIDGET_MAX_WIDTH = 112;
-
 class ControlGroupBox;
 class InputConfig;
 class MappingButton;
@@ -26,6 +24,7 @@ class Control;
 class ControlGroup;
 class EmulatedController;
 class NumericSettingBase;
+enum class SettingVisibility;
 }  // namespace ControllerEmu
 
 constexpr int INDICATOR_UPDATE_FREQ = 30;
@@ -57,6 +56,9 @@ protected:
                                int columns);
   void CreateControl(const ControllerEmu::Control* control, QFormLayout* layout, bool indicator);
   QPushButton* CreateSettingAdvancedMappingButton(ControllerEmu::NumericSettingBase& setting);
+  void AddSettingWidgets(QFormLayout* layout, ControllerEmu::ControlGroup* group,
+                         ControllerEmu::SettingVisibility visibility);
+  void ShowAdvancedControlGroupDialog(ControllerEmu::ControlGroup* group);
 
 private:
   MappingWindow* m_parent;

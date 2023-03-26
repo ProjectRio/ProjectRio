@@ -32,15 +32,13 @@
 #include "UICommon/DiscordPresence.h"
 #endif
 
-//constexpr int AUTO_UPDATE_DISABLE_INDEX = 0;
-//constexpr int AUTO_UPDATE_STABLE_INDEX = 1;
-//constexpr int AUTO_UPDATE_BETA_INDEX = 2;
-//constexpr int AUTO_UPDATE_DEV_INDEX = 3;
-//
-//constexpr const char* AUTO_UPDATE_DISABLE_STRING = "";
-//constexpr const char* AUTO_UPDATE_STABLE_STRING = "stable";
-//constexpr const char* AUTO_UPDATE_BETA_STRING = "beta";
-//constexpr const char* AUTO_UPDATE_DEV_STRING = "dev";
+constexpr int AUTO_UPDATE_DISABLE_INDEX = 0;
+constexpr int AUTO_UPDATE_BETA_INDEX = 1;
+constexpr int AUTO_UPDATE_DEV_INDEX = 2;
+
+constexpr const char* AUTO_UPDATE_DISABLE_STRING = "";
+constexpr const char* AUTO_UPDATE_BETA_STRING = "beta";
+constexpr const char* AUTO_UPDATE_DEV_STRING = "dev";
 
 constexpr int FALLBACK_REGION_NTSCJ_INDEX = 0;
 constexpr int FALLBACK_REGION_NTSCU_INDEX = 1;
@@ -188,8 +186,8 @@ void GeneralPane::CreateAutoUpdate()
 
   auto_update_group_layout->addRow(tr("&Auto Update:"), m_combobox_update_track);
 
-  for (const QString& option : {tr("Don't Update"), tr("Stable (once a year)"),
-                                tr("Beta (once a month)"), tr("Dev (multiple times a day)")})
+  for (const QString& option :
+       {tr("Don't Update"), tr("Beta (once a month)"), tr("Dev (multiple times a day)")})
     m_combobox_update_track->addItem(option);
 }
 */
@@ -242,14 +240,15 @@ void GeneralPane::LoadConfig()
   /*if (AutoUpdateChecker::SystemSupportsAutoUpdates())
   {
     const auto track = Settings::Instance().GetAutoUpdateTrack().toStdString();
+
+    // If the track doesn't match any known value, set to "beta" which is the
+    // default config value on Dolphin release builds.
     if (track == AUTO_UPDATE_DISABLE_STRING)
       SignalBlocking(m_combobox_update_track)->setCurrentIndex(AUTO_UPDATE_DISABLE_INDEX);
-    else if (track == AUTO_UPDATE_STABLE_STRING)
-      SignalBlocking(m_combobox_update_track)->setCurrentIndex(AUTO_UPDATE_STABLE_INDEX);
-    else if (track == AUTO_UPDATE_BETA_STRING)
-      SignalBlocking(m_combobox_update_track)->setCurrentIndex(AUTO_UPDATE_BETA_INDEX);
-    else
+    else if (track == AUTO_UPDATE_DEV_STRING)
       SignalBlocking(m_combobox_update_track)->setCurrentIndex(AUTO_UPDATE_DEV_INDEX);
+    else
+      SignalBlocking(m_combobox_update_track)->setCurrentIndex(AUTO_UPDATE_BETA_INDEX);
   }*/
 
 #if defined(USE_ANALYTICS) && USE_ANALYTICS
@@ -283,29 +282,26 @@ void GeneralPane::LoadConfig()
   else
     SignalBlocking(m_combobox_fallback_region)->setCurrentIndex(FALLBACK_REGION_NTSCJ_INDEX);
 }
+/*
+static QString UpdateTrackFromIndex(int index)
+{
+  QString value;
 
-//static QString UpdateTrackFromIndex(int index)
-//{
-//  QString value;
-//
-//  switch (index)
-//  {
-//  case AUTO_UPDATE_DISABLE_INDEX:
-//    value = QString::fromStdString(AUTO_UPDATE_DISABLE_STRING);
-//    break;
-//  case AUTO_UPDATE_STABLE_INDEX:
-//    value = QString::fromStdString(AUTO_UPDATE_STABLE_STRING);
-//    break;
-//  case AUTO_UPDATE_BETA_INDEX:
-//    value = QString::fromStdString(AUTO_UPDATE_BETA_STRING);
-//    break;
-//  case AUTO_UPDATE_DEV_INDEX:
-//    value = QString::fromStdString(AUTO_UPDATE_DEV_STRING);
-//    break;
-//  }
-//
-//  return value;
-//}
+  switch (index)
+  {
+  case AUTO_UPDATE_DISABLE_INDEX:
+    value = QString::fromStdString(AUTO_UPDATE_DISABLE_STRING);
+    break;
+  case AUTO_UPDATE_BETA_INDEX:
+    value = QString::fromStdString(AUTO_UPDATE_BETA_STRING);
+    break;
+  case AUTO_UPDATE_DEV_INDEX:
+    value = QString::fromStdString(AUTO_UPDATE_DEV_STRING);
+    break;
+  }
+
+  return value;
+}*/
 
 static DiscIO::Region UpdateFallbackRegionFromIndex(int index)
 {

@@ -62,8 +62,7 @@ void ToolBar::OnEmulationStateChanged(Core::State state)
   bool running = state != Core::State::Uninitialized;
   m_stop_action->setEnabled(running);
   m_fullscreen_action->setEnabled(running);
-  // m_screenshot_action->setEnabled(running);
-  m_controllers_action->setEnabled(NetPlay::IsNetPlayRunning() ? !running : true);
+  //m_screenshot_action->setEnabled(running);
 
   bool playing = running && state != Core::State::Paused;
   UpdatePausePlayButtonState(playing);
@@ -140,7 +139,6 @@ void ToolBar::MakeActions()
   m_config_action = addAction(tr("Config"), this, &ToolBar::SettingsPressed);
   m_graphics_action = addAction(tr("Graphics"), this, &ToolBar::GraphicsPressed);
   m_controllers_action = addAction(tr("Controllers"), this, &ToolBar::ControllersPressed);
-  m_controllers_action->setEnabled(true);
 
   m_view_gecko_codes_action = addAction(tr("Mods"), this, &ToolBar::ViewGeckoCodes);
 

@@ -13,7 +13,8 @@ namespace DriverDetails
 enum API
 {
   API_OPENGL = (1 << 0),
-  API_VULKAN = (1 << 1)
+  API_VULKAN = (1 << 1),
+  API_METAL = (1 << 2),
 };
 
 // Enum of supported operating systems
@@ -64,6 +65,7 @@ enum Driver
   DRIVER_IMGTEC,       // Official PowerVR driver
   DRIVER_VIVANTE,      // Official Vivante driver
   DRIVER_PORTABILITY,  // Vulkan via Metal on macOS
+  DRIVER_APPLE,        // Metal on macOS
   DRIVER_UNKNOWN       // Unknown driver, default to official hardware driver
 };
 
@@ -237,7 +239,8 @@ enum Bug
   // crash. Sometimes this happens in the kernel mode part of the driver, resulting in a BSOD.
   // These shaders are also particularly problematic on macOS's Intel drivers. On OpenGL, they can
   // cause depth issues. On Metal, they can cause the driver to not write a primitive to the depth
-  // buffer whenever a fragment is discarded. Disable dual-source blending support on these drivers.
+  // buffer if dual source blending is output in the shader but not subsequently used in blending.
+  // Compile separate shaders for DSB on vs off for these drivers.
   BUG_BROKEN_DUAL_SOURCE_BLENDING,
 
   // BUG: ImgTec GLSL shader compiler fails when negating the input to a bitwise operation
@@ -303,10 +306,15 @@ enum Bug
   BUG_BROKEN_VECTOR_BITWISE_AND,
 
   // BUG: Accessing gl_SubgroupInvocationID causes the Metal shader compiler to crash.
-  // Affected devices: AMD (macOS)
+  //      Affected devices: AMD (older macOS)
+  // BUG: gl_HelperInvocation always returns true, even for non-helper invocations
+  //      Affected devices: AMD (newer macOS)
+  // BUG: Using subgroupMax in a shader that can discard results in garbage data
+  //      (For some reason, this only happens at 4x+ IR on Metal, but 2x+ IR on MoltenVK)
+  //      Affected devices: Intel (macOS)
   // Started version: -1
   // Ended version: -1
-  BUG_BROKEN_SUBGROUP_INVOCATION_ID,
+  BUG_BROKEN_SUBGROUP_OPS,
 
   // BUG: Multi-threaded shader pre-compilation sometimes crashes
   // Used primarily in Videoconfig.cpp's GetNumAutoShaderPreCompilerThreads()
@@ -320,6 +328,19 @@ enum Bug
   // Started version: -1
   // Ended version: -1
   BUG_BROKEN_DISCARD_WITH_EARLY_Z,
+
+  // BUG: Using dynamic sampler indexing locks up the GPU
+  // Affected devices: Intel (macOS Metal)
+  // Started version: -1
+  // Ended version: -1
+  BUG_BROKEN_DYNAMIC_SAMPLER_INDEXING,
+
+  // BUG: vkCmdCopyImageToBuffer allocates a staging image when used to copy from
+  // an image with optimal tiling.
+  // Affected devices: Adreno
+  // Started Version: -1
+  // Ended Version: -1
+  BUG_SLOW_OPTIMAL_IMAGE_TO_BUFFER_COPY
 };
 
 // Initializes our internal vendor, device family, and driver version

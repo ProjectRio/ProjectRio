@@ -77,8 +77,7 @@ void WriteVertexLighting(ShaderCode& out, APIType api_type, std::string_view wor
                          std::string_view out_color_1_var)
 {
   out.Write("// Lighting\n");
-  out.Write("{}for (uint chan = 0u; chan < {}u; chan++) {{\n",
-            api_type == APIType::D3D ? "[loop] " : "", NUM_XF_COLOR_CHANNELS);
+  out.Write("for (uint chan = 0u; chan < {}u; chan++) {{\n", NUM_XF_COLOR_CHANNELS);
   out.Write("  uint colorreg = xfmem_color(chan);\n"
             "  uint alphareg = xfmem_alpha(chan);\n"
             "  int4 mat = " I_MATERIALS "[chan + 2u]; \n"
@@ -119,10 +118,12 @@ void WriteVertexLighting(ShaderCode& out, APIType api_type, std::string_view wor
 
   out.Write("  if ({} != 0u) {{\n", BitfieldExtract<&LitChannel::enablelighting>("alphareg"));
   out.Write("    if ({} != 0u) {{\n", BitfieldExtract<&LitChannel::ambsource>("alphareg"));
-  out.Write("      if ((components & ({}u << chan)) != 0u) // VB_HAS_COL0\n", VB_HAS_COL0);
+  out.Write("      if ((components & ({}u << chan)) != 0u) // VB_HAS_COL0\n",
+            static_cast<u32>(VB_HAS_COL0));
   out.Write("        lacc.w = int(round(((chan == 0u) ? {}.w : {}.w) * 255.0));\n", in_color_0_var,
             in_color_1_var);
-  out.Write("      else if ((components & {}u) != 0u) // VB_HAS_COLO0\n", VB_HAS_COL0);
+  out.Write("      else if ((components & {}u) != 0u) // VB_HAS_COLO0\n",
+            static_cast<u32>(VB_HAS_COL0));
   out.Write("        lacc.w = int(round({}.w * 255.0));\n", in_color_0_var);
   out.Write("      else\n"
             "        lacc.w = 255;\n"

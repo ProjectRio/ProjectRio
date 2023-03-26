@@ -14,6 +14,10 @@
 class MemoryCardBase;
 class PointerWrap;
 
+namespace Core
+{
+class System;
+}
 namespace Memcard
 {
 struct HeaderData;
@@ -32,7 +36,8 @@ enum class AllowMovieFolder
 class CEXIMemoryCard : public IEXIDevice
 {
 public:
-  CEXIMemoryCard(Slot slot, bool gci_folder, const Memcard::HeaderData& header_data);
+  CEXIMemoryCard(Core::System& system, Slot slot, bool gci_folder,
+                 const Memcard::HeaderData& header_data);
   ~CEXIMemoryCard() override;
   void SetCS(int cs) override;
   bool IsInterruptSet() override;
@@ -54,14 +59,14 @@ public:
 private:
   void SetupGciFolder(const Memcard::HeaderData& header_data);
   void SetupRawMemcard(u16 size_mb);
-  static void EventCompleteFindInstance(u64 userdata,
+  static void EventCompleteFindInstance(Core::System& system, u64 userdata,
                                         std::function<void(CEXIMemoryCard*)> callback);
 
   // Scheduled when a command that required delayed end signaling is done.
-  static void CmdDoneCallback(u64 userdata, s64 cyclesLate);
+  static void CmdDoneCallback(Core::System& system, u64 userdata, s64 cyclesLate);
 
   // Scheduled when memory card is done transferring data
-  static void TransferCompleteCallback(u64 userdata, s64 cyclesLate);
+  static void TransferCompleteCallback(Core::System& system, u64 userdata, s64 cyclesLate);
 
   // Signals that the command that was previously executed is now done.
   void CmdDone();

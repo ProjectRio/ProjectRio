@@ -20,11 +20,12 @@
 #include "Common/StringUtil.h"
 
 #include "VideoCommon/AbstractFramebuffer.h"
+#include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/AbstractPipeline.h"
 #include "VideoCommon/AbstractShader.h"
 #include "VideoCommon/AbstractTexture.h"
 #include "VideoCommon/FramebufferManager.h"
-#include "VideoCommon/RenderBase.h"
+#include "VideoCommon/Present.h"
 #include "VideoCommon/ShaderCache.h"
 #include "VideoCommon/VertexManagerBase.h"
 #include "VideoCommon/VideoCommon.h"
@@ -416,9 +417,9 @@ void PostProcessing::BlitFromTexture(const MathUtil::Rectangle<int>& dst,
                                      const MathUtil::Rectangle<int>& src,
                                      const AbstractTexture* src_tex, int src_layer)
 {
-  if (g_renderer->GetCurrentFramebuffer()->GetColorFormat() != m_framebuffer_format)
+  if (g_gfx->GetCurrentFramebuffer()->GetColorFormat() != m_framebuffer_format)
   {
-    m_framebuffer_format = g_renderer->GetCurrentFramebuffer()->GetColorFormat();
+    m_framebuffer_format = g_gfx->GetCurrentFramebuffer()->GetColorFormat();
     RecompilePipeline();
   }
 
@@ -429,22 +430,19 @@ void PostProcessing::BlitFromTexture(const MathUtil::Rectangle<int>& dst,
   g_vertex_manager->UploadUtilityUniforms(m_uniform_staging_buffer.data(),
                                           static_cast<u32>(m_uniform_staging_buffer.size()));
 
-  g_renderer->SetViewportAndScissor(
-      g_renderer->ConvertFramebufferRectangle(dst, g_renderer->GetCurrentFramebuffer()));
-  g_renderer->SetPipeline(m_pipeline.get());
-  g_renderer->SetTexture(0, src_tex);
-  g_renderer->SetSamplerState(0, RenderState::GetLinearSamplerState());
-  g_renderer->Draw(0, 3);
+  g_gfx->SetViewportAndScissor(
+      g_gfx->ConvertFramebufferRectangle(dst, g_gfx->GetCurrentFramebuffer()));
+  g_gfx->SetPipeline(m_pipeline.get());
+  g_gfx->SetTexture(0, src_tex);
+  g_gfx->SetSamplerState(0, RenderState::GetLinearSamplerState());
+  g_gfx->Draw(0, 3);
 }
 
 std::string PostProcessing::GetUniformBufferHeader() const
 {
   std::ostringstream ss;
   u32 unused_counter = 1;
-  if (g_ActiveConfig.backend_info.api_type == APIType::D3D)
-    ss << "cbuffer PSBlock : register(b0) {\n";
-  else
-    ss << "UBO_BINDING(std140, 1) uniform PSBlock {\n";
+  ss << "UBO_BINDING(std140, 1) uniform PSBlock {\n";
 
   // Builtin uniforms
   ss << "  float4 resolution;\n";
@@ -499,42 +497,20 @@ std::string PostProcessing::GetHeader() const
 {
   std::ostringstream ss;
   ss << GetUniformBufferHeader();
-  if (g_ActiveConfig.backend_info.api_type == APIType::D3D)
+  ss << "SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n";
+
+  if (g_ActiveConfig.backend_info.bSupportsGeometryShaders)
   {
-    ss << "Texture2DArray samp0 : register(t0);\n";
-    ss << "SamplerState samp0_ss : register(s0);\n";
+    ss << "VARYING_LOCATION(0) in VertexData {\n";
+    ss << "  float3 v_tex0;\n";
+    ss << "};\n";
   }
   else
   {
-    ss << "SAMPLER_BINDING(0) uniform sampler2DArray samp0;\n";
-
-    if (g_ActiveConfig.backend_info.bSupportsGeometryShaders)
-    {
-      ss << "VARYING_LOCATION(0) in VertexData {\n";
-      ss << "  float3 v_tex0;\n";
-      ss << "};\n";
-    }
-    else
-    {
-      ss << "VARYING_LOCATION(0) in float3 v_tex0;\n";
-    }
-
-    ss << "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n";
+    ss << "VARYING_LOCATION(0) in float3 v_tex0;\n";
   }
 
-  // Rename main, since we need to set up globals
-  if (g_ActiveConfig.backend_info.api_type == APIType::D3D)
-  {
-    ss << R"(
-#define main real_main
-static float3 v_tex0;
-static float4 ocol0;
-
-// Wrappers for sampling functions.
-#define texture(sampler, coords) sampler.Sample(sampler##_ss, coords)
-#define textureOffset(sampler, coords, offset) sampler.Sample(sampler##_ss, coords, offset)
-)";
-  }
+  ss << "FRAGMENT_OUTPUT_LOCATION(0) out float4 ocol0;\n";
 
   ss << R"(
 float4 Sample() { return texture(samp0, v_tex0); }
@@ -591,22 +567,7 @@ void SetOutput(float4 color)
 
 std::string PostProcessing::GetFooter() const
 {
-  if (g_ActiveConfig.backend_info.api_type == APIType::D3D)
-  {
-    return R"(
-
-#undef main
-void main(in float3 v_tex0_ : TEXCOORD0, out float4 ocol0_ : SV_Target)
-{
-  v_tex0 = v_tex0_;
-  real_main();
-  ocol0_ = ocol0;
-})";
-  }
-  else
-  {
-    return {};
-  }
+  return {};
 }
 
 bool PostProcessing::CompileVertexShader()
@@ -614,28 +575,20 @@ bool PostProcessing::CompileVertexShader()
   std::ostringstream ss;
   ss << GetUniformBufferHeader();
 
-  if (g_ActiveConfig.backend_info.api_type == APIType::D3D)
+  if (g_ActiveConfig.backend_info.bSupportsGeometryShaders)
   {
-    ss << "void main(in uint id : SV_VertexID, out float3 v_tex0 : TEXCOORD0,\n";
-    ss << "          out float4 opos : SV_Position) {\n";
+    ss << "VARYING_LOCATION(0) out VertexData {\n";
+    ss << "  float3 v_tex0;\n";
+    ss << "};\n";
   }
   else
   {
-    if (g_ActiveConfig.backend_info.bSupportsGeometryShaders)
-    {
-      ss << "VARYING_LOCATION(0) out VertexData {\n";
-      ss << "  float3 v_tex0;\n";
-      ss << "};\n";
-    }
-    else
-    {
-      ss << "VARYING_LOCATION(0) out float3 v_tex0;\n";
-    }
-
-    ss << "#define id gl_VertexID\n";
-    ss << "#define opos gl_Position\n";
-    ss << "void main() {\n";
+    ss << "VARYING_LOCATION(0) out float3 v_tex0;\n";
   }
+
+  ss << "#define id gl_VertexID\n";
+  ss << "#define opos gl_Position\n";
+  ss << "void main() {\n";
   ss << "  v_tex0 = float3(float((id << 1) & 2), float(id & 2), 0.0f);\n";
   ss << "  opos = float4(v_tex0.xy * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);\n";
   ss << "  v_tex0 = float3(src_rect.xy + (src_rect.zw * v_tex0.xy), float(src_layer));\n";
@@ -645,8 +598,8 @@ bool PostProcessing::CompileVertexShader()
 
   ss << "}\n";
 
-  m_vertex_shader = g_renderer->CreateShaderFromSource(ShaderStage::Vertex, ss.str(),
-                                                       "Post-processing vertex shader");
+  m_vertex_shader =
+      g_gfx->CreateShaderFromSource(ShaderStage::Vertex, ss.str(), "Post-processing vertex shader");
   if (!m_vertex_shader)
   {
     PanicAlertFmt("Failed to compile post-processing vertex shader");
@@ -675,7 +628,7 @@ size_t PostProcessing::CalculateUniformsSize() const
 void PostProcessing::FillUniformBuffer(const MathUtil::Rectangle<int>& src,
                                        const AbstractTexture* src_tex, int src_layer)
 {
-  const auto& window_rect = g_renderer->GetTargetRectangle();
+  const auto& window_rect = g_presenter->GetTargetRectangle();
   const float rcp_src_width = 1.0f / src_tex->GetWidth();
   const float rcp_src_height = 1.0f / src_tex->GetHeight();
   BuiltinUniforms builtin_uniforms = {
@@ -688,7 +641,7 @@ void PostProcessing::FillUniformBuffer(const MathUtil::Rectangle<int>& src,
        static_cast<float>(src.GetWidth()) * rcp_src_width,
        static_cast<float>(src.GetHeight()) * rcp_src_height},
       static_cast<s32>(src_layer),
-      static_cast<u32>(m_timer.GetTimeElapsed()),
+      static_cast<u32>(m_timer.ElapsedMs()),
   };
 
   u8* buf = m_uniform_staging_buffer.data();
@@ -735,7 +688,7 @@ bool PostProcessing::CompilePixelShader()
 
   // Generate GLSL and compile the new shader.
   m_config.LoadShader(g_ActiveConfig.sPostProcessingShader);
-  m_pixel_shader = g_renderer->CreateShaderFromSource(
+  m_pixel_shader = g_gfx->CreateShaderFromSource(
       ShaderStage::Pixel, GetHeader() + m_config.GetShaderCode() + GetFooter(),
       fmt::format("Post-processing pixel shader: {}", m_config.GetShader()));
   if (!m_pixel_shader)
@@ -744,7 +697,7 @@ bool PostProcessing::CompilePixelShader()
 
     // Use default shader.
     m_config.LoadDefaultShader();
-    m_pixel_shader = g_renderer->CreateShaderFromSource(
+    m_pixel_shader = g_gfx->CreateShaderFromSource(
         ShaderStage::Pixel, GetHeader() + m_config.GetShaderCode() + GetFooter(),
         "Default post-processing pixel shader");
     if (!m_pixel_shader)
@@ -757,17 +710,20 @@ bool PostProcessing::CompilePixelShader()
 
 bool PostProcessing::CompilePipeline()
 {
+  if (m_framebuffer_format == AbstractTextureFormat::Undefined)
+    return true;  // Not needed (some backends don't like making pipelines with no targets)
+
   AbstractPipelineConfig config = {};
   config.vertex_shader = m_vertex_shader.get();
   config.geometry_shader =
-      g_renderer->UseGeometryShaderForUI() ? g_shader_cache->GetTexcoordGeometryShader() : nullptr;
+      g_gfx->UseGeometryShaderForUI() ? g_shader_cache->GetTexcoordGeometryShader() : nullptr;
   config.pixel_shader = m_pixel_shader.get();
   config.rasterization_state = RenderState::GetNoCullRasterizationState(PrimitiveType::Triangles);
   config.depth_state = RenderState::GetNoDepthTestingDepthState();
   config.blending_state = RenderState::GetNoBlendingBlendState();
   config.framebuffer_state = RenderState::GetColorFramebufferState(m_framebuffer_format);
   config.usage = AbstractPipelineUsage::Utility;
-  m_pipeline = g_renderer->CreatePipeline(config);
+  m_pipeline = g_gfx->CreatePipeline(config);
   if (!m_pipeline)
     return false;
 

@@ -3,30 +3,35 @@
 package org.dolphinemu.dolphinemu.ui.platform;
 
 import android.os.Bundle;
-import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.fragment.app.Fragment;
-import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import com.google.android.material.color.MaterialColors;
+
 import org.dolphinemu.dolphinemu.R;
 import org.dolphinemu.dolphinemu.adapters.GameAdapter;
+import org.dolphinemu.dolphinemu.databinding.FragmentGridBinding;
+import org.dolphinemu.dolphinemu.layout.AutofitGridLayoutManager;
 import org.dolphinemu.dolphinemu.services.GameFileCacheManager;
 
 public final class PlatformGamesFragment extends Fragment implements PlatformGamesView
 {
   private static final String ARG_PLATFORM = "platform";
 
-  private GameAdapter mAdapter;
-  private RecyclerView mRecyclerView;
   private SwipeRefreshLayout mSwipeRefresh;
   private SwipeRefreshLayout.OnRefreshListener mOnRefreshListener;
+
+  private FragmentGridBinding mBinding;
 
   public static PlatformGamesFragment newInstance(Platform platform)
   {
@@ -45,33 +50,35 @@ public final class PlatformGamesFragment extends Fragment implements PlatformGam
     super.onCreate(savedInstanceState);
   }
 
+  @NonNull
   @Override
-  public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
+  public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container,
+          Bundle savedInstanceState)
   {
-    View rootView = inflater.inflate(R.layout.fragment_grid, container, false);
-
-    findViews(rootView);
-
-    return rootView;
+    mBinding = FragmentGridBinding.inflate(inflater, container, false);
+    return mBinding.getRoot();
   }
 
   @Override
   public void onViewCreated(@NonNull View view, Bundle savedInstanceState)
   {
-    int columns = getResources().getInteger(R.integer.game_grid_columns);
-    RecyclerView.LayoutManager layoutManager = new GridLayoutManager(getActivity(), columns);
-    mAdapter = new GameAdapter();
+    mSwipeRefresh = mBinding.swipeRefresh;
+    GameAdapter adapter = new GameAdapter(requireActivity());
+    adapter.setStateRestorationPolicy(
+            RecyclerView.Adapter.StateRestorationPolicy.PREVENT_WHEN_EMPTY);
+    mBinding.gridGames.setAdapter(adapter);
+    mBinding.gridGames.setLayoutManager(new AutofitGridLayoutManager(requireContext(),
+            getResources().getDimensionPixelSize(R.dimen.card_width)));
 
-    TypedValue typedValue = new TypedValue();
-    requireActivity().getTheme().resolveAttribute(R.attr.colorPrimary, typedValue, true);
-    mSwipeRefresh.setColorSchemeColors(typedValue.data);
+    // Set theme color to the refresh animation's background
+    mSwipeRefresh.setProgressBackgroundColorSchemeColor(
+            MaterialColors.getColor(mSwipeRefresh, R.attr.colorPrimary));
+    mSwipeRefresh.setColorSchemeColors(
+            MaterialColors.getColor(mSwipeRefresh, R.attr.colorOnPrimary));
 
     mSwipeRefresh.setOnRefreshListener(mOnRefreshListener);
 
-    mRecyclerView.setLayoutManager(layoutManager);
-    mRecyclerView.setAdapter(mAdapter);
-
-    mRecyclerView.addItemDecoration(new GameAdapter.SpacesItemDecoration(8));
+    setInsets();
 
     setRefreshing(GameFileCacheManager.isLoadingOrRescanning());
 
@@ -79,9 +86,10 @@ public final class PlatformGamesFragment extends Fragment implements PlatformGam
   }
 
   @Override
-  public void refreshScreenshotAtPosition(int position)
+  public void onDestroyView()
   {
-    mAdapter.notifyItemChanged(position);
+    super.onDestroyView();
+    mBinding = null;
   }
 
   @Override
@@ -93,17 +101,21 @@ public final class PlatformGamesFragment extends Fragment implements PlatformGam
   @Override
   public void showGames()
   {
-    if (mAdapter != null)
+    if (mBinding == null)
+      return;
+
+    if (mBinding.gridGames.getAdapter() != null)
     {
       Platform platform = (Platform) getArguments().getSerializable(ARG_PLATFORM);
-      mAdapter.swapDataSet(GameFileCacheManager.getGameFilesForPlatform(platform));
+      ((GameAdapter) mBinding.gridGames.getAdapter()).swapDataSet(
+              GameFileCacheManager.getGameFilesForPlatform(platform));
     }
   }
 
   @Override
   public void refetchMetadata()
   {
-    mAdapter.refetchMetadata();
+    ((GameAdapter) mBinding.gridGames.getAdapter()).refetchMetadata();
   }
 
   public void setOnRefreshListener(@Nullable SwipeRefreshLayout.OnRefreshListener listener)
@@ -111,17 +123,25 @@ public final class PlatformGamesFragment extends Fragment implements PlatformGam
     mOnRefreshListener = listener;
 
     if (mSwipeRefresh != null)
+    {
       mSwipeRefresh.setOnRefreshListener(listener);
+    }
   }
 
   public void setRefreshing(boolean refreshing)
   {
-    mSwipeRefresh.setRefreshing(refreshing);
+    mBinding.swipeRefresh.setRefreshing(refreshing);
   }
 
-  private void findViews(View root)
+  private void setInsets()
   {
-    mSwipeRefresh = root.findViewById(R.id.swipe_refresh);
-    mRecyclerView = root.findViewById(R.id.grid_games);
+    ViewCompat.setOnApplyWindowInsetsListener(mBinding.gridGames, (v, windowInsets) ->
+    {
+      Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+      v.setPadding(0, 0, 0,
+              insets.bottom + getResources().getDimensionPixelSize(R.dimen.spacing_list) +
+                      getResources().getDimensionPixelSize(R.dimen.spacing_fab));
+      return windowInsets;
+    });
   }
 }
