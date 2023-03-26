@@ -7,18 +7,35 @@
 #include <set>
 #include <tuple>
 #include "Core/HW/Memmap.h"
+#include "Common/TagSet.h"
 
 class DefaultGeckoCodes {
   public:
-    void RunCodeInject(bool bNetplayEventCode, bool bIsRanked, bool bIsNight, u32 uGameMode, bool bDisableReplays);
+    void Init(std::optional<std::vector<ClientCode>> client_codes, bool tagset_active, bool is_night, bool disable_replays);
+    void RunCodeInject();
 
   private:
-    bool NetplayEventCode;
-    bool IsRanked;
-    bool IsNight;
-    u32 GameMode;
-    bool DisableReplays;
+    struct DefaultGeckoCode
+    {
+      u32 addr;
+      u32 conditionalVal;  // set to 0 if no onditional needed; condition is for when we don't want
+                           // to write at an addr every frame
+      std::vector<u32> codeLines;
+    };
+    // DefaultGeckoCode mGeckoCode;
 
+    void AddRequiredCodes();
+    void AddTagSetCodes();
+    void AddOptionalCodes();
+    void WriteAsm(DefaultGeckoCode CodeBlock);
+
+    u32 aWriteAddr;  // address where the first code gets written to
+
+    bool initiated = false;
+    bool TagSetActive;
+    std::optional<std::vector<ClientCode>> ClientCodes;
+    bool IsNight;
+    bool DisableReplays;
 
     // Default Rumble On [LittleCoaks]
     static const u32 aControllerRumble = 0x80366177;
@@ -60,23 +77,18 @@ class DefaultGeckoCodes {
     static const u32 aNeverCull_3 = 0x806ab8b4;  // write to 0x38000001
     static const u32 aNeverCull_4 = 0x806f7b7c;  // write to 0x38000003 if equal to 0x881a0093
 
-    // Ban Batter Pausing [LittleCoaks]
-    static const u32 aBanBatterPausing = 0x806eed5c; // write to 0x38000000 if equal to 0xA0040006
-
     // Disable Replays [LittleCoaks]
-    static const u32 aDisableReplays = 0x806bb214; // write  to 0x38000000 if equal to 0x38000001
+    static const u32 aDisableReplays = 0x806bb214; // write to 0x38000000 if equal to 0x38000001
 
-    void InjectNetplayEventCode();
-    void AddRankedCodes();
+    // Force Star Skills Off [LittleCoaks]
+    static const u32 aDisableStarSkills = 0x800498d4; // write to 0x98c7003d
+    static const u32 aDisableStarSkills_1 = 0x80049030;  // write to 0x38a00000
 
-
-    struct DefaultGeckoCode
-    {
-      u32 addr;
-      u32 conditionalVal;  // set to 0 if no onditional needed; condition is for when we don't want to write at an addr every frame
-      std::vector<u32> codeLines;
-    };
-    // DefaultGeckoCode mGeckoCode;
+    // Default Rules [LittleCoaks]
+    static const u32 aDefaultMercyOn = 0x800498DC;  // write to 0x9867003F
+    static const u32 aDefaultNineInnings = 0x800498C4;  // write to 0x38000004
+    static const u32 aDefaultDropSpotsOff = 0x800498FC;   // write to 0x98C70048
+    static const u32 aDefaultDropSpotsOff_1 = 0x8004991C;  // write to 0x98C7004C
 
     // Generate the Game ID at 0x802EBF8C when Start Game is pressed [LittleCoaks]
     const DefaultGeckoCode sGenerateGameID = {
@@ -85,14 +97,14 @@ class DefaultGeckoCodes {
     };
 
     // Clear Game ID when exiting mid - game [LittleCoaks]
-    const DefaultGeckoCode sClearGameID_1 =
-        {0x806ed704, 0,
+    const DefaultGeckoCode sClearGameID_1 = {
+        0x806ed704, 0,
         {0x981F01D2, 0x3D00802E, 0x6108BF8C, 0x38000000, 0x90080000}
     };
 
     // Clear Game ID when exiting mid - game [LittleCoaks]
-    const DefaultGeckoCode sClearGameID_2 =
-        {0x806edf8c, 0,
+    const DefaultGeckoCode sClearGameID_2 = {
+        0x806edf8c, 0,
         {0x981F01D2, 0x3D00802E, 0x6108BF8C, 0x38000000, 0x90080000}
     };
 
@@ -150,38 +162,27 @@ class DefaultGeckoCodes {
         0x3DC08089, 0x61CE099D, 0x89CE0000, 0x2C0E0001, 0x41820008, 0xA01E0006}
     };
 
-    // Default Competitive Rules [LittleCoaks]
-    const DefaultGeckoCode sDefaultCompetitiveRules = {
-        0x80049D08, 0,
-        {0x3DC08035, 0x61CE323B, 0x3A000000, 0x7DEE80AE, 0x2C0F0001, 0x4182001C,
-        0x3A100001, 0x2C100012, 0x4082FFEC, 0x39C00004, 0x39E00001, 0x4800000C,
-        0x39C00002, 0x39E00000, 0x99C3003E, 0x99E30048, 0x99E3004C, 0x3A000001,
-        0x9A03003F, 0x3C60803C}
-    };
-
     // Manual Fielder Select 4.0 [PeacockSlayer, LittleCoaks]
     const DefaultGeckoCode sManualSelect = {
         0x80678F8C, 0x88061BD1,
         {0x7C6E1B78, 0x7C0802A6, 0x90010004, 0x9421FF00, 0xBC610008, 0x3D20802E, 0x6129BF97,
-         0x3C808089, 0x6084269E, 0xA0840000, 0x2C040004, 0x418201B8, 0x3C808089, 0x60842973,
+         0x3C808089, 0x6084269E, 0xA0840000, 0x2C040032, 0x40810178, 0x3C808089, 0x60842973,
          0x88840000, 0x2C040003, 0x40800024, 0x3C808089, 0x60842701, 0x88840000, 0x2C040000,
-         0x41820010, 0x2C040003, 0x41820008, 0x48000184, 0x3D008089, 0x61082898, 0xA1080000,
+         0x41820010, 0x2C040003, 0x41820008, 0x48000144, 0x3D008089, 0x61082898, 0xA1080000,
          0x88890000, 0x71050010, 0x2C050010, 0x4082000C, 0x38800000, 0x98890000, 0x71050800,
          0x2C050800, 0x4082000C, 0x38800001, 0x98890000, 0x71050400, 0x2C050400, 0x4082000C,
          0x38800002, 0x98890000, 0x71050020, 0x2C050020, 0x4082000C, 0x38800003, 0x98890000,
-         0x71050040, 0x2C050040, 0x4082000C, 0x38800004, 0x98890000, 0x2C040005, 0x40800108,
-         0x2C040000, 0x41820100, 0x2C040003, 0x41820038, 0x2C040004, 0x4182000C, 0x3884FFFF,
-         0x48000098, 0x3CE08089, 0x60E726B2, 0x88E70000, 0x2C070001, 0x41820014, 0x3CE08089,
-         0x60E70E80, 0x39000004, 0x48000010, 0x3CE08089, 0x60E70B38, 0x39000008, 0x38A00000,
-         0x38800000, 0x3CC08088, 0x60C6F368, 0xC3870000, 0xC3A60000, 0xFFDCE828, 0xFFDEF02A,
-         0xFFC0F210, 0x7F883C2E, 0xC3A60008, 0xFF9CE828, 0xFF9CE02A, 0xFF80E210, 0xFFDEE02A,
-         0x2C050000, 0x4182000C, 0xFC0AF040, 0x4180000C, 0xFD40F090, 0x7CA42B78, 0x38A50001,
-         0x38C60268, 0x2C050009, 0x4082FFB0, 0x3CC08088, 0x60C6F53B, 0x39000000, 0x1D280268,
-         0x7CA930AE, 0x2C05000F, 0x4082000C, 0x38A00002, 0x7CA931AE, 0x39080001, 0x2C080009,
-         0x4180FFE0, 0x1CA40268, 0x38E0000F, 0x7CE531AE, 0x3CC08089, 0x60C62800, 0x98860001,
-         0x98860007, 0x48000028, 0x38800000, 0x98890000, 0xB8610008, 0x80010104, 0x38210100,
-         0x7C0803A6, 0x7DC37378, 0x88061BD1, 0x4800001C, 0xB8610008, 0x80010104, 0x38210100,
-         0x7C0803A6, 0x7DC37378, 0x38000001}
+         0x2C040004, 0x408000DC, 0x2C040000, 0x418200D4, 0x2C040003, 0x4182000C, 0x3884FFFF,
+         0x48000074, 0x3CE08089, 0x60E70B38, 0x39000008, 0x38A00000, 0x38800000, 0x3CC08088,
+         0x60C6F368, 0xC3870000, 0xC3A60000, 0xFFDCE828, 0xFFDEF02A, 0xFFC0F210, 0x7F883C2E,
+         0xC3A60008, 0xFF9CE828, 0xFF9CE02A, 0xFF80E210, 0xFFDEE02A, 0x2C050000, 0x4182000C,
+         0xFC0AF040, 0x4180000C, 0xFD40F090, 0x7CA42B78, 0x38A50001, 0x38C60268, 0x2C050009,
+         0x4082FFB0, 0x3CC08088, 0x60C6F53B, 0x39000000, 0x1D280268, 0x7CA930AE, 0x2C05000F,
+         0x4082000C, 0x38A00002, 0x7CA931AE, 0x39080001, 0x2C080009, 0x4180FFE0, 0x1CA40268,
+         0x38E0000F, 0x7CE531AE, 0x3CC08089, 0x60C62800, 0x98860001, 0x98860007, 0x48000028,
+         0x38800000, 0x98890000, 0xB8610008, 0x80010104, 0x38210100, 0x7C0803A6, 0x7DC37378,
+         0x88061BD1, 0x4800001C, 0xB8610008, 0x80010104, 0x38210100, 0x7C0803A6, 0x7DC37378,
+         0x38000001}
     };
 
     // Night time Mario Stadium [LittleCoaks]
@@ -214,31 +215,30 @@ class DefaultGeckoCodes {
 
     // Checksum Calculator [LitleCoaks]
     const DefaultGeckoCode sChecksum = {
-        0x8069A160, 0x3c80800f,
-        {0x7C0802A6, 0x90010004, 0x9421FF00, 0xBC610008, 0x38800000, 0x3CA08089,
-         0x60A52AAA, 0x88A50000, 0x7C852214, 0x3CA08089, 0x60A52AAB, 0x88A50000,
-         0x7C852214, 0x3CA08089, 0x60A509A1, 0x88A50000, 0x7C852214, 0x3CA08089,
-         0x60A52857, 0x88A50000, 0x7C852214, 0x3CA08036, 0x60A5F3A9, 0x88A50000,
-         0x7C852214, 0x3CA08089, 0x60A509AA, 0x88A50000, 0x7C852214, 0x3CA08087,
-         0x60A52540, 0x88A50000, 0x7C852214, 0x3CA08089, 0x60A50971, 0x88A50000,
-         0x7C852214, 0x3CA08089, 0x60A528A3, 0x88A50000, 0x7C852214, 0x3CA08089,
-         0x60A5294D, 0x88A50000, 0x7C852214, 0x3CA08089, 0x60A5296F, 0x88A50000,
-         0x7C852214, 0x3CA08089, 0x60A5296B, 0x88A50000, 0x7C852214, 0x3CA08089,
-         0x60A52973, 0x88A50000, 0x7C852214, 0x3CA08089, 0x60A52AD6, 0x88A50000,
-         0x7C852214, 0x3CA08089, 0x60A52AD7, 0x88A50000, 0x7C852214, 0x3CA08089,
-         0x60A52AD8, 0x88A50000, 0x7C852214, 0x3CA08089, 0x60A509BA, 0x88A50000,
-         0x7C852214, 0x3CA08088, 0x60A5F09D, 0x88A50000, 0x7C852214, 0x3CA08088,
-         0x60A5F1F1, 0x88A50000, 0x7C852214, 0x3CA08088, 0x60A5F345, 0x88A50000,
-         0x7C852214, 0x3CA08089, 0x60A538AD, 0x88A50000, 0x7C852214, 0x3CA08089,
-         0x60A509A3, 0x88A50000, 0x7C852214, 0x3CA08089, 0x60A53BAA, 0x88A50000,
-         0x7C852214, 0x3CA08089, 0x60A528A4, 0x88A50000, 0x7C852214, 0x3CA08089,
-         0x60A528CA, 0x88A50000, 0x7C852214, 0x3CA08089, 0x60A50971, 0x88A50000,
-         0x7C852214, 0x3CA08089, 0x60A50AD9, 0x88A50000, 0x7C852214, 0x3CA08089,
-         0x60A50B38, 0x80A50000, 0x7C852214, 0x3CA08089, 0x60A50B3C, 0x80A50000,
-         0x7C852214, 0x3CA08089, 0x60A50B40, 0x80A50000, 0x7C852214, 0x3CA0802E,
-         0x60A5BFB8, 0x90850000, 0xB8610008, 0x80010104, 0x38210100, 0x7C0803A6,
-         0x3C80800F}};  // 0x802EBFB8 == checksum addr
-
+        0x8000928c, 0,
+        {0x9421FFB0, 0xBDC10008, 0x39C00000, 0x3A000000, 0x3DE0800E, 0x61EF877E, 0xA1EF0000,
+         0x7DCF7214, 0x3DE0800E, 0x61EF8782, 0xA1EF0000, 0x7DCF7214, 0x3DE0800E, 0x61EF874C,
+         0xA1EF0000, 0x7DCF7214, 0x3DE0803C, 0x61EF6726, 0x7DF078AE, 0x7DCF7214, 0x7DD07214,
+         0x3DE08035, 0x61EF323B, 0x7DF078AE, 0x7DCF7214, 0x7DD07214, 0x3A100001, 0x2C100012,
+         0x4180FFD0, 0x3DE08089, 0x61EF2AAA, 0x89EF0000, 0x7DCF7214, 0x3DE08089, 0x61EF2AAB,
+         0x89EF0000, 0x7DCF7214, 0x3DE08089, 0x61EF09A1, 0x89EF0000, 0x7DCF7214, 0x3DE08089,
+         0x61EF2857, 0x89EF0000, 0x7DCF7214, 0x3DE08036, 0x61EFF3A9, 0x89EF0000, 0x7DCF7214,
+         0x3DE08089, 0x61EF09AA, 0x89EF0000, 0x7DCF7214, 0x3DE08087, 0x61EF2540, 0x89EF0000,
+         0x7DCF7214, 0x3DE08089, 0x61EF0971, 0x89EF0000, 0x7DCF7214, 0x3DE08089, 0x61EF28A3,
+         0x89EF0000, 0x7DCF7214, 0x3DE08089, 0x61EF294D, 0x89EF0000, 0x7DCF7214, 0x3DE08089,
+         0x61EF296F, 0x89EF0000, 0x7DCF7214, 0x3DE08089, 0x61EF296B, 0x89EF0000, 0x7DCF7214,
+         0x3DE08089, 0x61EF2973, 0x89EF0000, 0x7DCF7214, 0x3DE08089, 0x61EF2AD6, 0x89EF0000,
+         0x7DCF7214, 0x3DE08089, 0x61EF2AD7, 0x89EF0000, 0x7DCF7214, 0x3DE08089, 0x61EF2AD8,
+         0x89EF0000, 0x7DCF7214, 0x3DE08089, 0x61EF09BA, 0x89EF0000, 0x7DCF7214, 0x3DE08088,
+         0x61EFF09D, 0x89EF0000, 0x7DCF7214, 0x3DE08088, 0x61EFF1F1, 0x89EF0000, 0x7DCF7214,
+         0x3DE08088, 0x61EFF345, 0x89EF0000, 0x7DCF7214, 0x3DE08089, 0x61EF38AD, 0x89EF0000,
+         0x7DCF7214, 0x3DE08089, 0x61EF09A3, 0x89EF0000, 0x7DCF7214, 0x3DE08089, 0x61EF3BAA,
+         0x89EF0000, 0x7DCF7214, 0x3DE08089, 0x61EF28A4, 0x89EF0000, 0x7DCF7214, 0x3DE08089,
+         0x61EF28CA, 0x89EF0000, 0x7DCF7214, 0x3DE08089, 0x61EF0971, 0x89EF0000, 0x7DCF7214,
+         0x3DE08089, 0x61EF0AD9, 0x89EF0000, 0x7DCF7214, 0x3DE08089, 0x61EF0B38, 0x81EF0000,
+         0x7DCF7214, 0x3DE08089, 0x61EF0B3C, 0x81EF0000, 0x7DCF7214, 0x3DE08089, 0x61EF0B40,
+         0x81EF0000, 0x7DCF7214, 0x3DE0802E, 0x61EFBFB8, 0x91CF0000, 0xB9C10008, 0x38210050,
+         0x28180000}};  // 0x802EBFB8 == checksum addr
 
     // Hold Z for Easy Batting [Roeming]
     const DefaultGeckoCode sEasyBattingZ = {
@@ -247,37 +247,50 @@ class DefaultGeckoCodes {
         0x80040000, 0x1C000010,0x3885392C, 0x7C840214, 0xA0040000, 0x70000010, 0x28000000}
     };
 
-
     // Hazardless Stadiums [LittleCoaks, PeacockSlayer]
     const DefaultGeckoCode sHazardless = {
         0x80699508, 0x88a40009,
-        {0x88A40009, 0x9421FFB0, 0xBDC10008, 0x3E608035, 0x6273323B, 0x3AA00000, 0x7E93A8AE,
-         0x2C140001, 0x418200D8, 0x3AB50001, 0x2C150012, 0x4082FFEC, 0x2C050000, 0x418200C4,
-         0x2C050006, 0x408000BC, 0x2C050001, 0x41820028, 0x2C050002, 0x4182003C, 0x2C050003,
-         0x41820050, 0x2C050004, 0x4182005C, 0x2C050005, 0x4182007C, 0x48000090, 0x3E608070,
-         0x627356C8, 0x3E803860, 0x92930000, 0x3E803800, 0x92931638, 0x48000074, 0x3E608070,
-         0x6273FC30, 0x3E806000, 0x92930000, 0x3E803800, 0x9293376C, 0x48000058, 0x3E608069,
-         0x62739E54, 0x3E803800, 0x92930000, 0x48000044, 0x3E60807C, 0x6273D098, 0x3A800000,
-         0x3AA00000, 0x9A930011, 0x3AB50001, 0x3A730014, 0x2C150010, 0x4180FFF0, 0x4800001C,
-         0x3E608072, 0x6273F950, 0x3E806000, 0x92930000, 0x92934A54, 0x92934A60, 0xB9C10008,
-         0x38210050}
+        {0x88A40009, 0x9421FFB0, 0xBDC10008, 0x3E803800, 0x62940007, 0x2C050002, 0x40820030,
+         0x3E608070, 0x6273FC30, 0x3EA06000, 0x92B30000, 0x3EA03800, 0x92B3376C, 0x3E60807C,
+         0x62739964, 0x3EA042C8, 0x92B30000, 0x92B30034, 0x3E608070, 0x62737CB8, 0x92930000,
+         0x3E608072, 0x62734428, 0x92930000, 0x3E608073, 0x62739A28, 0x92930000, 0x3E608073,
+         0x62736D08, 0x92930000, 0x3E608073, 0x627343A4, 0x3EA06000, 0x92B30000, 0x92B3000C,
+         0xB9C10008, 0x38210050}
     };
 
-    const DefaultGeckoCode sHazardless_1 = {
-        0x8072FDC8, 0xC0010044,
-        {0x3E608035, 0x6273323B, 0x3AA00000, 0x7E93A8AE, 0x2C140001, 0x41820018, 0x3AB50001, 0x2C150012,
-        0x4082FFEC, 0x3E204348, 0x92210044, 0xC0010044}
+    // Restrict Batter Pausing [LittleCoaks]
+    const DefaultGeckoCode sRestrictBatterPausing = {
+        0x806EED5C, 0xA0040006,
+        {0x3CC08089, 0x60C6099D, 0x88060000, 0x3CC08089, 0x60C609AD, 0x88C60000,
+        0x7CC03214, 0xA0040006, 0x2C060000, 0x41820008, 0x38000000}
     };
 
+    // Highlight Ball Shadow [LittleCoaks]
+    const DefaultGeckoCode sHighlightBallShadow = {
+        0x806A844C, 0x41820224,
+        {0x40820020, 0x3C80806A, 0x608485B8, 0x3D80C01D, 0x91840000, 0x3D80C005, 0x618C0008,
+        0x9184001C}
+    };
 
-    void WriteAsm(DefaultGeckoCode CodeBlock);
-    u32 aWriteAddr;  // address where the first code gets written to
+    // Fix Random Captain Select [LittleCoaks]
+    const DefaultGeckoCode sFixRandomCaptain = {
+        0x8063F7C4, 0x90040000,
+        {0x90040000, 0x90040330}
+    };
 
-    std::vector<DefaultGeckoCode> sRequiredCodes =
-    {sGenerateGameID, sClearGameID_1, sClearGameID_2, sClearGameID_3,
-    sClearPortInfo, sClearHitResult, sStorePortInfo_1, sStorePortInfo_2,
-        sRememberWhoQuit_1, sRememberWhoQuit_2, sStoreRandBattingInts, sChecksum};
-
-    std::vector<DefaultGeckoCode> sNetplayCodes =
-    {sAntiQuickPitch, sDefaultCompetitiveRules, sManualSelect, sRemoveDingus};
+    std::vector<DefaultGeckoCode> sRequiredCodes = {
+      sGenerateGameID,
+      sClearGameID_1,
+      sClearGameID_2,
+      sClearGameID_3,
+      sClearPortInfo,
+      sClearHitResult,
+      sStorePortInfo_1,
+      sStorePortInfo_2,
+      sRememberWhoQuit_1,
+      sRememberWhoQuit_2,
+      sStoreRandBattingInts,
+      sChecksum,
+      sFixRandomCaptain
+    };
 };

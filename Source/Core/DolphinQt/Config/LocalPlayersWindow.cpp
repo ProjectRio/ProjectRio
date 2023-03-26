@@ -11,7 +11,7 @@
 
 LocalPlayersWindow::LocalPlayersWindow(QWidget* parent) : QDialog(parent)
 {
-  setWindowTitle(tr("Local Players Settings"));
+  setWindowTitle(tr("Rio Config"));
   setWindowFlags(windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
   m_player_list = new LocalPlayersWidget(this);

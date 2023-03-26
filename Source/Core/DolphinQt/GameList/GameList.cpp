@@ -273,8 +273,9 @@ void GameList::UpdateColumnVisibility()
 void GameList::MakeEmptyView()
 {
   const QString refreshing_msg = tr("Refreshing...");
-  const QString empty_msg = tr("Dolphin could not find any GameCube/Wii ISOs or WADs.\n"
-                               "Double-click here to set a games directory...");
+  const QString empty_msg = tr("Rio could not find any <u>Mario Superstar Baseball (USA)</u> ISOs.\n"
+                               "<h1>DOUBLE-CLICK HERE</h1>\n"
+                               "and <u><b>select the folder</b></u> which contains your ISO file.");
 
   m_empty = new QLabel(this);
   m_empty->setText(refreshing_msg);
@@ -301,6 +302,7 @@ void GameList::MakeEmptyView()
           });
   connect(&Settings::Instance(), &Settings::GameListRefreshCompleted, this,
           [this, empty_msg = empty_msg] {
+            m_empty->setTextFormat(Qt::RichText);
             m_empty->setText(empty_msg);
             m_empty->setEnabled(true);
           });
@@ -515,18 +517,18 @@ void GameList::ShowContextMenu(const QPoint&)
     menu->addAction(tr("New Tag..."), this, &GameList::NewTag);
     menu->addAction(tr("Remove Tag..."), this, &GameList::DeleteTag);
 
-    menu->addSeparator();
+    //menu->addSeparator();
 
-    QAction* netplay_host = new QAction(tr("Host with NetPlay"), menu);
+    //QAction* netplay_host = new QAction(tr("Host with NetPlay"), menu);
 
-    connect(netplay_host, &QAction::triggered, [this, game] { emit NetPlayHost(*game); });
+    //connect(netplay_host, &QAction::triggered, [this, game] { emit NetPlayHost(*game); });
 
-    connect(&Settings::Instance(), &Settings::EmulationStateChanged, menu, [=](Core::State state) {
-      netplay_host->setEnabled(state == Core::State::Uninitialized);
-    });
-    netplay_host->setEnabled(!Core::IsRunning());
+    //connect(&Settings::Instance(), &Settings::EmulationStateChanged, menu, [=](Core::State state) {
+    //  netplay_host->setEnabled(state == Core::State::Uninitialized);
+    //});
+    //netplay_host->setEnabled(!Core::IsRunning());
 
-    menu->addAction(netplay_host);
+    //menu->addAction(netplay_host);
   }
 
   menu->exec(QCursor::pos());

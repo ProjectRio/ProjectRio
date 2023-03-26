@@ -26,6 +26,7 @@
     <ClCompile />
     <ClCompile>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <DisableSpecificWarnings>%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>

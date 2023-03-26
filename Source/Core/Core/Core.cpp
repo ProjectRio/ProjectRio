@@ -96,6 +96,8 @@
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
 
+#include "Common/TagSet.h"
+
 #ifdef ANDROID
 #include "jni/AndroidCommon/IDCache.h"
 #endif
@@ -122,12 +124,17 @@ static std::atomic<double> s_last_actual_emulation_speed{1.0};
 static bool s_frame_step = false;
 static std::atomic<bool> s_stop_frame_step;
 
-static bool hasSentGameID = false;
-// auto GameMode = GameMode::Custom;
-static u32 GameMode = 0;
+static std::optional<TagSet> tagset_local = std::nullopt;
+static std::optional<TagSet> tagset_netplay = std::nullopt;
+static bool previousContactMade = false;
+static bool runNetplayGameFunctions = true;
+
+static int avgPing = 0;
+static int nPing = 0;
+static int nLagSpikes = 0;
+static int previousPing = 50;
+
 static int draftTimer = 0;
-static u8 m_stadium = 0;
-static u8 m_stadium_id = 0;
 
 #ifdef USE_MEMORYWATCHER
 static std::unique_ptr<MemoryWatcher> s_memory_watcher;
@@ -170,13 +177,6 @@ void FrameUpdateOnCPUThread()
 {
   if (NetPlay::IsNetPlayRunning() && Core::IsRunningAndStarted())
   {
-    // NetPlay::NetPlayClient::SendTimeBase();
-    u64 frame = Movie::GetCurrentFrame();
-    if (frame % 60)
-    {
-      u8 checksumId = (frame / 60) & 0xF;
-      NetPlay::NetPlayClient::SendChecksum(checksumId, frame);
-    }
     if (s_stat_tracker)
     {
       // Figure out if client is hosting via netplay settings. Could use local player as well
@@ -199,22 +199,46 @@ void FrameUpdateOnCPUThread()
       s_stat_tracker->setNetplaySession(false);
     }
   }
+}
 
+// this function is called from PatchEngine.cpp (ApplyFramePatches()) safely
+// we can do memory reads/writes without worrying
+// anything that needs to read or write to memory should be getting run from here
+void RunRioFunctions()
+{
   if (s_stat_tracker)
   {
     s_stat_tracker->Run();
   }
 
-  SetNetplayerUserInfo();
-  SetDisplayStats();
+  if (PowerPC::HostRead_U32(aGameId) == 0)
+  {
+    runNetplayGameFunctions = true;
+  }
 
-  CodeWriter.RunCodeInject(Memory::Read_U8(aNetplayEventCode) == 1, isRankedMode(), isNight(), GameMode, isDisableReplays());
+  if (NetPlay::IsNetPlayRunning())
+  {
+    // send checksum for desync detection
+    u64 frame = Movie::GetCurrentFrame();
+    if (frame % 60)
+    {
+      u8 checksumId = (frame / 60) & 0xF;
+      NetPlay::NetPlayClient::SendChecksum(checksumId, frame);
+    }
+    if (runNetplayGameFunctions)
+    {
+      SetNetplayerUserInfo();
+      NetPlay::NetPlayClient::SendGameID(PowerPC::HostRead_U32(aGameId));
+      runNetplayGameFunctions = false;
+    }
 
+  }
+
+  CodeWriter.RunCodeInject();
   AutoGolfMode();
   TrainingMode();
   DisplayBatterFielder();
   SetAvgPing();
-  SendGameID();
   RunDraftTimer();
 }
 
@@ -230,27 +254,27 @@ void AutoGolfMode()
 {
   if (IsGolfMode())
   {
-    u8 BatterPort = Memory::Read_U8(aBatterPort);      
-    u8 FielderPort = Memory::Read_U8(aFielderPort);
-    bool isField = Memory::Read_U8(aIsField) == 1;
+    u8 BatterPort = PowerPC::HostRead_U8(aBatterPort);      
+    u8 FielderPort = PowerPC::HostRead_U8(aFielderPort);
+    bool isField = PowerPC::HostRead_U8(aIsField) == 1;
 
     if (BatterPort == 0)
       return;  // means game hasn't started yet
 
     // makes the player who paused the golfer
-    if (Memory::Read_U8(aWhoPaused) == 2)
+    if (PowerPC::HostRead_U8(aWhoPaused) == 2)
       isField = true;
 
     // add minigame functionality
-    int minigameId = Memory::Read_U8(aMinigameID);
+    int minigameId = PowerPC::HostRead_U8(aMinigameID);
     if (minigameId == 3 || minigameId == 1)
     {
-      BatterPort = Memory::Read_U8(aBarrelBatterPort) + 1;
+      BatterPort = PowerPC::HostRead_U8(aBarrelBatterPort) + 1;
       isField = false;
     }
     else if (minigameId == 2)
     {
-      FielderPort = Memory::Read_U8(aWallBallPort) + 1;
+      FielderPort = PowerPC::HostRead_U8(aWallBallPort) + 1;
       isField = true;
     }
 
@@ -272,34 +296,34 @@ void TrainingMode()
 {
   // if training mode config is on and not ranked netplay
   // using this feature on ranked can be considered an unfair advantage
-  if (!g_ActiveConfig.bTrainingModeOverlay || isRankedMode())
+  if (!g_ActiveConfig.bTrainingModeOverlay || isTagSetActive())
     return;
 
-  //bool isPitchThrown = Memory::Read_U8(0x80895D6C) == 1 ? true : false;
-  bool isField = Memory::Read_U8(aIsField) == 1 ? true : false;
-  bool isInGame = Memory::Read_U8(aIsInGame) == 1 ? true : false;
-  bool ContactMade = Memory::Read_U8(aContactMade) == 1 ? true : false;
+  //bool isPitchThrown = PowerPC::HostRead_U8(0x80895D6C) == 1 ? true : false;
+  bool isField = PowerPC::HostRead_U8(aIsField) == 1 ? true : false;
+  bool isInGame = PowerPC::HostRead_U8(aIsInGame) == 1 ? true : false;
+  bool ContactMade = PowerPC::HostRead_U8(aContactMade) == 1 ? true : false;
 
   // Batting Training Mode stats
   if (ContactMade && !previousContactMade)
   {
-    u8 BatterPort = Memory::Read_U8(aBatterPort);
+    u8 BatterPort = PowerPC::HostRead_U8(aBatterPort);
     if (BatterPort > 0)
       BatterPort--;
     u32 stickDirectionAddr = 0x8089392D + (0x10 * BatterPort);
 
-    u16 contactFrame = Memory::Read_U16(aContactFrame);
-    u8 typeOfContact_Value = Memory::Read_U8(aTypeOfContact);
+    u16 contactFrame = PowerPC::HostRead_U16(aContactFrame);
+    u8 typeOfContact_Value = PowerPC::HostRead_U8(aTypeOfContact);
     std::string typeOfContact;
-    u8 inputDirection_Value = Memory::Read_U8(stickDirectionAddr) & 0xF;
+    u8 inputDirection_Value = PowerPC::HostRead_U8(stickDirectionAddr) & 0xF;
     std::string inputDirection;
-    int chargeUp = static_cast<int>(roundf(u32ToFloat(Memory::Read_U32(aChargeUp)) * 100)); 
-    int chargeDown = static_cast<int>(roundf(u32ToFloat(Memory::Read_U32(aChargeDown)) * 100));
+    int chargeUp = static_cast<int>(roundf(u32ToFloat(PowerPC::HostRead_U32(aChargeUp)) * 100)); 
+    int chargeDown = static_cast<int>(roundf(u32ToFloat(PowerPC::HostRead_U32(aChargeDown)) * 100));
 
-    float angle = roundf((float)Memory::Read_U16(aBallAngle) * 36000 / 4096) / 100; // 0x400 == 90°, 0x800 == 180°, 0x1000 == 360°
-    float xVelocity = roundf(u32ToFloat(Memory::Read_U32(aBallVelocity_X)) * 6000) / 100;  // * 60 cause default units are meters per frame
-    float yVelocity = roundf(u32ToFloat(Memory::Read_U32(aBallVelocity_Y)) * 6000) / 100;
-    float zVelocity = roundf(u32ToFloat(Memory::Read_U32(aBallVelocity_Z)) * 6000) / 100;
+    float angle = roundf((float)PowerPC::HostRead_U16(aBallAngle) * 36000 / 4096) / 100; // 0x400 == 90°, 0x800 == 180°, 0x1000 == 360°
+    float xVelocity = roundf(u32ToFloat(PowerPC::HostRead_U32(aBallVelocity_X)) * 6000) / 100;  // * 60 cause default units are meters per frame
+    float yVelocity = roundf(u32ToFloat(PowerPC::HostRead_U32(aBallVelocity_Y)) * 6000) / 100;
+    float zVelocity = roundf(u32ToFloat(PowerPC::HostRead_U32(aBallVelocity_Z)) * 6000) / 100;
     float netVelocity = vectorMagnitude(xVelocity, yVelocity, zVelocity);
 
     // convert type of contact to string
@@ -371,26 +395,26 @@ void TrainingMode()
   // Coordinate data
   if (isInGame)
   {
-    float BallPos_X = roundf(u32ToFloat(Memory::Read_U32(aBallPosition_X)) * 100) / 100;
-    float BallPos_Y = roundf(u32ToFloat(Memory::Read_U32(aBallPosition_Y)) * 100) / 100;
-    float BallPos_Z = roundf(u32ToFloat(Memory::Read_U32(aBallPosition_Z)) * 100) / 100;
-    float BallVel_X = isField ? roundf(u32ToFloat(Memory::Read_U32(aBallVelocity_X)) * 6000) / 100 :
-                                roundf(u32ToFloat(Memory::Read_U32(aPitchedBallVelocity_X)) * 6000) / 100;
-    float BallVel_Y = isField ? RoundZ(u32ToFloat(Memory::Read_U32(aBallVelocity_Y)) * 6000) / 100 :// floor small decimal to prevent weirdness
-                                RoundZ(u32ToFloat(Memory::Read_U32(aPitchedBallVelocity_Y)) * 6000) / 100;
-    float BallVel_Z = isField ? roundf(u32ToFloat(Memory::Read_U32(aBallVelocity_Z)) * 6000) / 100 :
-                                roundf(u32ToFloat(Memory::Read_U32(aPitchedBallVelocity_Z)) * 6000) / 100;
+    float BallPos_X = roundf(u32ToFloat(PowerPC::HostRead_U32(aBallPosition_X)) * 100) / 100;
+    float BallPos_Y = roundf(u32ToFloat(PowerPC::HostRead_U32(aBallPosition_Y)) * 100) / 100;
+    float BallPos_Z = roundf(u32ToFloat(PowerPC::HostRead_U32(aBallPosition_Z)) * 100) / 100;
+    float BallVel_X = isField ? roundf(u32ToFloat(PowerPC::HostRead_U32(aBallVelocity_X)) * 6000) / 100 :
+                                roundf(u32ToFloat(PowerPC::HostRead_U32(aPitchedBallVelocity_X)) * 6000) / 100;
+    float BallVel_Y = isField ? RoundZ(u32ToFloat(PowerPC::HostRead_U32(aBallVelocity_Y)) * 6000) / 100 :// floor small decimal to prevent weirdness
+                                RoundZ(u32ToFloat(PowerPC::HostRead_U32(aPitchedBallVelocity_Y)) * 6000) / 100;
+    float BallVel_Z = isField ? roundf(u32ToFloat(PowerPC::HostRead_U32(aBallVelocity_Z)) * 6000) / 100 :
+                                roundf(u32ToFloat(PowerPC::HostRead_U32(aPitchedBallVelocity_Z)) * 6000) / 100;
     float BallVel_Net = roundf(vectorMagnitude(BallVel_X, BallVel_Y, BallVel_Z) * 100) / 100;
 
-    int baseOffset= 0x268 * Memory::Read_U8(0x80892801);  // used to get offsed for baseFielderAddr
+    int baseOffset= 0x268 * PowerPC::HostRead_U8(0x80892801);  // used to get offsed for baseFielderAddr
     u32 baseFielderAddr = 0x8088F368 + baseOffset;        // 0x0 == x; 0x8 == y; 0xc == z
 
-    float FielderPos_X = roundf(u32ToFloat(Memory::Read_U32(baseFielderAddr)) * 100) / 100;
-    float FielderPos_Y = roundf(u32ToFloat(Memory::Read_U32(baseFielderAddr + 0xc)) * 100) / 100;
-    float FielderPos_Z = roundf(u32ToFloat(Memory::Read_U32(baseFielderAddr + 0x8)) * 100) / 100;
-    float FielderVel_X = roundf(u32ToFloat(Memory::Read_U32(baseFielderAddr + 0x30)) * 6000) / 100;
-    //float FielderVel_Y = roundf(u32ToFloat(Memory::Read_U32(baseFielderAddr + 0x15C)) * 6000) / 100; // this addr is wrong
-    float FielderVel_Z = roundf(u32ToFloat(Memory::Read_U32(baseFielderAddr + 0x34)) * 6000) / 100;
+    float FielderPos_X = roundf(u32ToFloat(PowerPC::HostRead_U32(baseFielderAddr)) * 100) / 100;
+    float FielderPos_Y = roundf(u32ToFloat(PowerPC::HostRead_U32(baseFielderAddr + 0xc)) * 100) / 100;
+    float FielderPos_Z = roundf(u32ToFloat(PowerPC::HostRead_U32(baseFielderAddr + 0x8)) * 100) / 100;
+    float FielderVel_X = roundf(u32ToFloat(PowerPC::HostRead_U32(baseFielderAddr + 0x30)) * 6000) / 100;
+    //float FielderVel_Y = roundf(u32ToFloat(PowerPC::HostRead_U32(baseFielderAddr + 0x15C)) * 6000) / 100; // this addr is wrong
+    float FielderVel_Z = roundf(u32ToFloat(PowerPC::HostRead_U32(baseFielderAddr + 0x34)) * 6000) / 100;
     float FielderVel_Net = roundf(vectorMagnitude(FielderVel_X, 0 /*FielderVel_Y*/, FielderVel_Z) * 100) / 100;
 
     OSD::AddTypedMessage(OSD::MessageType::TrainingModeBallCoordinates, fmt::format(
@@ -440,8 +464,8 @@ void DisplayBatterFielder()
   if (!g_ActiveConfig.bShowBatterFielder)
     return;
 
-  u8 BatterPort = Memory::Read_U8(aBatterPort);
-  u8 FielderPort = Memory::Read_U8(aFielderPort); 
+  u8 BatterPort = PowerPC::HostRead_U8(aBatterPort);
+  u8 FielderPort = PowerPC::HostRead_U8(aFielderPort); 
   if (BatterPort == 0 || FielderPort == 0) // game hasn't started yet; do not continue func
     return;
 
@@ -487,30 +511,13 @@ void DisplayBatterFielder()
   }
 }
 
-void SendGameID()
-{
-  if (NetPlay::IsNetPlayRunning())
-  {
-    bool matchStarted = Memory::Read_U8(aBatterPort) != 0 ? true : false;
-
-    if (!matchStarted)
-      hasSentGameID = false;
-
-    if (!hasSentGameID && matchStarted)
-    {
-      NetPlay::NetPlayClient::SendGameID(Memory::Read_U32(aGameId));
-      hasSentGameID = true;
-    }
-  }
-}
-
 void RunDraftTimer()
 {
   // if they have the config off or if it's not 1st frame of second
   if (Movie::GetCurrentFrame() % 60 != 0)
     return;
 
-  u8 scene = Memory::Read_U8(aSceneId);
+  u8 scene = PowerPC::HostRead_U8(aSceneId);
 
   if (scene < 0x9)
     draftTimer = 0;
@@ -561,13 +568,6 @@ float RoundZ(float num)
   return roundf(num);
 }
 
-bool isRankedMode()
-{
-  if (!NetPlay::IsNetPlayRunning())
-    return false;
-  return NetPlay::NetPlayClient::isRanked();
-}
-
 bool isNight()
 {
   if (!NetPlay::IsNetPlayRunning())
@@ -588,7 +588,7 @@ void SetAvgPing()
     return;
 
   // checks if GameID is set and that the end game flag hasn't been hit yet
-  bool inGame = Memory::Read_U32(aGameId) != 0 /*&& Memory::Read_U8(aEndOfGameFlag) == 0*/ ?
+  bool inGame = PowerPC::HostRead_U32(aGameId) != 0 /*&& PowerPC::HostRead_U8(aEndOfGameFlag) == 0*/ ?
                     true :
                     false;
   if (!inGame) {
@@ -619,13 +619,6 @@ void SetAvgPing()
 
 void SetNetplayerUserInfo()
 {
-  if (!NetPlay::IsNetPlayRunning())
-    return;
-
-  // checks if GameID is set
-  if (Memory::Read_U32(aGameId) != 0)
-    return;
-
   // tell the stat tracker who the players are
   if (s_stat_tracker)
   {
@@ -726,6 +719,13 @@ bool Init(std::unique_ptr<BootParameters> boot, const WindowSystemInfo& wsi)
   // Start the emu thread
   s_is_booting.Set();
   s_emu_thread = std::thread(EmuThread, std::move(boot), prepared_wsi);
+
+  std::optional<std::vector<ClientCode>> client_codes =
+      GetActiveTagSet(NetPlay::IsNetPlayRunning()).has_value() ?
+      GetActiveTagSet(NetPlay::IsNetPlayRunning()).value().client_codes_vector() :
+      std::nullopt;
+
+  CodeWriter.Init(client_codes, isTagSetActive(), isNight(), isDisableReplays());
 
   return true;
 }
@@ -1639,82 +1639,66 @@ void UpdateInputGate(bool require_focus, bool require_full_focus)
   ControlReference::SetInputGate(focus_passes && full_focus_passes);
 }
 
-void setRecordStatus(bool inNewStatus)
-{
-  //SConfig& settings = SConfig::GetInstance();
-  //settings.SaveSettings();
-  if (s_stat_tracker) {
-    s_stat_tracker->setRecordStatus(inNewStatus);
-  }
-  else {
-    s_stat_tracker = std::make_unique<StatTracker>();
-    s_stat_tracker->init();
-    s_stat_tracker->setRecordStatus(inNewStatus);
-  }
-}
-
-void setSubmitStatus(bool inNewStatus)
-{
-  SConfig& settings = SConfig::GetInstance();
-  settings.SaveSettings();
-}
-
-void setRankedStatus(bool inNewStatus)
-{
-  if (s_stat_tracker) {
-    s_stat_tracker->setRankedStatus(inNewStatus);
-  }
-  else {
-    s_stat_tracker = std::make_unique<StatTracker>();
-    s_stat_tracker->init();
-    s_stat_tracker->setRankedStatus(inNewStatus);
-  }
-}
-
-void SetDisplayStats()
-{
-  if (s_stat_tracker)
-  {
-      s_stat_tracker->setDisplayStats(Config::Get(Config::MAIN_ENABLE_DEBUGGING));
-  }
-  else {
-    s_stat_tracker = std::make_unique<StatTracker>();
-    s_stat_tracker->init();
-    s_stat_tracker->setDisplayStats(Config::Get(Config::MAIN_ENABLE_DEBUGGING));
-  }
-}
-
 void SetGameID(u32 gameID)
 {
-  if (s_stat_tracker)
-  {
-    s_stat_tracker->setGameID(gameID);
-  }
-  else
+  if (!s_stat_tracker)
   {
     s_stat_tracker = std::make_unique<StatTracker>();
     s_stat_tracker->init();
-    s_stat_tracker->setGameID(gameID);
   }
+
+  s_stat_tracker->setGameID(gameID);
 }
 
-void SetGameMode(std::string mode)
+std::optional<TagSet> GetActiveTagSet(bool netplay)
 {
-  if (mode == "Superstars OFF")
+  return netplay ? tagset_netplay : tagset_local;
+}
+
+void SetTagSet(std::optional<TagSet> tagset, bool netplay)
+{
+  if (netplay)
+    tagset_netplay = tagset;
+  else
+    tagset_local = tagset;
+
+  if (!s_stat_tracker)
   {
-    GameMode = 1;
-    //GameMode = GameMode::StarsOff;
+    s_stat_tracker = std::make_unique<StatTracker>();
+    s_stat_tracker->init();
   }
-  else if (mode == "Superstars ON")
+
+  if (tagset.has_value())
   {
-    GameMode = 2;
-    //GameMode = GameMode::StarsOn;
+    s_stat_tracker->setTagSetId(std::move(tagset.value()), netplay);
   }
   else
   {
-    GameMode = 0;
-    //GameMode = GameMode::Custom;
+    s_stat_tracker->clearTagSetId(netplay);
   }
+}
+
+bool isTagSetActive(std::optional<bool> netplay)
+{
+  if (!netplay.has_value())
+    netplay = NetPlay::IsNetPlayRunning();
+
+  bool isActive = false;
+  if (netplay.value())
+    isActive = tagset_netplay.has_value();
+  else
+    isActive = tagset_local.has_value();
+  return isActive;
+}
+
+std::optional<std::vector<std::string>> GetTagSetGeckoString()
+{
+  std::optional<TagSet> tagset_active = GetActiveTagSet(NetPlay::IsNetPlayRunning());
+
+  if (!tagset_active.has_value())
+    return std::nullopt;
+
+  return tagset_active.value().gecko_codes_string();
 }
 
 }  // namespace Core

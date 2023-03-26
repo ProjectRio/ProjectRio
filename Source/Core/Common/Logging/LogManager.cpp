@@ -20,6 +20,7 @@
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Common/Timer.h"
+#include <Core/Config/MainSettings.h>
 
 namespace Common::Log
 {
@@ -155,12 +156,13 @@ LogManager::LogManager()
   RegisterListener(LogListener::CONSOLE_LISTENER, new ConsoleListener());
 
   // Set up log listeners
-  LogLevel verbosity = Config::Get(LOGGER_VERBOSITY);
+  LogLevel verbosity = LogLevel::LNOTICE;
 
   SetLogLevel(verbosity);
-  EnableListener(LogListener::FILE_LISTENER, Config::Get(LOGGER_WRITE_TO_FILE));
-  EnableListener(LogListener::CONSOLE_LISTENER, Config::Get(LOGGER_WRITE_TO_CONSOLE));
-  EnableListener(LogListener::LOG_WINDOW_LISTENER, Config::Get(LOGGER_WRITE_TO_WINDOW));
+
+  EnableListener(LogListener::FILE_LISTENER, true);
+  EnableListener(LogListener::CONSOLE_LISTENER, true);
+  EnableListener(LogListener::LOG_WINDOW_LISTENER, true);
 
   for (auto& container : m_log)
   {
@@ -232,7 +234,10 @@ void LogManager::SetLogLevel(LogLevel level)
 
 void LogManager::SetEnable(LogType type, bool enable)
 {
-  m_log[type].m_enable = enable;
+  if (type == LogType::NETPLAY)
+    m_log[type].m_enable = true;
+  else
+    m_log[type].m_enable = enable;
 }
 
 bool LogManager::IsEnabled(LogType type, LogLevel level) const

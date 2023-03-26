@@ -105,8 +105,6 @@ struct NetSettings
   bool m_UseFMA = false;
   bool m_HideRemoteGBAs = false;
 
-  bool m_RankedMode = false;
-  std::string m_GameMode = "";
 
   // These aren't sent over the network directly
   bool m_IsHosting = false;
@@ -145,14 +143,12 @@ enum class MessageID : u8
   ChunkedDataAbort = 0x45,
 
   GameMode = 0x5e,
-  RankedBox = 0x5f,
 
   PadData = 0x60,
   PadMapping = 0x61,
   PadBuffer = 0x62,
   PadHostData = 0x63,
   GBAConfig = 0x64,
-  PlayerData = 0x65,
   PadSpectator = 0x66,
 
   WiimoteData = 0x70,

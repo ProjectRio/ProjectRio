@@ -11,13 +11,13 @@
 #include <optional>
 #include <string>
 
-#include <Common/HttpRequest.h>
+#include "Core/Boot/Boot.h"
+#include "Core/LocalPlayersConfig.h"
 
 class QStackedWidget;
 class QString;
 
 class BreakpointWidget;
-class BootSessionData;
 struct BootParameters;
 class CheatsManager;
 class CodeWidget;
@@ -64,6 +64,10 @@ namespace X11Utils
 {
 class XRRConfiguration;
 }
+
+namespace Tag {
+  class TagSet;
+};
 
 class MainWindow final : public QMainWindow
 {
@@ -217,6 +221,7 @@ private:
   bool m_is_screensaver_inhibited = false;
   int m_state_slot = 1;
   std::unique_ptr<BootParameters> m_pending_boot;
+  LocalPlayers::LocalPlayers::Player m_active_account;
 
   ControllersWindow* m_controllers_window = nullptr;
   SettingsWindow* m_settings_window = nullptr;
@@ -231,6 +236,7 @@ private:
   NetPlayDialog* m_netplay_dialog;
   DiscordHandler* m_netplay_discord;
   NetPlaySetupDialog* m_netplay_setup_dialog;
+  std::map<int, Tag::TagSet> user_tagsets;
   static constexpr int num_gc_controllers = 4;
   std::array<GCTASInputWindow*, num_gc_controllers> m_gc_tas_input_windows{};
   static constexpr int num_wii_controllers = 4;

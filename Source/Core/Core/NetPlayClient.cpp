@@ -79,6 +79,7 @@
 #include "Core/HotkeyManager.h"
 #include "Core/LocalPlayersConfig.h"
 #include "Core/Core.h"
+#include "Common/TagSet.h"
 
 namespace NetPlay
 {
@@ -131,10 +132,31 @@ NetPlayClient::~NetPlayClient()
 
 // called from ---GUI--- thread
 NetPlayClient::NetPlayClient(const std::string& address, const u16 port, NetPlayUI* dialog,
-                             const std::string& name, const NetTraversalConfig& traversal_config)
-    : m_dialog(dialog), m_player_name(name)
+                             const NetTraversalConfig& traversal_config,
+                             LocalPlayers::LocalPlayers::Player* player,
+                             std::map<int, Tag::TagSet>* tagset_map)
+    : m_dialog(dialog)
 {
   ClearBuffers();
+
+    // Validate Rio User
+  LocalPlayers::LocalPlayers::AccountValidationType type = player->ValidateAccount(m_http);
+
+if (type == LocalPlayers::LocalPlayers::Invalid)
+  {
+    m_dialog->OnConnectionError(_trans("The Username and Rio Key of the Online Player could not be validated. You must make a Rio account to access online play.\n\n"
+           "To access online play, please follow these steps:\n"
+           "- open the \"Rio Config\" tab and click the \"Add Player\" button.\n"
+           "- click \"Create Account\" and create a Rio account through the Project Rio website.\n"
+           "- make sure to verify your email and receive your Rio Key.\n"
+           "- enter your username and Rio Key into the appropriate text boxes, then click \"Save\".\n"
+        "- set the \"Online Player\" combo box to your newly added account."));
+    return;  // no netplay for invalid account
+  }
+  ActiveOnlinePlayer = player;
+  TagSetMap = tagset_map;
+  m_player_name = ActiveOnlinePlayer->GetUsername();
+  m_player_key = ActiveOnlinePlayer->GetUserID();
 
   if (!traversal_config.use_traversal)
   {
@@ -245,6 +267,7 @@ bool NetPlayClient::Connect()
   packet << Common::GetScmRevGitStr();
   packet << Common::GetNetplayDolphinVer();
   packet << m_player_name;
+  packet << m_player_key;
   Send(packet);
   enet_host_flush(m_client);
   sf::Packet rpac;
@@ -295,6 +318,7 @@ bool NetPlayClient::Connect()
 
     Player player;
     player.name = m_player_name;
+    player.riokey = m_player_key;
     player.pid = m_pid;
     player.revision = Common::GetNetplayDolphinVer();
 
@@ -473,14 +497,6 @@ void NetPlayClient::OnData(sf::Packet& packet)
     OnGameModeMsg(packet);
     break;
   
-  case MessageID::RankedBox:
-    OnRankedBoxMsg(packet);
-    break;
-  
-  case MessageID::PlayerData:
-    OnPlayerDataMsg(packet);
-    break;
-  
   case MessageID::SendCodes:
     OnSendCodesMsg(packet);
     break;
@@ -520,9 +536,10 @@ void NetPlayClient::OnPlayerJoin(sf::Packet& packet)
   Player player{};
   packet >> player.pid;
   packet >> player.name;
+  packet >> player.riokey;
   packet >> player.revision;
 
-  INFO_LOG_FMT(NETPLAY, "Player {} ({}) using {} joined", player.name, player.pid, player.revision);
+  INFO_LOG_FMT(NETPLAY, "Player {} (pid: {}) using {} joined", player.name, player.pid, player.revision);
 
   {
     std::lock_guard lkp(m_crit.players);
@@ -790,17 +807,21 @@ void NetPlayClient::OnGolfSwitch(sf::Packet& packet)
   m_current_golfer = pid;
   m_dialog->OnGolferChanged(m_local_player->pid == pid, pid != 0 ? m_players[pid].name : "");
 
+  NOTICE_LOG_FMT(NETPLAY, "Running OnGolfSwitch. local pid: {} - current golfer pid: {} - previous golfer: {}", m_local_player->pid, pid, previous_golfer);
+
   if (m_local_player->pid == previous_golfer)
   {
     sf::Packet spac;
     spac << MessageID::GolfRelease;
     Send(spac);
+    NOTICE_LOG_FMT(NETPLAY, "Sent GolfRelease");
   }
   else if (m_local_player->pid == pid)
   {
     sf::Packet spac;
     spac << MessageID::GolfAcquire;
     Send(spac);
+    NOTICE_LOG_FMT(NETPLAY, "Sent GolfAquire");
 
     // Pads are already calibrated so we can just ignore this
     m_first_pad_status_received.fill(true);
@@ -814,6 +835,7 @@ void NetPlayClient::OnGolfPrepare(sf::Packet& packet)
 {
   m_wait_on_input_received = true;
   m_wait_on_input = true;
+  NOTICE_LOG_FMT(NETPLAY, "Ran function OnGolfPrepare");
 }
 
 void NetPlayClient::OnChangeGame(sf::Packet& packet)
@@ -854,6 +876,7 @@ void NetPlayClient::OnGameStatus(sf::Packet& packet)
 
 void NetPlayClient::OnStartGame(sf::Packet& packet)
 {
+  NOTICE_LOG_FMT(NETPLAY, "\n --- Start of game {} --- \npid: {}", m_selected_game.game_id, m_local_player->pid);
   {
     std::lock_guard lkg(m_crit.game);
 
@@ -949,12 +972,13 @@ void NetPlayClient::OnStartGame(sf::Packet& packet)
   }
 
   m_dialog->OnMsgStartGame();
-  m_dialog->RankedStartingMsg(m_ranked_client);
+  m_dialog->StartingMsg(Core::isTagSetActive(true));
 }
 
 void NetPlayClient::OnStopGame(sf::Packet& packet)
 {
   INFO_LOG_FMT(NETPLAY, "Game stopped");
+  NOTICE_LOG_FMT(NETPLAY, "\n --- Game stopped --- \n");
 
   StopGame();
   m_dialog->OnMsgStopGame();
@@ -1519,29 +1543,22 @@ void NetPlayClient::OnMD5Abort()
 
 void NetPlayClient::OnGameModeMsg(sf::Packet& packet)
 {
-  std::string mode;
-  packet >> mode;
-  m_dialog->OnGameMode(mode);
-}
+  bool exists;
+  int tagset_id;
+  packet >> exists;
+  packet >> tagset_id;
 
-void NetPlayClient::OnRankedBoxMsg(sf::Packet& packet)
-{
-  packet >> m_ranked_client;
-  m_dialog->OnRankedEnabled(m_ranked_client);
-}
+  std::optional<Tag::TagSet> current_tagset =
+      exists ? std::optional<Tag::TagSet>{TagSetMap->at(tagset_id)} : std::nullopt;
 
-void NetPlayClient::OnPlayerDataMsg(sf::Packet& packet)
-{
-  u8 port;
-  packet >> port;
+  std::string mode = exists ? current_tagset.value().name : "none";
+  std::string description = exists ? current_tagset.value().description() : "No Description";
+  std::vector<std::string> tags =
+      exists ? current_tagset.value().tag_names_vector() :
+          std::vector<std::string>{"none"};
 
-  std::string userinfoStr;
-  packet >> userinfoStr;
-
-  LocalPlayers::LocalPlayers i_LocalPlayers;
-  LocalPlayers::LocalPlayers::Player userinfo = i_LocalPlayers.toLocalPlayer(userinfoStr);
-
-  NetplayerUserInfo[port] = userinfo;
+  Core::SetTagSet(std::move(current_tagset), true);
+  m_dialog->OnGameMode(mode, description, tags);
 }
 
 void NetPlayClient::OnSendCodesMsg(sf::Packet& packet)
@@ -1621,16 +1638,12 @@ void NetPlayClient::Send(const sf::Packet& packet, const u8 channel_id)
 
 void NetPlayClient::DisplayPlayersPing()
 {
+  maxPing = GetPlayersMaxPing();
   if (!g_ActiveConfig.bShowNetPlayPing)
     return;
 
-  OSD::AddTypedMessage(OSD::MessageType::NetPlayPing, fmt::format("Ping: {}", GetPlayersMaxPing()),
+  OSD::AddTypedMessage(OSD::MessageType::NetPlayPing, fmt::format("Ping: {}", maxPing),
                        OSD::Duration::SHORT, OSD::Color::CYAN);
-}
-
-bool NetPlayClient::isRanked()
-{
-  return netplay_client->m_ranked_client;
 }
 
 bool NetPlayClient::isNight()
@@ -1655,9 +1668,7 @@ void NetPlayClient::DisplayBatterFielder(u8 BatterPortInt, u8 FielderPortInt)
   bool fielderExists = FielderPortInt >= 0 && FielderPortInt <= 3 ? true : false;  // checks that the port isn't a CPU
   if (fielderExists)
   {
-    playername = netplay_client->NetplayerUserInfo[FielderPortInt + 1].GetUsername();
-    if (playername == "" || playername == "No Player Selected")
-      playername = netplay_client->GetPortPlayer(FielderPortInt);
+    playername = netplay_client->m_players[netplay_client->m_pad_map[FielderPortInt]].name;
 
     color = portColor[FielderPortInt];
     OSD::AddTypedMessage(OSD::MessageType::CurrentFielder, fmt::format("Fielder: {}", playername),
@@ -1667,9 +1678,7 @@ void NetPlayClient::DisplayBatterFielder(u8 BatterPortInt, u8 FielderPortInt)
   bool batterExists = BatterPortInt >= 0 && BatterPortInt <= 3 ? true : false;  // checks that the port isn't a CPU
   if (batterExists)
   {
-    playername = netplay_client->NetplayerUserInfo[BatterPortInt + 1].GetUsername();
-    if (playername == "" || playername == "No Player Selected")
-      playername = netplay_client->GetPortPlayer(BatterPortInt);
+    playername = netplay_client->m_players[netplay_client->m_pad_map[BatterPortInt]].name;
 
     color = portColor[BatterPortInt];
     OSD::AddTypedMessage(OSD::MessageType::CurrentBatter, fmt::format("Batter: {}", playername),
@@ -1679,24 +1688,27 @@ void NetPlayClient::DisplayBatterFielder(u8 BatterPortInt, u8 FielderPortInt)
 
 std::map<int, LocalPlayers::LocalPlayers::Player> NetPlayClient::getNetplayerUserInfo()
 {
-  // send player usernames & keys here
-  netplay_client->SendLocalPlayerNetplay(netplay_client->GetLocalPlayerNetplay());
-  return netplay_client->NetplayerUserInfo;
-}
+  std::map<int, LocalPlayers::LocalPlayers::Player> NetplayerUserInfo;
+  for (auto& player : netplay_client->m_players)
+  {
+    LocalPlayers::LocalPlayers::Player player_info;
+    player_info.username = player.second.name;
+    player_info.userid = player.second.riokey;
+    int player_port = 0;
 
-std::string NetPlayClient::sGetPortPlayer(int PortInt)
-{
-  return netplay_client->GetPortPlayer(PortInt - 1);
-}
-
-std::string NetPlayClient::GetPortPlayer(int PortInt)
-{
-  return m_players[m_pad_map[PortInt]].name;
+    for (int i = 0; i < netplay_client->m_pad_map.size(); i++)
+    {
+      if (netplay_client->m_pad_map[i] == player.first)
+        player_port = i + 1;
+    }
+    NetplayerUserInfo.emplace(std::pair<int, LocalPlayers::LocalPlayers::Player>(player_port, player_info));
+  }
+  return NetplayerUserInfo;
 }
 
 u32 NetPlayClient::sGetPlayersMaxPing()
 {
-  return netplay_client->GetPlayersMaxPing();
+  return netplay_client->maxPing;
 }
 
 u32 NetPlayClient::GetPlayersMaxPing() const
@@ -1875,8 +1887,8 @@ void NetPlayClient::SendDisableReplays(bool disable)
 
 void NetPlayClient::GetActiveGeckoCodes()
 {
-  // don't use any gecko codes if playing ranked
-  if (m_ranked_client)
+  // don't use any gecko codes if playing under a tagset
+  if (Core::isTagSetActive(true))
     return;
 
   // Find all INI files
@@ -2249,6 +2261,7 @@ bool NetPlayClient::GetNetPads(const int pad_nb, const bool batching, GCPadStatu
       sf::Packet spac;
       spac << MessageID::GolfPrepare;
       Send(spac);
+      NOTICE_LOG_FMT(NETPLAY, "Sent GolfPrepare to clients");
 
       m_wait_on_input_received = false;
     }
@@ -2300,8 +2313,8 @@ bool NetPlayClient::GetNetPads(const int pad_nb, const bool batching, GCPadStatu
 
       unsigned int currentBuffer = m_pad_buffer[pad_nb].Size();
       const bool buffer_over_target = currentBuffer > m_target_buffer_size + 1;
-      bool isPitchInProgress = Memory::Read_U8(0x8088A81B) == 1;
-      bool pitchComplete = Memory::Read_U8(0x80890B18) == 1;
+      //bool isPitchInProgress = Memory::Read_U8(0x8088A81B) == 1;
+      //bool pitchComplete = Memory::Read_U8(0x80890B18) == 1;
       if (!buffer_over_target)
         m_buffer_under_target_last = std::chrono::steady_clock::now();
 
@@ -2310,15 +2323,15 @@ bool NetPlayClient::GetNetPads(const int pad_nb, const bool batching, GCPadStatu
       bool bDrainHotkeyPressed = HotkeyManagerEmu::IsPressed(HK_DRAIN_GOLF_BUFFER, true);
 
       if ((time_diff.count() >= 1.0 || (!buffer_over_target && !bDrainHotkeyPressed))
-        && !isPitchInProgress) // don't speed up game during a pitch
+        /*&& !isPitchInProgress*/) // don't speed up game during a pitch
       {
         // run fast if the buffer is overfilled, otherwise run normal speed
         Config::SetCurrent(Config::MAIN_EMULATION_SPEED, buffer_over_target ? 0.0f : 1.0f);
       }
       // after a pitch, we speed up game to keep buffer low
-      if (pitchComplete)
-        Config::SetCurrent(Config::MAIN_EMULATION_SPEED,
-          m_pad_buffer[pad_nb].Size() > 1 ? 0.0f : 1.0f);
+      //if (pitchComplete)
+      //  Config::SetCurrent(Config::MAIN_EMULATION_SPEED,
+      //    m_pad_buffer[pad_nb].Size() > 1 ? 0.0f : 1.0f);
       // Hotkey drains netplay buffer for non golfer
       if (bDrainHotkeyPressed)
         Config::SetCurrent(Config::MAIN_EMULATION_SPEED,
@@ -2621,6 +2634,7 @@ void NetPlayClient::RequestGolfControl(const PlayerId pid)
   packet << MessageID::GolfRequest;
   packet << pid;
   SendAsync(std::move(packet));
+  NOTICE_LOG_FMT(NETPLAY, "Sent GolfRequest for client {} to clients", pid);
 }
 
 void NetPlayClient::RequestGolfControl()
@@ -2648,16 +2662,7 @@ void NetPlayClient::AutoGolfMode(bool isField, int BatPort, int FieldPort)
 
 void NetPlayClient::AutoGolfModeLogic(bool isField, int BatPort, int FieldPort)
 {
-  int clientID = m_local_player->pid; // refers to netplay client (the computer that's connected)
-
-  // Golf Port is the player who should be the golfer
-  int GolfPort = isField ? FieldPort - 1 : BatPort - 1;  // subtract 1 since m_pad_map uses 0->3 instead of 1->4
-  if (GolfPort >= 4 || GolfPort < 0)  // something's wrong. probably a CPU player                                         
-    return;   // return to avoid array out-of-range errors
-
-  // if the player who should be the gofler isn't in the lobby, return
-  if (!PortHasPlayerAssigned(GolfPort))
-    return;
+  PlayerId clientID = m_local_player->pid; // refers to netplay client (the computer that's connected)
 
   // don't run the rest of the code unless we're the golfer
   if (clientID != m_current_golfer) {
@@ -2665,25 +2670,34 @@ void NetPlayClient::AutoGolfModeLogic(bool isField, int BatPort, int FieldPort)
     return;
   }
 
-  // this little block makes it so that the auto golf logic will only complete if the client's been
-  // the golfer for more than 60 frames. this is to ensure that under laggier conditions, a golfer
-  // who's game is too far behind doesn't swap the golfer status back and forth for a short while,
-  // which can be extra jarring to players
+  // auto golf logic will only complete if client's been the golfer for more than 60 frames
+  // this is to ensure that under laggier conditions, a golfer who's game is too far behind
+  // doesn't swap the golfer status back and forth for a short while, which can be jarring to players
   if (framesAsGolfer < 255) // don't want a memory overflow here
-    framesAsGolfer += 1;
+    framesAsGolfer++;
   if (framesAsGolfer <= 60) // delay this so that swapping bugs are way less likely; 1 second lockout window (60 frames)
     return;
 
+
+  int NextGolferPort = isField ? FieldPort - 1 : BatPort - 1;  // subtract 1 since m_pad_map uses 0->3 instead of 1->4
+  if (NextGolferPort >= 4 || NextGolferPort < 0)  // something's wrong. probably a CPU player                                         
+    return;   // return to avoid array out-of-range errors
+
+  // if the player who should be the gofler isn't in the lobby, return
+  if (!PortHasPlayerAssigned(NextGolferPort))
+    return;
+
   // if the current golfer is also the one who should be the golfer, return
-  // this prevents bugs due to requesting a swap every frame, which i think caused problems in the old code
+  // this prevents bugs due to requesting a swap every frame
   // m_pad_map is an array. the indices are the ports (0->3) and the values are the client ID's assigned to that port
-  if (m_pad_map[GolfPort] == clientID)
+  if (m_pad_map[NextGolferPort] == clientID)
     return;
 
   // find the player that should be the golfer and assign them as the golfer
-  RequestGolfControl(m_pad_map[GolfPort]);
+  NOTICE_LOG_FMT(NETPLAY, "Client {} will swap golfer to port {}", clientID, NextGolferPort + 1);
+  RequestGolfControl(m_pad_map[NextGolferPort]);
   framesAsGolfer = 0;
-  NOTICE_LOG_FMT(NETPLAY, "Client {} swaps golfer to port {}", clientID, GolfPort + 1);
+  NOTICE_LOG_FMT(NETPLAY, "Successfully swapped golfer");
 }
 
 
@@ -2795,7 +2809,7 @@ void NetPlayClient::SendGameStatus()
 
 void NetPlayClient::SendChecksum(u8 checksumId, u64 frame)
 {
-  u32 checksum = Memory::Read_U32(0x802EBFB8);
+  u32 checksum = PowerPC::HostRead_U32(0x802EBFB8);
   netplay_client->ourChecksum[checksumId] = checksum;
 
   if (frame < 1000) // dont send the initial ones since they're whack
@@ -3088,41 +3102,6 @@ void NetPlay_Disable()
 {
   std::lock_guard lk(crit_netplay_client);
   netplay_client = nullptr;
-}
-
-void NetPlayClient::SendLocalPlayerNetplay(LocalPlayers::LocalPlayers::Player userinfo)
-{
-  for (auto player_id : m_pad_map)
-  {
-    if (player_id == m_local_player->pid)
-    {
-      sf::Packet packet;
-      packet << MessageID::PlayerData;
-
-      NetplayerUserInfo[player_id] = userinfo;  // if the client is mapped to a port, that port is set to the local player at the client's port 1
-      packet << player_id;
-      packet << userinfo.LocalPlayerToStr();  // have to sent the string over netplay; will convert this back later
-
-      SendAsync(std::move(packet));
-    }
-  }
-
-}
-
-LocalPlayers::LocalPlayers::Player NetPlayClient::GetLocalPlayerNetplay()
-{
-  // Eventually replace this with the account information in future official release
-  // for now, we just reference the player mapped to port 1, which is the intended player 99% of the time anyway
-  // if no one is set, use netplay nickname
-  LocalPlayers::LocalPlayers::Player netplay_player;
-  if (LocalPlayers::m_local_player_1.GetUsername() == "" || LocalPlayers::m_local_player_1.GetUsername() == "No Player Selected")
-  {
-    netplay_player.username = m_players[m_local_player->pid].name;
-    netplay_player.userid = "0";
-  }
-  else
-    netplay_player = LocalPlayers::m_local_player_1;
-  return netplay_player;
 }
 
 }  // namespace NetPlay

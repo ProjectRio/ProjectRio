@@ -60,7 +60,7 @@ private:
   QLabel* m_name_label;
   QLabel* m_creator_label;
   QTextEdit* m_code_description;
-  QTextEdit* m_code_view;
+  // QTextEdit* m_code_view;
   QPushButton* m_add_code;
   QPushButton* m_edit_code;
   QPushButton* m_remove_code;

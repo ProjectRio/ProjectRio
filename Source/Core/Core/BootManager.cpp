@@ -66,7 +66,7 @@ bool BootCore(std::unique_ptr<BootParameters> boot, const WindowSystemInfo& wsi)
     return false;
 
  // Block running anything other than MSSB
-  if (!StartUp.GetGameID().empty() && !StartUp.GameHasDefaultGameIni())
+  if (!StartUp.GetGameID().empty() && !StartUp.GameIsAllowed())
   {
     PanicAlertFmt("This is not a copy of Mario Superstar Baseball.\n"
                 "Project Rio is only intended to be used for Mario Superstar Baseball.\n"

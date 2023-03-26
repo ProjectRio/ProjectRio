@@ -132,7 +132,7 @@ void ToolBar::MakeActions()
   // addSeparator();
 
 
-  m_local_play_action = addAction(tr("Local Play"), this, &ToolBar::ViewLocalPlayers);
+  m_local_play_action = addAction(tr("Rio Config"), this, &ToolBar::ViewLocalPlayers);
   m_start_netplay_action = addAction(tr("Online Play"), this, &ToolBar::StartNetPlayPressed);
 
   addSeparator();
@@ -142,7 +142,7 @@ void ToolBar::MakeActions()
   m_controllers_action = addAction(tr("Controllers"), this, &ToolBar::ControllersPressed);
   m_controllers_action->setEnabled(true);
 
-  m_view_gecko_codes_action = addAction(tr("Gecko Codes"), this, &ToolBar::ViewGeckoCodes);
+  m_view_gecko_codes_action = addAction(tr("Mods"), this, &ToolBar::ViewGeckoCodes);
 
   addSeparator();
 
@@ -215,5 +215,5 @@ void ToolBar::UpdateIcons()
   m_graphics_action->setIcon(Resources::GetScaledThemeIcon("graphics"));
   m_start_netplay_action->setIcon(Resources::GetScaledThemeIcon("wifi"));
   m_view_gecko_codes_action->setIcon(Resources::GetScaledThemeIcon("debugger_add_breakpoint@2x"));
-  m_local_play_action->setIcon(Resources::GetScaledThemeIcon("play"));
+  m_local_play_action->setIcon(Resources::GetScaledThemeIcon("rio"));
 }

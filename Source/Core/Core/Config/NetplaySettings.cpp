@@ -33,7 +33,7 @@ const Info<std::string> NETPLAY_ADDRESS{{System::Main, "NetPlay", "Address"}, "1
 const Info<u16> NETPLAY_CONNECT_PORT{{System::Main, "NetPlay", "ConnectPort"}, DEFAULT_LISTEN_PORT};
 const Info<u16> NETPLAY_LISTEN_PORT{{System::Main, "NetPlay", "ListenPort"}, DEFAULT_LISTEN_PORT};
 
-const Info<std::string> NETPLAY_NICKNAME{{System::Main, "NetPlay", "Nickname"}, "Player"};
+//const Info<std::string> NETPLAY_NICKNAME{{System::Main, "NetPlay", "Nickname"}, "Player"};
 const Info<bool> NETPLAY_USE_UPNP{{System::Main, "NetPlay", "UseUPNP"}, false};
 
 const Info<bool> NETPLAY_ENABLE_QOS{{System::Main, "NetPlay", "EnableQoS"}, true};
@@ -57,10 +57,9 @@ const Info<std::string> NETPLAY_NETWORK_MODE{{System::Main, "NetPlay", "NetworkM
 const Info<bool> NETPLAY_SYNC_ALL_WII_SAVES{{System::Main, "NetPlay", "SyncAllWiiSaves"}, false};
 const Info<bool> NETPLAY_GOLF_MODE_OVERLAY{{System::Main, "NetPlay", "GolfModeOverlay"}, true};
 const Info<bool> NETPLAY_HIDE_REMOTE_GBAS{{System::Main, "NetPlay", "HideRemoteGBAs"}, false};
-const Info<bool> NETPLAY_RANKED{{System::Main, "NetPlay", "Ranked"}, false};
-const Info<std::string> NETPLAY_GAME_MODE{{System::Main, "NetPlay", "GameMode"}, "Superstars OFF"};
 //const Info<bool> NETPLAY_NIGHT_STADIUM{{System::Main, "NetPlay", "Night Stadium"}, false};
 const Info<bool> NETPLAY_DISABLE_MUSIC{{System::Main, "NetPlay", "Disable Music"}, false};
+const Info<bool> NETPLAY_HIGHLIGHT_BALL_SHADOW{{System::Main, "NetPlay", "Highlight Ball Shadow"}, false};
 //const Info<bool> NETPLAY_NEVER_CULL{{System::Main, "NetPlay", "Never Cull"}, false};
 
 int ONLINE_COUNT = 0;

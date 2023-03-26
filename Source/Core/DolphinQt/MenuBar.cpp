@@ -119,8 +119,6 @@ void MenuBar::OnEmulationStateChanged(Core::State state)
   m_screenshot_action->setEnabled(running);
   m_state_load_menu->setEnabled(running);
   m_state_save_menu->setEnabled(running);
-  m_record_stats->setDisabled(running);
-  m_submit_stats->setDisabled(running);
 
   // Movie
   m_recording_read_only->setEnabled(running);
@@ -528,27 +526,6 @@ void MenuBar::AddOptionsMenu()
 
   options_menu->addSeparator();
 
- 
-  m_record_stats = options_menu->addAction(tr("Record Stats"), this, &Core::setRecordStatus);
-  m_record_stats->setCheckable(true);
-  m_record_stats->setChecked(SConfig::GetInstance().bRecordStats);
-
-  connect(m_record_stats, &QAction::toggled, this,
-          [](bool enable) { SConfig::GetInstance().bRecordStats = enable; });
-
-  Core::setRecordStatus(SConfig::GetInstance().bRecordStats);
-  
-  m_submit_stats = options_menu->addAction(tr("Submit Stats"), this, &Core::setSubmitStatus);
-  m_submit_stats->setCheckable(true);
-  // Hiding since submission won't be in alpha release
-  m_submit_stats->setVisible(false);
-  m_submit_stats->setChecked(SConfig::GetInstance().bSubmitStats);
-
-  connect(m_submit_stats, &QAction::toggled, this,
-          [](bool enable) { SConfig::GetInstance().bSubmitStats = enable; });
-
-  Core::setSubmitStatus(SConfig::GetInstance().bSubmitStats);
-
 
   // Debugging mode only
   m_boot_to_pause = options_menu->addAction(tr("Boot to Pause"));
@@ -600,8 +577,12 @@ void MenuBar::AddHelpMenu()
   QAction* projectrio = help_menu->addAction(tr("&Project Rio Website"));
   connect(projectrio, &QAction::triggered, this,
           []() { QDesktopServices::openUrl(QUrl(QStringLiteral("https://www.projectrio.online/"))); });
-  QAction* discord = help_menu->addAction(tr("&Discord"));
-  connect(discord, &QAction::triggered, this, []() {
+  QAction* rio_discord = help_menu->addAction(tr("&Project Rio Discord"));
+  connect(rio_discord, &QAction::triggered, this, []() {
+    QDesktopServices::openUrl(QUrl(QStringLiteral("https://discord.com/invite/c3r9PabfRU")));
+  });
+  QAction* mssb_discord = help_menu->addAction(tr("&Mario Baseball Discord"));
+  connect(mssb_discord, &QAction::triggered, this, []() {
     QDesktopServices::openUrl(QUrl(QStringLiteral("https://discord.com/invite/9ZZtpuEPCd")));
   });
 

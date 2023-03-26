@@ -42,7 +42,7 @@ public:
                          StartGameCallback start_game_callback, QWidget* parent = nullptr);
   ~NetPlayDialog();
 
-  void show(std::string nickname, bool use_traversal);
+  void show(bool use_traversal);
   void reject() override;
 
   // NetPlayUI methods
@@ -73,9 +73,8 @@ public:
   void OnGameStartAborted() override;
   void OnGolferChanged(bool is_golfer, const std::string& golfer_name) override;
 
-  void RankedStartingMsg(bool is_ranked) override;
-  void OnGameMode(std::string mode) override;
-  void OnRankedEnabled(bool is_ranked) override;
+  void StartingMsg(bool is_tagset) override;
+  void OnGameMode(std::string mode, std::string description, std::vector<std::string> tags) override;
   void OnCoinFlipResult(int coinNum);
   void OnRandomStadiumResult(int stadium);
   void OnNightResult(bool is_night);
@@ -153,7 +152,7 @@ private:
   QMenu* m_network_menu;
   QMenu* m_md5_menu;
   QMenu* m_other_menu;
-  QMenu* m_gecko_menu;
+  //QMenu* m_gecko_menu;
   QPushButton* m_game_button;
   QPushButton* m_start_button;
   QLabel* m_buffer_label;
@@ -171,10 +170,10 @@ private:
   QAction* m_hide_remote_gbas_action;
   QAction* m_night_stadium_action;
   QAction* m_disable_music_action;
+  QAction* m_highlight_ball_shadow_action;
   //QAction* m_never_cull_action;
   QPushButton* m_quit_button;
   QSplitter* m_splitter;
-  // QCheckBox* m_ranked_box;
   QActionGroup* m_network_mode_group;
   QPushButton* m_coin_flipper;
   QPushButton* m_random_stadium;
@@ -198,7 +197,6 @@ private:
   int m_player_count = 0;
   int m_old_player_count = 0;
   bool m_host_input_authority = false;
-  bool m_current_ranked_value = false;
 
   StartGameCallback m_start_game_callback;
 };

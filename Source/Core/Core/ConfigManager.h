@@ -37,8 +37,6 @@ struct SConfig
   // Settings
   bool bAutomaticStart = false;
   bool bBootToPause = false;
-  bool bRecordStats;
-  bool bSubmitStats;
 
   bool bJITNoBlockCache = false;
   bool bJITNoBlockLinking = false;
@@ -80,6 +78,7 @@ struct SConfig
 
 	u16 GetGameRevision() const;
   std::string GetGameID_Wrapper() const;
+  bool GameIsAllowed() const;
   bool GameHasDefaultGameIni() const;
   IniFile LoadDefaultGameIni() const;
   IniFile LoadLocalGameIni() const;

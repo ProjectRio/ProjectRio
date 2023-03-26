@@ -41,21 +41,44 @@ bool Updater::CheckForUpdate()
   return m_update_available;
 }
 
-void Updater::OnUpdateAvailable(std::string info)
+void Updater::MarkDownToRichText(std::string &str)
+{
+  std::string markdownNewLine = "\r\n";
+  std::string RichTextNewLine = "<br/>";
+
+  size_t start_pos = 0;
+  while ((start_pos = str.find(markdownNewLine, start_pos)) != std::string::npos)
+  {
+    str.replace(start_pos, markdownNewLine.length(), RichTextNewLine);
+    start_pos += RichTextNewLine.length();
+  }
+
+  start_pos = 0;
+  while ((start_pos = str.find("*", start_pos)) != std::string::npos)
+  {
+    str.erase(start_pos, 1);
+  }
+}
+
+void Updater::OnUpdateAvailable(std::string version, std::string info)
 {
   // bool later = false;
   m_update_available = true;
+
+  MarkDownToRichText(info);
 
   std::optional<int> choice = RunOnObject(m_parent, [&] {
     QDialog* dialog = new QDialog(m_parent);
     dialog->setWindowTitle(tr("Update available"));
     dialog->setWindowFlags(dialog->windowFlags() & ~Qt::WindowContextHelpButtonHint);
-    auto* label = new QLabel(tr("<h2>A new version of Rio is available!</h2><h4>Head to "
-                                "the Project Rio website to download the latest update!</h4>"
-                                "<u>New Version:</u><strong> %1</strong><br><u>Your "
-                                "Version:</u><strong> %2</strong></br>")
-                                 .arg(QString::fromStdString(info))
-                                 .arg(QString::fromStdString(Common::GetRioRevStr())));
+    auto* label = new QLabel(tr("<h2>A new version of Rio is available!</h2>"
+                                "<h4>Head to the Project Rio website to download the latest update!</h4>"
+                                "<u>New Version:</u><strong> %1</strong><br/>"
+                                "<u>Your Version:</u><strong> %2</strong><br/>"
+                                "<h3>Changelog</h3>%3")
+                                .arg(QString::fromStdString(version))
+                                .arg(QString::fromStdString(Common::GetRioRevStr()))
+                                .arg(QString::fromStdString(info)));
     label->setTextFormat(Qt::RichText);
 
     auto* buttons = new QDialogButtonBox;

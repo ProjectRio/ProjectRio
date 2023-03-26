@@ -22,6 +22,8 @@ namespace LocalPlayers
 //  LocalPlayers player;
 //  return player.GetPlayers(localIni);
 //}
+LocalPlayers::Player m_online_player{"No Player Selected", "0"};
+
 LocalPlayers::Player m_local_player_1{"No Player Selected", "0"};
 LocalPlayers::Player m_local_player_2{"No Player Selected", "0"};
 LocalPlayers::Player m_local_player_3{"No Player Selected", "0"};
@@ -60,12 +62,14 @@ std::vector<std::string> LoadPortPlayers(IniFile& inifile)
   return ports;
 }
 
+// take player set to the local player variables and save it to the ini
 void SaveLocalPorts()
 {
   const auto ini_path = File::GetUserPath(F_LOCALPLAYERSCONFIG_IDX);
   IniFile ini;
   ini.Load(ini_path);
   IniFile::Section* localplayers = ini.GetOrCreateSection("Local Players");
+  localplayers->Set("Online Player", (m_online_player).LocalPlayerToStr());
   localplayers->Set("Player 1", (m_local_player_1).LocalPlayerToStr());
   localplayers->Set("Player 2", (m_local_player_2).LocalPlayerToStr());
   localplayers->Set("Player 3", (m_local_player_3).LocalPlayerToStr());
@@ -75,12 +79,9 @@ void SaveLocalPorts()
 
 void LoadLocalPorts()
 {
-  //const auto ini_path = std::string(File::GetUserPath(F_LOCALPLAYERSCONFIG_IDX));
-  //IniFile local_players_path;
-  //local_players_path.Load(ini_path);
-
   LocalPlayers i_LocalPlayers;
   std::map<int, LocalPlayers::Player> portPlayers = i_LocalPlayers.GetPortPlayers();
+  m_online_player.SetUserInfo(portPlayers[0]);
   m_local_player_1.SetUserInfo(portPlayers[1]);
   m_local_player_2.SetUserInfo(portPlayers[2]);
   m_local_player_3.SetUserInfo(portPlayers[3]);

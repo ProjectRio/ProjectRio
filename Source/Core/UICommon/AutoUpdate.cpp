@@ -195,7 +195,7 @@ void AutoUpdateChecker::CheckForUpdate(std::string_view update_track,
     INFO_LOG_FMT(COMMON, "Auto-update status: we are up to date.");
     return;
   }
-  OnUpdateAvailable(obj["tag_name"].get<std::string>());
+  OnUpdateAvailable(obj["tag_name"].get<std::string>(), obj["body"].get<std::string>());
 }
 
 void AutoUpdateChecker::TriggerUpdate(const AutoUpdateChecker::NewVersionInformation& info,

@@ -7,13 +7,16 @@
 namespace LocalPlayers
 {
 // gets a vector of all the local players
-std::vector<LocalPlayers::Player> LocalPlayers::GetPlayers(const IniFile& localIni)
+std::vector<LocalPlayers::Player> LocalPlayers::GetPlayers()
 {
+  IniFile local_players_ini;
+  local_players_ini.Load(File::GetUserPath(F_LOCALPLAYERSCONFIG_IDX));
+
   std::vector<LocalPlayers::Player> players;
   LocalPlayers::Player defaultPlayer{"No Player Selected", "0"};
   players.push_back(defaultPlayer);
 
-  for (const IniFile* ini : {&localIni})
+  for (const IniFile* ini : {&local_players_ini})
   {
     std::vector<std::string> lines;
     ini->GetLines("Local_Players_List", &lines, false);
@@ -25,17 +28,36 @@ std::vector<LocalPlayers::Player> LocalPlayers::GetPlayers(const IniFile& localI
         players.push_back(player);
     }
 
-    // do i need this?
-    // add the last username
-    //if (!player.username.empty())
-    //{
-    //  players.push_back(player);
-    //}
-
   }
   return players;
 }
 
+// returns a mak of player keys to usernames
+std::map<std::string, std::string> LocalPlayers::GetPlayerMap()
+{
+  std::map<std::string, std::string> playerMap;
+  std::vector<LocalPlayers::Player> playerList = GetPlayers();
+
+  for (Player player : playerList)
+  {
+    playerMap.emplace(player.userid, player.username);
+  }
+  return playerMap;
+}
+
+// maps the rio key to the index of the player vector
+std::map<std::string, int> LocalPlayers::GetPlayerIndexMap()
+{
+  std::map<std::string, int> playerIndexMap;
+  std::vector<LocalPlayers::Player> playerList = GetPlayers();
+
+  for (int i = 0; i < playerList.size(); i++)
+  {
+    playerIndexMap.emplace(playerList[i].userid, i);
+  }
+
+  return playerIndexMap;
+}
 
 // returns map of local players set to each port
 // NOTE: reads from the file
@@ -45,18 +67,21 @@ std::map<int, LocalPlayers::Player> LocalPlayers::GetPortPlayers()
 
   IniFile local_players_ini;
   local_players_ini.Load(File::GetUserPath(F_LOCALPLAYERSCONFIG_IDX));
-  const std::vector<LocalPlayers::Player> LocalPlayersList = GetPlayers(local_players_ini); // list of all available local players
-
   IniFile::Section* localplayers = local_players_ini.GetOrCreateSection("Local Players");
   const IniFile::Section::SectionMap portmap = localplayers->GetValues();
 
-  u8 portnum = 1;
   for (const auto& name : portmap)
   {
-    std::string playerStr = name.second;
-
-    LocalPortPlayers[portnum] = toLocalPlayer(playerStr);
-    portnum++;
+    if (name.first == "Online Player")
+      LocalPortPlayers[0] = toLocalPlayer(name.second);
+    if (name.first == "Player 1")
+      LocalPortPlayers[1] = toLocalPlayer(name.second);
+    if (name.first == "Player 2")
+      LocalPortPlayers[2] = toLocalPlayer(name.second);
+    if (name.first == "Player 3")
+      LocalPortPlayers[3] = toLocalPlayer(name.second);
+    if (name.first == "Player 4")
+      LocalPortPlayers[4] = toLocalPlayer(name.second);
   }
 
   return LocalPortPlayers;
@@ -92,7 +117,9 @@ LocalPlayers::Player LocalPlayers::toLocalPlayer(std::string playerStr)
 // converts local players to a str
 std::string LocalPlayers::Player::LocalPlayerToStr()
 {
-  std::string title = '+' + this->username + "[" + this->userid + "]";
+  std::string title =
+      "+" + (this->username == "" ? "No Player Selected" : this->username) +
+      "[" + (this->userid == "" ? "0]" : this->userid) + "]";
   return title;
 }
 
@@ -139,6 +166,26 @@ void LocalPlayers::Player::SetUserInfo(LocalPlayers::Player player)
 {
   this->username = player.GetUsername();
   this->userid = player.GetUserID();
-} 
+}
+
+enum LocalPlayers::AccountValidationType LocalPlayers::Player::ValidateAccount(Common::HttpRequest &m_http)
+{
+  AccountValidationType validationType;
+  std::string url = "https://api.projectrio.app/validate_user_from_client/?username=" +
+                    this->username + "&rio_key=" + this->userid;
+
+  const Common::HttpRequest::Response response = m_http.Get(url/*, {}, Common::HttpRequest::AllowedReturnCodes::All*/);
+
+  if (!response)
+  {
+    validationType = Invalid;
+  }
+  else
+  {
+    validationType = Valid;
+  }
+
+  return validationType;
+}
 
 }  // namespace LocalPlayers
