@@ -48,6 +48,8 @@ private:
   void DownloadCodes();
   void SaveCodes();
   void SortAlphabetically();
+  void SortEnabledCodesFirst();
+  void SortDisabledCodesFirst();
   void MakeEnabledList();
 
   std::string m_game_id;
