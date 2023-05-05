@@ -10,13 +10,15 @@
 
 #include <algorithm>
 
-namespace ResourcePack
-{
 namespace
 {
 std::vector<ResourcePack> packs;
+  
 std::string packs_path;
+}
 
+namespace ResourcePack
+{
 IniFile GetPackConfig()
 {
   packs_path = File::GetUserPath(D_RESOURCEPACK_IDX) + "/Packs.ini";
@@ -25,7 +27,6 @@ IniFile GetPackConfig()
   file.Load(packs_path);
 
   return file;
-}
 }  // Anonymous namespace
 
 bool Init()
