@@ -19,11 +19,11 @@ std::vector<ResourcePack> packs;
   
 std::string packs_path;
 
-IniFile GetPackConfig()
+Common::IniFile GetPackConfig()
 {
   packs_path = File::GetUserPath(D_RESOURCEPACK_IDX) + "/Packs.ini";
 
-  IniFile file;
+  Common::IniFile file;
   file.Load(packs_path);
 
   return file;
