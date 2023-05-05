@@ -43,7 +43,9 @@ private:
   void UpdateList();
   void SaveCodes();
   void SortAlphabetically();
-
+  void SortEnabledCodesFirst();
+  void SortDisabledCodesFirst();
+  
   void OnCodeAddClicked();
   void OnCodeEditClicked();
   void OnCodeRemoveClicked();
