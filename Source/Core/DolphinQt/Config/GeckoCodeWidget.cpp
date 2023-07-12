@@ -15,6 +15,7 @@
 #include <QPushButton>
 #include <QTextEdit>
 #include <QVBoxLayout>
+#include <QScrollBar>
 
 #include "Common/FileUtil.h"
 #include "Common/IniFile.h"
@@ -72,11 +73,12 @@ void GeckoCodeWidget::CreateWidgets()
   m_code_description->setFont(monospace);
   m_code_description->setReadOnly(true);
   m_code_description->setFixedHeight(line_height * 10);
+  m_code_description->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);  // disable auto-scrolling
 
-  m_code_view = new QTextEdit;
-  m_code_view->setFont(monospace);
-  m_code_view->setReadOnly(true);
-  m_code_view->setFixedHeight(line_height * 10);
+  //m_code_view = new QTextEdit;
+  //m_code_view->setFont(monospace);
+  //m_code_view->setReadOnly(true);
+  //m_code_view->setFixedHeight(line_height * 10);
 
   m_add_code = new NonDefaultQPushButton(tr("&Add New Code..."));
   m_edit_code = new NonDefaultQPushButton(tr("&Edit Code..."));
@@ -91,7 +93,7 @@ void GeckoCodeWidget::CreateWidgets()
   m_name_label->setEnabled(!m_game_id.empty());
   m_creator_label->setEnabled(!m_game_id.empty());
   m_code_description->setEnabled(!m_game_id.empty());
-  m_code_view->setEnabled(!m_game_id.empty());
+  //m_code_view->setEnabled(!m_game_id.empty());
 
   m_add_code->setEnabled(!m_game_id.empty());
   m_edit_code->setEnabled(false);
@@ -119,7 +121,7 @@ void GeckoCodeWidget::CreateWidgets()
 
   layout->addLayout(info_layout);
   layout->addWidget(m_code_description);
-  layout->addWidget(m_code_view);
+  //layout->addWidget(m_code_view);
 
   QHBoxLayout* btn_layout = new QHBoxLayout;
 
@@ -176,10 +178,12 @@ void GeckoCodeWidget::OnSelectionChanged()
   for (const auto& line : code.notes)
     m_code_description->append(QString::fromStdString(line));
 
-  m_code_view->clear();
+  QScrollBar* scrollBar = m_code_description->verticalScrollBar();
+  scrollBar->setValue(scrollBar->minimum());  // set scroll bar to the top
+  //m_code_view->clear();
 
-  for (const auto& c : code.codes)
-    m_code_view->append(QString::fromStdString(c.original_line));
+  //for (const auto& c : code.codes)
+  //  m_code_view->append(QString::fromStdString(c.original_line));
 }
 
 void GeckoCodeWidget::OnItemChanged(QListWidgetItem* item)

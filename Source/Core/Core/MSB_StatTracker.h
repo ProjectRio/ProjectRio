@@ -16,12 +16,12 @@
 #include "Common/FileUtil.h"
 
 #include "Core/LocalPlayers.h"
-
 #include "Core/Logger.h"
-
 #include "Core/TrackerAdr.h"
 
-#include "Common/TagSet.h"
+namespace Tag {
+class TagSet;
+}
 
 enum class GAME_STATE
 {
@@ -500,13 +500,6 @@ public:
     //StatTracker() { };
     Logger state_logger = Logger("state_log");;
 
-    struct TrackerInfo{
-        bool mRecord;
-        bool mSubmit = true;
-        bool mDisplay = true;
-    };
-    TrackerInfo mTrackerInfo;
-
     struct EndGameRosterDefensiveStats{
         u8  batters_faced;
         u16 runs_allowed;
@@ -688,6 +681,7 @@ public:
 
     struct Event{
         u16 event_num;
+        bool pick_off_attempt = false;
 
         u8 inning;
         u8 half_inning;
@@ -736,6 +730,7 @@ public:
     
     struct GameInfo{
         u32 game_id;
+        bool init_game = true;
         bool game_active = false;
         std::string start_unix_date_time;
         std::string start_local_date_time;
@@ -752,7 +747,6 @@ public:
 
         LocalPlayers::LocalPlayers::Player team0_player;
         LocalPlayers::LocalPlayers::Player team1_player;
-        bool ranked;
         int avg_ping = 0;
         int lag_spikes = 0;
 
@@ -770,12 +764,19 @@ public:
         bool host;
         std::string netplay_opponent_alias;
 
+        //TagSet info
+        std::optional<int> tag_set_id = std::nullopt;
+
         //Quit?
         u8 quitter_team = 0xFF;
 
         //Bookkeeping
         //int pitch_num = 0;
         int event_num = 0;
+
+        //Update server with new AB
+        bool update_ongoing_game = true;
+        bool post_ongoing_game = true;
 
         //Array of both teams' character summaries
         std::array<std::array<CharacterSummary, cRosterSize>, cNumOfTeams> character_summaries;
@@ -851,7 +852,7 @@ public:
             for (u8 pos=0; pos < cRosterSize; ++pos){
                 u32 aFielderRosterLoc_calc = aFielder_RosterLoc + (pos * cFielder_Offset);
 
-                u8 roster_loc = Memory::Read_U8(aFielderRosterLoc_calc);
+                u8 roster_loc = PowerPC::HostRead_U8(aFielderRosterLoc_calc);
 
                 std::cout << "RosterLoc:" << std::to_string(roster_loc) 
                           << " Init Pos=" << cPosition.at(pos) << std::endl;
@@ -872,7 +873,7 @@ public:
             for (u8 pos=0; pos < cRosterSize; ++pos){
                 u32 aFielderRosterLoc_calc = aFielder_RosterLoc + (pos * cFielder_Offset);
 
-                u8 roster_loc = Memory::Read_U8(aFielderRosterLoc_calc);
+                u8 roster_loc = PowerPC::HostRead_U8(aFielderRosterLoc_calc);
 
                 //If new position, mark changed (unless this is the first pitch of the AB (pos==0xFF))
                 //Then set new position
@@ -976,13 +977,12 @@ public:
     EVENT_STATE m_event_state_prev = EVENT_STATE::UNDEFINED;
 
     struct state_members{
-        //Holds the status of the ranked button check box. Sampled at beginning of game
-        bool m_ranked_status = false;
         bool m_netplay_session = false;
         bool m_is_host = false;
         std::optional<int> m_tag_set;
         std::string m_netplay_opponent_alias = "";
-        std::optional<int> tag_set_id = std::nullopt;
+        std::optional<int> tag_set_id_local = std::nullopt;
+        std::optional<int> tag_set_id_netplay = std::nullopt;
     } m_state;
 
     union
@@ -991,14 +991,12 @@ public:
         float fnum;
     } float_converter;
 
-    void setRankedStatus(bool inBool);
-    void setRecordStatus(bool inBool);
-    void setTagSetId(Tag::TagSet tag_set);
+    void setTagSetId(Tag::TagSet tag_set, bool netplay);
+    void clearTagSetId(bool netplay);
     void setNetplaySession(bool netplay_session, bool is_host=false, std::string opponent_name = "");
     void setAvgPing(int avgPing);
     void setLagSpikes(int nLagSpikes);
     void setNetplayerUserInfo(std::map<int, LocalPlayers::LocalPlayers::Player> userInfo);
-    void setDisplayStats(bool bDisplay);
     void setGameID(u32 gameID);
     // void setTags(std::vector tags);
     // void setTagSet(int tagset);
@@ -1053,15 +1051,18 @@ public:
     //Returns path to save json
     std::string getStatJsonPath(std::string prefix);
 
+    void postOngoingGame(Event& in_event);
+    void updateOngoingGame(Event& in_event);
+
     std::pair<u8,u8> getBatterFielderPorts(){
         // These values are the actual port numbers
         // and are indexed into using the below u8s
-        std::array<u8, 2> ports = {Memory::Read_U8(0x800e874c), Memory::Read_U8(0x800e874d)};
+        std::array<u8, 2> ports = {PowerPC::HostRead_U8(0x800e874c), PowerPC::HostRead_U8(0x800e874d)};
 
         // These registers will always be 0 or 1
         // and swap values each half inning
-        u32 BattingTeam = Memory::Read_U32(0x80892990);
-        u32 PitchingTeam = Memory::Read_U32(0x80892994);
+        u32 BattingTeam = PowerPC::HostRead_U32(0x80892990);
+        u32 PitchingTeam = PowerPC::HostRead_U32(0x80892994);
         
         u8 BattingPort = ports[BattingTeam];
         u8 FieldingPort = ports[PitchingTeam];
@@ -1073,7 +1074,7 @@ public:
     std::pair<u8,u8> getHomeAwayPort(){
         // These values are the actual port numbers
         // and are indexed into using the below u8s
-        std::array<u8, 2> ports = {Memory::Read_U8(0x800e874c), Memory::Read_U8(0x800e874d)};
+        std::array<u8, 2> ports = {PowerPC::HostRead_U8(0x800e874c), PowerPC::HostRead_U8(0x800e874d)};
         
         m_game_info.home_port = ports[0];
         m_game_info.away_port = ports[1];
@@ -1083,6 +1084,7 @@ public:
     */
 
     void initPlayerInfo();
+    void initCaptains();
 
     //If mid-game, dump game
     void dumpGame(){
@@ -1092,7 +1094,7 @@ public:
 
             //Remove current event, wasn't finished
             auto it = m_game_info.events.find(m_game_info.event_num);
-            if (&it != NULL)
+            if ((&it != NULL) && (it != m_game_info.events.end()))
             {
               m_game_info.events.erase(it);
             }

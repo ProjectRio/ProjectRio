@@ -338,7 +338,6 @@ void NetPlayBrowser::SaveSettings() const
   settings.setValue(QStringLiteral("netplaybrowser/geometry"), saveGeometry());
   settings.setValue(QStringLiteral("netplaybrowser/region"), m_region_combo->currentText());
   settings.setValue(QStringLiteral("netplaybrowser/name"), m_edit_name->text());
-  Config::SetBaseOrCurrent(Config::NETPLAY_NICKNAME, m_edit_nickname->text().toStdString());
 
   QString visibility(QStringLiteral("all"));
   if (m_radio_public->isChecked())
@@ -367,7 +366,6 @@ void NetPlayBrowser::RestoreSettings()
     m_region_combo->setCurrentText(region);
 
   m_edit_name->setText(settings.value(QStringLiteral("netplaybrowser/name")).toString());
-  m_edit_nickname->setText(QString::fromStdString(Config::Get(Config::NETPLAY_NICKNAME)));
 
   const QString visibility = settings.value(QStringLiteral("netplaybrowser/visibility")).toString();
   if (visibility == QStringLiteral("public"))

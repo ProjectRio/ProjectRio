@@ -20,8 +20,9 @@ public:
   explicit Updater(QWidget* parent, std::string update_track, std::string hash_override);
 
   void run() override;
-  void OnUpdateAvailable(std::string info);
+  void OnUpdateAvailable(std::string version, std::string info);
   bool CheckForUpdate();
+  void MarkDownToRichText(std::string& str);
 
 private:
   QWidget* m_parent;

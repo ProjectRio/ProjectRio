@@ -179,20 +179,20 @@ void LogConfigWidget::SaveSettings()
   // Config - Verbosity
   auto verbosity = Common::Log::LogLevel::LNOTICE;
 
-  if (m_verbosity_notice->isChecked())
-    verbosity = Common::Log::LogLevel::LNOTICE;
+  //if (m_verbosity_notice->isChecked())
+  //  verbosity = Common::Log::LogLevel::LNOTICE;
 
-  if (m_verbosity_error->isChecked())
-    verbosity = Common::Log::LogLevel::LERROR;
+  //if (m_verbosity_error->isChecked())
+  //  verbosity = Common::Log::LogLevel::LERROR;
 
-  if (m_verbosity_warning->isChecked())
-    verbosity = Common::Log::LogLevel::LWARNING;
+  //if (m_verbosity_warning->isChecked())
+  //  verbosity = Common::Log::LogLevel::LWARNING;
 
-  if (m_verbosity_info->isChecked())
-    verbosity = Common::Log::LogLevel::LINFO;
+  //if (m_verbosity_info->isChecked())
+  //  verbosity = Common::Log::LogLevel::LINFO;
 
-  if (m_verbosity_debug->isChecked())
-    verbosity = Common::Log::LogLevel::LDEBUG;
+  //if (m_verbosity_debug->isChecked())
+  //  verbosity = Common::Log::LogLevel::LDEBUG;
 
   auto* const log_manager = Common::Log::LogManager::GetInstance();
 
@@ -200,11 +200,11 @@ void LogConfigWidget::SaveSettings()
   log_manager->SetLogLevel(verbosity);
 
   // Config - Outputs
-  log_manager->EnableListener(Common::Log::LogListener::FILE_LISTENER, m_out_file->isChecked());
-  log_manager->EnableListener(Common::Log::LogListener::CONSOLE_LISTENER,
-                              m_out_console->isChecked());
-  log_manager->EnableListener(Common::Log::LogListener::LOG_WINDOW_LISTENER,
-                              m_out_window->isChecked());
+  //log_manager->EnableListener(Common::Log::LogListener::FILE_LISTENER, m_out_file->isChecked());
+  //log_manager->EnableListener(Common::Log::LogListener::CONSOLE_LISTENER,
+  //                            m_out_console->isChecked());
+  //log_manager->EnableListener(Common::Log::LogListener::LOG_WINDOW_LISTENER,
+  //                            m_out_window->isChecked());
   // Config - Log Types
   for (int i = 0; i < static_cast<int>(Common::Log::LogType::NUMBER_OF_LOGS); ++i)
   {

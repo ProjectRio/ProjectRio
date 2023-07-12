@@ -113,69 +113,46 @@ jobs:
           sudo apt install -y software-properties-common 
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt install -y gcc-11 g++-11
+          sudo apt-get install fuse libfuse2
           sudo apt update
           sudo apt install \
           cmake \
+          ca-certificates \
+          qtbase5-dev \
+          qtbase5-private-dev \
+          make \
           pkg-config \
-          git \
-          wget \
-          libfuse2 \
-          libao-dev \
-          libasound2-dev \
+          udev \
+          libudev1 \
           libavcodec-dev \
           libavformat-dev \
-          libbluetooth-dev \
-          libenet-dev \
-          libgtk2.0-dev \
-          liblzo2-dev \
-          libminiupnpc-dev \
-          libopenal-dev \
-          libpulse-dev \
-          libreadline-dev \
-          libsfml-dev \
-          libsoil-dev \
-          libsoundtouch-dev \
+          libavutil-dev \
           libswscale-dev \
-          libusb-1.0-0-dev \
-          libwebkit2gtk-4.0-dev \
-          libxext-dev \
+          libxi-dev \
           libxrandr-dev \
-          portaudio19-dev \
-          zlib1g-dev \
-          libudev-dev \
           libevdev-dev \
+          libsfml-dev \
+          libminiupnpc-dev \
           libmbedtls-dev \
           libcurl4-openssl-dev \
-          libegl1-mesa-dev \
+          libhidapi-dev \
+          libbluetooth-dev \
+          libasound2-dev \
+          libpulse-dev \
+          libpugixml-dev \
+          libbz2-dev \
+          libzstd-dev \
+          liblzo2-dev \
           libpng-dev \
-          qt5-base-private-dev \
-          libxxf86vm-dev \
-          x11proto-xinerama-dev
+          libusb-1.0-0-dev \
+          gettext libudev-dev \
+          libsystemd-dev \
+          -y
       - name: "Build ${{ matrix.build_type }} Dolphin"
         if: success()
         working-directory: ${{ github.workspace }}
         run: |
           git config core.fileMode false ; chmod +x ./build-linux.sh && ./build-linux.sh ${{ matrix.build_config }}
-      - name: "Build ${{ matrix.build_type }} AppImage"
-        if: success()
-        working-directory: ${{ github.workspace }}
-        run: |
-          git config core.fileMode false ; chmod +x ./build-appimage.sh && ./build-appimage.sh ${{ matrix.build_config }}
-      - name: "Package"
-        if: success()
-        working-directory: ${{ github.workspace }}
-        run: |
-          mkdir artifact
-          FILE_NAME=${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-${{ matrix.artifact_name }}.zip
-          chmod +x ./*.AppImage
-          zip -r "${FILE_NAME}" ./*.AppImage*
-          mv "${FILE_NAME}" ./artifact/
-      - name: "Publish"
-        if: success()
-        uses: actions/upload-artifact@v2-preview
-        with:
-          name: ${{ matrix.artifact_name }}
-          path: "./artifact/"
   macOS:
     strategy:
       fail-fast: false

@@ -18,6 +18,8 @@ namespace LocalPlayers
   void SaveLocalPorts();
   void LoadLocalPorts();
 
+  extern LocalPlayers::Player m_online_player;
+
   extern LocalPlayers::Player m_local_player_1;
   extern LocalPlayers::Player m_local_player_2;
   extern LocalPlayers::Player m_local_player_3;

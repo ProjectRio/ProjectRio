@@ -941,6 +941,7 @@ static void RebuildUserDirectories(unsigned int dir_index)
     s_user_paths[D_CONFIG_IDX] = s_user_paths[D_USER_IDX] + CONFIG_DIR DIR_SEP;
     s_user_paths[D_GAMESETTINGS_IDX] = s_user_paths[D_USER_IDX] + GAMESETTINGS_DIR DIR_SEP;
     s_user_paths[D_STATFILES_IDX] = s_user_paths[D_USER_IDX] + STATFILES_DIR DIR_SEP;
+    s_user_paths[D_MSSBFILES_IDX] = s_user_paths[D_STATFILES_IDX] + MSSBFILES_DIR DIR_SEP;
     s_user_paths[D_HUDFILES_IDX] = s_user_paths[D_USER_IDX] + HUDFILES_DIR DIR_SEP;
     s_user_paths[D_STATELOGGER_IDX] = s_user_paths[D_USER_IDX] + STATELOGGERFILES_DIR DIR_SEP;
     s_user_paths[D_MAPS_IDX] = s_user_paths[D_USER_IDX] + MAPS_DIR DIR_SEP;

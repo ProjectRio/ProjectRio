@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <optional>
 
 #include "Common/Event.h"
 #include "Common/QoSSession.h"
@@ -66,8 +67,8 @@ public:
 
   void AdjustPadBufferSize(unsigned int size);
   void SetHostInputAuthority(bool enable);
+  void SetTagSet(bool exists, int tagset_id);
 
-  void AdjustRankedBox(bool is_ranked);
   void AdjustNightStadium(bool is_night);
   void AdjustReplays(bool disable);
 
@@ -86,6 +87,7 @@ private:
   public:
     PlayerId pid{};
     std::string name;
+    std::string riokey;
     std::string revision;
     SyncIdentifierComparison game_status = SyncIdentifierComparison::Unknown;
     bool has_ipl_dump = false;
@@ -172,9 +174,9 @@ private:
   PlayerId m_current_golfer = 1;
   PlayerId m_pending_golfer = 0;
 
-  bool m_current_ranked_value = false;
   bool m_current_night_value = false;
   bool m_current_disable_replays_value = false;
+  std::optional<int> m_tagset_id = std::nullopt;
 
   std::map<PlayerId, Client> m_players;
 

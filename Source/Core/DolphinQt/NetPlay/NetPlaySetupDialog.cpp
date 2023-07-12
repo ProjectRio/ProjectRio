@@ -23,6 +23,8 @@
 #include <QHeaderView>
 #include <QInputDialog>
 #include <QUrl>
+#include <QTextEdit>
+#include <QScrollBar>
 
 #include "Core/Config/NetplaySettings.h"
 #include "Core/NetPlayProto.h"
@@ -37,7 +39,9 @@
 #include "DolphinQt/NetPlay/NetPlayBrowser.h"
 #include "Common/Version.h"
 #include <qdesktopservices.h>
+#include "Core/Core.h"
 //#include "Core/NetPlayServer.h"
+#include "Common/TagSet.h"
 
 
 NetPlaySetupDialog::NetPlaySetupDialog(const GameListModel& game_list_model, QWidget* parent)
@@ -52,7 +56,6 @@ NetPlaySetupDialog::NetPlaySetupDialog(const GameListModel& game_list_model, QWi
   std::string index_region = Config::Get(Config::NETPLAY_INDEX_REGION);
   std::string index_name = Config::LobbyNameVector(Config::Get(Config::NETPLAY_INDEX_NAME))[0];
   std::string index_password = Config::Get(Config::NETPLAY_INDEX_PASSWORD);
-  std::string nickname = Config::Get(Config::NETPLAY_NICKNAME);
   std::string traversal_choice = Config::Get(Config::NETPLAY_TRAVERSAL_CHOICE);
   int connect_port = Config::Get(Config::NETPLAY_CONNECT_PORT);
   int host_port = Config::Get(Config::NETPLAY_HOST_PORT);
@@ -65,8 +68,7 @@ NetPlaySetupDialog::NetPlaySetupDialog(const GameListModel& game_list_model, QWi
   m_host_upnp->setChecked(use_upnp);
 #endif
 
-  m_nickname_edit->setText(QString::fromStdString(nickname));
-  m_connection_type->setCurrentIndex(traversal_choice == "direct" ? 0 : 1);
+  m_connection_type->setCurrentIndex(traversal_choice == "direct" ? 1 : 0);
   m_connect_port_box->setValue(connect_port);
   m_host_port_box->setValue(host_port);
 
@@ -82,8 +84,6 @@ NetPlaySetupDialog::NetPlaySetupDialog(const GameListModel& game_list_model, QWi
   m_host_server_name->setEnabled(use_index);
   m_host_server_name->setText(QString::fromStdString(index_name));
 
-  bool is_ranked = Config::Get(Config::NETPLAY_RANKED);
-  m_host_ranked->setChecked(is_ranked);
   m_host_game_mode->setEnabled(true);
 
   m_host_server_password->setEnabled(use_index);
@@ -132,19 +132,36 @@ void NetPlaySetupDialog::CreateMainLayout()
 {
   m_main_layout = new QGridLayout;
   m_button_box = new QDialogButtonBox(QDialogButtonBox::Cancel);
-  m_nickname_edit = new QLineEdit;
   m_connection_type = new QComboBox;
-  m_connection_type->setCurrentIndex(1); // default to traversal server
   m_reset_traversal_button = new NonDefaultQPushButton(tr("Reset Traversal Settings"));
   m_latency_test = new QPushButton(tr("Internet Test"));
   m_tab_widget = new QTabWidget;
+  m_account_name = new QLabel;
+  m_account_name->setTextFormat(Qt::RichText);
+  m_account_name->setText(tr("<h1><u>An unklnown error has occurred. Please close this window</u></h1>"));
+  m_account_box = new QGroupBox(tr("Current User"));
 
-  m_nickname_edit->setValidator(
-      new UTF8CodePointCountValidator(NetPlay::MAX_NAME_LENGTH, m_nickname_edit));
 
   // Connection widget
   auto* connection_widget = new QWidget;
   auto* connection_layout = new QGridLayout;
+
+  m_ip_label = new QLabel;
+  m_ip_edit = new QLineEdit;
+  m_ip_edit->setPlaceholderText(tr("To join a private lobby, paste the room code here"));
+  m_connect_port_label = new QLabel(tr("Port:"));
+  m_connect_port_box = new QSpinBox;
+  m_connect_button = new NonDefaultQPushButton(tr("Connect"));
+
+  m_connect_port_box->setMaximum(65535);
+
+  connection_layout->addWidget(m_ip_label, 0, 0);
+  connection_layout->addWidget(m_ip_edit, 0, 1);
+  connection_layout->addWidget(m_connect_port_label, 0, 2);
+  connection_layout->addWidget(m_connect_port_box, 0, 3);
+  connection_layout->addWidget(m_connect_button, 0, 4, Qt::AlignRight);
+  connection_widget->setLayout(connection_layout);
+
 
   // NetPlay Browser
   auto* browser_widget = new QWidget;
@@ -174,7 +191,9 @@ void NetPlaySetupDialog::CreateMainLayout()
   m_online_count = new QLabel;
   m_b_button_box = new QDialogButtonBox;
   m_button_refresh = new QPushButton(tr("Refresh"));
+  m_button_refresh->setAutoDefault(false);
   m_edit_name = new QLineEdit;
+  m_edit_name->setPlaceholderText(tr("Lobby Name"));
   m_check_hide_ingame = new QCheckBox(tr("Hide In-Game Sessions"));
 
   m_radio_all = new QRadioButton(tr("Private and Public"));
@@ -185,56 +204,40 @@ void NetPlaySetupDialog::CreateMainLayout()
 
   auto* filter_box = new QGroupBox(tr("Filters"));
   auto* filter_layout = new QGridLayout;
+
+  filter_layout->addWidget(m_check_hide_ingame, 0, 0);
+  filter_layout->addWidget(m_radio_all, 0, 1);
+  filter_layout->addWidget(m_radio_public, 0, 2);
+  filter_layout->addWidget(m_radio_private, 0, 3);
+  filter_layout->addWidget(m_region_combo, 1, 0, 1, 3);
+  filter_layout->addWidget(m_edit_name, 1, 1, 1, -1);
+  filter_layout->addItem(new QSpacerItem(3, 1, QSizePolicy::Expanding), 3, 4);
   filter_box->setLayout(filter_layout);
 
-  filter_layout->addWidget(new QLabel(tr("Region:")), 0, 0);
-  filter_layout->addWidget(m_region_combo, 0, 1, 1, -1);
-  filter_layout->addWidget(new QLabel(tr("Lobby Name:")), 1, 0);
-  filter_layout->addWidget(m_edit_name, 1, 1, 1, -1);
-  filter_layout->addWidget(m_radio_all, 2, 1);
-  filter_layout->addWidget(m_radio_public, 2, 2);
-  filter_layout->addWidget(m_radio_private, 2, 3);
-  filter_layout->addItem(new QSpacerItem(3, 1, QSizePolicy::Expanding), 3, 4);
-  filter_layout->addWidget(m_check_hide_ingame, 4, 1, 1, -1);
+  auto* status = new QWidget;
+  auto* status_layout = new QVBoxLayout;
+  status_layout->addWidget(m_status_label);
+  status_layout->addWidget(m_b_button_box);
+  status->setLayout(status_layout);
 
+  auto* filter_status = new QWidget;
+  auto* filter_status_layout = new QHBoxLayout;
+  filter_status_layout->addWidget(status);
+  filter_status_layout->addWidget(filter_box);
+  filter_status->setLayout(filter_status_layout);
+
+  layout->addWidget(connection_widget);
   layout->addWidget(m_online_count);
   layout->addWidget(m_table_widget);
-  layout->addWidget(filter_box);
-  layout->addWidget(m_status_label);
-  layout->addWidget(m_b_button_box);
+  layout->addWidget(filter_status);
+  //layout->addWidget(filter_box);
+  //layout->addWidget(m_status_label);
+  //layout->addWidget(m_b_button_box);
 
   m_b_button_box->addButton(m_button_refresh, QDialogButtonBox::ResetRole);
 
   browser_widget->setLayout(layout);
 
-  m_ip_label = new QLabel;
-  m_ip_edit = new QLineEdit;
-  m_connect_port_label = new QLabel(tr("Port:"));
-  m_connect_port_box = new QSpinBox;
-  m_connect_button = new NonDefaultQPushButton(tr("Connect"));
-
-  m_connect_port_box->setMaximum(65535);
-
-  connection_layout->addWidget(m_ip_label, 0, 0);
-  connection_layout->addWidget(m_ip_edit, 0, 1);
-  connection_layout->addWidget(m_connect_port_label, 0, 2);
-  connection_layout->addWidget(m_connect_port_box, 0, 3);
-  connection_layout->addWidget(
-      new QLabel(
-          tr("ALERT:\n\n"
-             "All players must use the same Dolphin version.\n"
-             "If enabled, SD cards must be identical between players.\n"
-             "If DSP LLE is used, DSP ROMs must be identical between players.\n"
-             "If a game is hanging on boot, it may not support Dual Core Netplay."
-             " Disable Dual Core.\n"
-             "If connecting directly, the host must have the chosen UDP port open/forwarded!\n"
-             "\n"
-             "Wii Remote support in netplay is experimental and may not work correctly.\n"
-             "Use at your own risk.\n")),
-      1, 0, -1, -1);
-  connection_layout->addWidget(m_connect_button, 3, 3, Qt::AlignRight);
-
-  connection_widget->setLayout(connection_layout);
 
   // Host widget
   auto* host_widget = new QWidget;
@@ -245,43 +248,41 @@ void NetPlaySetupDialog::CreateMainLayout()
   m_host_force_port_box = new QSpinBox;
   m_host_chunked_upload_limit_check = new QCheckBox(tr("Limit Chunked Upload Speed:"));
   m_host_chunked_upload_limit_box = new QSpinBox;
-  m_host_server_browser = new QCheckBox(tr("Show in server browser"));
+  m_host_server_browser = new QCheckBox(tr("Public Match"));
   m_host_server_name = new QLineEdit;
   m_host_server_password = new QLineEdit;
   m_host_server_region = new QComboBox;
+  m_host_server_region->setPlaceholderText(tr("Select a Region (required)"));
+  m_game_mode_description = new QTextEdit;
 
-  // m_host_option_label = new QLabel(tr("Game Options:"));
-  m_host_option_label = new QLabel;
-  m_host_option_label->setTextFormat(Qt::RichText);
-  m_host_option_label->setText(tr("<b><u>Game Options</u>:</b>"));
+  const auto line_height = QFontMetrics(font()).lineSpacing();
+  m_game_mode_description = new QTextEdit;
+  m_game_mode_description->setReadOnly(true);
+  m_game_mode_description->setFixedHeight(line_height * 10);
+  m_game_mode_description->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+  
+  auto* description_widget = new QLabel(tr(
+    "Select the appropriate game (Mario Superstar Baseball) and choose a Game Mode (optional).<br/>"
+    "Game Modes are pre-made ways to play the game. Any necessary mods and/or game changes are<br/>"
+    "automatically applied with a Game Mode. To play normal netplay, select \"No Game Mode\".<br/><br/>"
+    "Head to the <a href=\"https://www.projectrio.online/gamemode/\">Project Rio Website</a> "
+    "to learn more about Game Modes!<br/><br/>"
+    ));
+  description_widget->setTextFormat(Qt::RichText);
+  description_widget->setTextInteractionFlags(Qt::TextBrowserInteraction);
+  description_widget->setOpenExternalLinks(true);
 
-  m_host_ranked = new QCheckBox(tr("Ranked Mode"));
-  m_host_ranked->setToolTip(
-      tr("Enabling Ranked Mode will mark down your games as being ranked in the stats files\n and "
-         "disable any extra gecko codes as well as Training Mode. This should be toggled for\n"
-         "serious/competitive/ranked games ase accurate and organized. Toggling this box will\n"
-         " always record stats, ignoring user configurations."));
   m_host_game_mode = new QComboBox;
   m_host_game_mode->setToolTip(
-      tr("Choose which game mode you would like to play with. This will appear and be visible to other players in the lobby browser.\n"
-      "- Superstars OFF: doesn't allow superstarred characters to be used\n"
-      "- Superstars ON: allows the use of superstarred characters\n"
-      "- Custom: any non-standard format"
+      tr("Choose which game mode you would like to play with. This will appear and be visible to other players in the lobby browser."
       ));
 
-  // add game modes
-  m_host_game_mode->addItem(tr("Superstars OFF"));
-  m_host_game_mode->addItem(tr("Superstars ON"));
-  m_host_game_mode->addItem(tr("Custom"));
-
-  std::string current_mode = Config::Get(Config::NETPLAY_GAME_MODE);
-  int iMode = m_host_game_mode->findText(QString::fromStdString(current_mode));
-  m_host_game_mode->setCurrentIndex(iMode == -1 ? 0 : iMode);
+  m_host_game_mode->setCurrentIndex(0);
 
 #ifdef USE_UPNP
   m_host_upnp = new QCheckBox(tr("Forward port (UPnP)"));
 #endif
-  m_host_games = new QListWidget;
+  m_host_games = new QComboBox;
   m_host_button = new NonDefaultQPushButton(tr("Host"));
 
   m_host_port_box->setMaximum(65535);
@@ -296,7 +297,7 @@ void NetPlaySetupDialog::CreateMainLayout()
   m_host_server_name->setToolTip(tr("Name of your session shown in the server browser"));
   m_host_server_name->setPlaceholderText(tr("Lobby Name"));
   m_host_server_password->setToolTip(tr("Password for joining your game (leave empty for none)"));
-  m_host_server_password->setPlaceholderText(tr("Password"));
+  m_host_server_password->setPlaceholderText(tr("Password (optional)"));
 
   for (const auto& region : NetPlayIndex::GetRegions())
   {
@@ -304,46 +305,66 @@ void NetPlaySetupDialog::CreateMainLayout()
         tr("%1 (%2)").arg(tr(region.second.c_str())).arg(QString::fromStdString(region.first)),
         QString::fromStdString(region.first));
   }
-  QLabel* separator = new QLabel(tr(" "));
-  host_layout->addWidget(m_host_port_label, 0, 0);
-  host_layout->addWidget(m_host_port_box, 0, 1);
-#ifdef USE_UPNP
-  host_layout->addWidget(m_host_upnp, 0, 2);
-#endif
-  host_layout->addWidget(m_host_server_browser, 1, 0);
-  host_layout->addWidget(m_host_server_region, 1, 1);
-  host_layout->addWidget(m_host_server_name, 1, 2);
-  host_layout->addWidget(m_host_server_password, 1, 3);
-  host_layout->addWidget(separator, 2, 0);
-  host_layout->addWidget(m_host_option_label, 3, 0);
-  host_layout->addWidget(m_host_ranked, 4, 0);
-  host_layout->addWidget(m_host_game_mode, 4, 1);
-  host_layout->addWidget(m_host_games, 5, 0, 1, -1);
-  host_layout->addWidget(m_host_force_port_check, 6, 0);
-  host_layout->addWidget(m_host_force_port_box, 6, 1, Qt::AlignLeft);
-  host_layout->addWidget(m_host_chunked_upload_limit_check, 7, 0);
-  host_layout->addWidget(m_host_chunked_upload_limit_box, 7, 1, Qt::AlignLeft);
-  host_layout->addWidget(m_host_button, 7, 3, 2, 1, Qt::AlignRight);
 
+  auto* game_config = new QGroupBox(tr("Game Options"));
+  auto* game_config_layout = new QGridLayout;
+  game_config_layout->addWidget(new QLabel(tr("Game: ")), 0, 0);
+  game_config_layout->addWidget(m_host_games, 0, 1, 1, -1);
+  game_config_layout->addWidget(new QLabel(tr("Game Mode: ")), 1, 0);
+  game_config_layout->addWidget(m_host_game_mode, 1, 1, 1, -1);
+  game_config_layout->addWidget(m_host_server_browser, 2, 1, 1, -1);
+  game_config_layout->setAlignment(Qt::AlignLeft);
+  game_config->setLayout(game_config_layout);
+
+  auto* match_config = new QGroupBox(tr("Lobby Options"));
+  auto* match_config_layout = new QVBoxLayout;
+  match_config_layout->addWidget(m_host_server_name);
+  match_config_layout->addWidget(m_host_server_password);
+  match_config_layout->addWidget(m_host_server_region);
+  //match_config_layout->addWidget(m_host_server_browser);
+  match_config->setLayout(match_config_layout);
+
+  auto* lobby_config = new QGroupBox(tr("Advanced Lobby Options"));
+  auto* lobby_config_layout = new QGridLayout;
+
+  lobby_config_layout->addWidget(m_host_port_label, 3, 0);
+  lobby_config_layout->addWidget(m_host_port_box, 3, 1);
+#ifdef USE_UPNP
+  lobby_config_layout->addWidget(m_host_upnp, 3, 2);
+#endif
+  lobby_config_layout->addWidget(m_host_force_port_check, 4, 0);
+  lobby_config_layout->addWidget(m_host_force_port_box, 4, 1, Qt::AlignLeft);
+  lobby_config_layout->addWidget(m_host_chunked_upload_limit_check, 5, 0);
+  lobby_config_layout->addWidget(m_host_chunked_upload_limit_box, 5, 1, Qt::AlignLeft);
+  lobby_config->setLayout(lobby_config_layout);
+
+  host_layout->addWidget(game_config, 0, 0);
+  host_layout->addWidget(match_config, 0, 1);
+  host_layout->addWidget(m_game_mode_description, 1, 0, 1, -1);
+  host_layout->addWidget(description_widget, 2, 0, 1, -1);
+  host_layout->addWidget(lobby_config, 3, 0, 1, -1, Qt::AlignBottom);
+  host_layout->addWidget(m_host_button, 4, 0, 1, -1, Qt::AlignRight);
   host_widget->setLayout(host_layout);
 
-  m_connection_type->addItem(tr("Direct Connection"));
   m_connection_type->addItem(tr("Traversal Server"));
+  m_connection_type->addItem(tr("Direct Connection"));
 
-  m_main_layout->addWidget(new QLabel(tr("Connection Type:")), 0, 0);
-  m_main_layout->addWidget(m_connection_type, 0, 1);
-  m_main_layout->addWidget(m_reset_traversal_button, 0, 2);
-  m_main_layout->addWidget(new QLabel(tr("Nickname:")), 1, 0);
-  m_main_layout->addWidget(m_nickname_edit, 1, 1);
-  m_main_layout->addWidget(m_latency_test, 1, 2);
-  m_main_layout->addWidget(m_tab_widget, 2, 0, 1, -1);
-  m_main_layout->addWidget(m_button_box, 3, 0, 1, -1);
+  auto* info_layout = new QGridLayout;
+  info_layout->addWidget(m_account_name, 0, 0, 1, -1, Qt::AlignHCenter);
+  m_account_box->setLayout(info_layout);
+
+
+  m_main_layout->addWidget(m_account_box, 0, 0, 1, -1);
+  m_main_layout->addWidget(m_tab_widget, 1, 0, 1, -1);
+  m_main_layout->addWidget(m_latency_test, 2, 0);
+  m_main_layout->addWidget(m_connection_type, 2, 1);
+  m_main_layout->addWidget(m_reset_traversal_button, 2, 3);
+  m_main_layout->addWidget(m_button_box, 2, 4, 1, -1);
 
   // Tabs
-  m_tab_widget->addTab(connection_widget, tr("Join Private Lobby"));
-  m_tab_widget->addTab(host_widget, tr("Host Lobby"));
-  m_tab_widget->addTab(browser_widget, tr("Lobby Browser"));
-
+  //m_tab_widget->addTab(connection_widget, tr("Join Private Lobby"));
+  m_tab_widget->addTab(browser_widget, tr("Join Match"));
+  m_tab_widget->addTab(host_widget, tr("Host Match"));
 
   setLayout(m_main_layout);
 }
@@ -362,7 +383,6 @@ void NetPlaySetupDialog::ConnectWidgets()
 {
   connect(m_connection_type, qOverload<int>(&QComboBox::currentIndexChanged), this,
           &NetPlaySetupDialog::OnConnectionTypeChanged);
-  connect(m_nickname_edit, &QLineEdit::textChanged, this, &NetPlaySetupDialog::SaveSettings);
 
   // Connect widget
   connect(m_ip_edit, &QLineEdit::textChanged, this, &NetPlaySetupDialog::SaveSettings);
@@ -371,15 +391,17 @@ void NetPlaySetupDialog::ConnectWidgets()
   // Host widget
   connect(m_host_port_box, qOverload<int>(&QSpinBox::valueChanged), this,
           &NetPlaySetupDialog::SaveSettings);
-  connect(m_host_games, qOverload<int>(&QListWidget::currentRowChanged), [this](int index) {
+  connect(m_host_games, qOverload<int>(&QComboBox::currentIndexChanged), [this](int index) {
     Settings::GetQSettings().setValue(QStringLiteral("netplay/hostgame"),
-                                      m_host_games->item(index)->text());
+                                      m_host_games->currentText());
   });
+  connect(m_host_game_mode, qOverload<int>(&QComboBox::currentIndexChanged), this,
+          &NetPlaySetupDialog::UpdateGameModeDescription);
 
   // refresh browser on tab changed
   connect(m_tab_widget, &QTabWidget::currentChanged, this, &NetPlaySetupDialog::RefreshBrowser);
 
-  connect(m_host_games, &QListWidget::itemDoubleClicked, this, &NetPlaySetupDialog::accept);
+  //connect(m_host_games, &QListWidget::itemDoubleClicked, this, &NetPlaySetupDialog::accept);
 
   connect(m_host_force_port_check, &QCheckBox::toggled,
           [this](bool value) { m_host_force_port_box->setEnabled(value); });
@@ -413,10 +435,6 @@ void NetPlaySetupDialog::ConnectWidgets()
     m_host_server_password->setEnabled(value);
   });
 
-  // connect this to lobby data stuff
-  connect(m_host_game_mode, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
-          this, &NetPlaySetupDialog::SaveLobbySettings);
-  connect(m_host_ranked, &QCheckBox::toggled, this, &NetPlaySetupDialog::SaveLobbySettings);
 
   // Browser Stuff
   connect(m_region_combo, qOverload<int>(&QComboBox::currentIndexChanged), this,
@@ -440,20 +458,11 @@ void NetPlaySetupDialog::ConnectWidgets()
           Qt::QueuedConnection);
 }
 
-void NetPlaySetupDialog::SaveLobbySettings()
-{
-  Config::SetBaseOrCurrent(Config::NETPLAY_RANKED, m_host_ranked->isChecked());
-  Config::SetBaseOrCurrent(Config::NETPLAY_GAME_MODE,
-                           m_host_game_mode->currentText().toStdString());
-  Config::Save();
-}
-
 void NetPlaySetupDialog::SaveSettings()
 {
   Config::ConfigChangeCallbackGuard config_guard;
 
-  Config::SetBaseOrCurrent(Config::NETPLAY_NICKNAME, m_nickname_edit->text().toStdString());
-  Config::SetBaseOrCurrent(m_connection_type->currentIndex() == 0 ? Config::NETPLAY_ADDRESS :
+  Config::SetBaseOrCurrent(m_connection_type->currentIndex() == 1 ? Config::NETPLAY_ADDRESS :
                                                                     Config::NETPLAY_HOST_CODE,
                            m_ip_edit->text().toStdString());
   Config::SetBaseOrCurrent(Config::NETPLAY_CONNECT_PORT,
@@ -499,41 +508,59 @@ void NetPlaySetupDialog::SaveSettings()
 
 void NetPlaySetupDialog::OnConnectionTypeChanged(int index)
 {
-  m_connect_port_box->setHidden(index != 0);
-  m_connect_port_label->setHidden(index != 0);
+  m_connect_port_box->setHidden(index != 1);
+  m_connect_port_label->setHidden(index != 1);
 
-  m_host_port_label->setHidden(index != 0);
-  m_host_port_box->setHidden(index != 0);
+  m_host_port_label->setHidden(index != 1);
+  m_host_port_box->setHidden(index != 1);
 #ifdef USE_UPNP
-  m_host_upnp->setHidden(index != 0);
+  m_host_upnp->setHidden(index != 1);
 #endif
-  m_host_force_port_check->setHidden(index == 0);
-  m_host_force_port_box->setHidden(index == 0);
+  m_host_force_port_check->setHidden(index == 1);
+  m_host_force_port_box->setHidden(index == 1);
 
-  m_reset_traversal_button->setHidden(index == 0);
+  m_reset_traversal_button->setHidden(index == 1);
 
   std::string address =
-      index == 0 ? Config::Get(Config::NETPLAY_ADDRESS) : Config::Get(Config::NETPLAY_HOST_CODE);
+      index == 1 ? Config::Get(Config::NETPLAY_ADDRESS) : Config::Get(Config::NETPLAY_HOST_CODE);
 
-  m_ip_label->setText(index == 0 ? tr("IP Address:") : tr("Host Code:"));
+  m_ip_label->setText(index == 1 ? tr("IP Address:") : tr("Host Code:"));
   m_ip_edit->setText(QString::fromStdString(address));
 
   Config::SetBaseOrCurrent(Config::NETPLAY_TRAVERSAL_CHOICE,
-                           std::string(index == 0 ? "direct" : "traversal"));
+                           std::string(index == 1 ? "direct" : "traversal"));
+}
+
+void NetPlaySetupDialog::UpdateGameModeDescription()
+{
+  std::optional<Tag::TagSet> selected_tagset = GetTagSet();
+
+  m_game_mode_description->clear();
+  if (!selected_tagset.has_value())
+  {
+    m_game_mode_description->append(tr("No Game Mode Selected."));
+    return;
+  }
+
+  std::vector<std::string> tags = selected_tagset.value().tag_names_vector();
+  std::string tags_string = "\nRules:\n";
+  for (auto& tag : tags)
+  {
+    if (tag != selected_tagset.value().name)
+      tags_string.append("- " + tag + "\n");
+  }
+  tags_string.pop_back();  // remove final delimiter
+
+  m_game_mode_description->append(QString::fromStdString(selected_tagset.value().description()));
+  m_game_mode_description->append(QString::fromStdString(tags_string));
+
+  QScrollBar* scrollBar = m_game_mode_description->verticalScrollBar();
+  scrollBar->setValue(scrollBar->minimum());  // set scroll bar to the top
 }
 
 void NetPlaySetupDialog::show()
 {
-  // Here i'm setting the lobby name if it's empty to make
-  // NetPlay sessions start more easily for first time players
-  if (m_host_server_name->text().isEmpty())
-  {
-    std::string nickname = Config::Get(Config::NETPLAY_NICKNAME);
-    m_host_server_name->setText(QString::fromStdString(nickname));
-  }
   m_host_server_browser->setChecked(true);
-  m_connection_type->setCurrentIndex(1);
-  m_tab_widget->setCurrentIndex(2); // start on browser
   RefreshBrowser();
 
   PopulateGameList();
@@ -549,8 +576,7 @@ void NetPlaySetupDialog::accept()
   }
   else
   {
-    auto items = m_host_games->selectedItems();
-    if (items.empty())
+    if (m_host_games->count() == 0)
     {
       ModalMessageBox::critical(this, tr("Error"), tr("You must select a game to host!"));
       return;
@@ -570,8 +596,44 @@ void NetPlaySetupDialog::accept()
       return;
     }
 
-    emit Host(*items[0]->data(Qt::UserRole).value <std::shared_ptr<const UICommon::GameFile>>());
+    emit Host(host_games_map.at(m_host_games->currentIndex()));
   }
+}
+
+std::map<int, Tag::TagSet>& NetPlaySetupDialog::assignOnlineAccount(LocalPlayers::LocalPlayers::Player online_player)
+{
+  m_active_account.SetUserInfo(online_player);
+  std::string label = "<h1>" + m_active_account.GetUsername() + "</h1>";
+  m_account_name->setText(QString::fromStdString(label));
+
+  // Here i'm setting the lobby name if it's empty to make
+  // NetPlay sessions start more easily for first time players
+  if (m_host_server_name->text().isEmpty())
+  {
+    std::string nickname = m_active_account.username;
+    nickname += "'s Lobby";
+    m_host_server_name->setText(QString::fromStdString(nickname));
+  }
+
+  user_tagsets = Tag::getAvailableTagSets(m_http, m_active_account.userid);
+
+  // add game modes
+  tagset_map.clear();
+  m_host_game_mode->clear();
+  int combobox_index = 0;
+  m_host_game_mode->addItem(QString::fromStdString("No Game Mode"));
+  tagset_map.insert(std::pair<int, std::optional<Tag::TagSet>>(combobox_index++, std::nullopt));
+  for (auto& tagset : user_tagsets)
+  {
+    m_host_game_mode->addItem(QString::fromStdString(tagset.second.name));
+    tagset_map.insert(std::pair<int, std::optional<Tag::TagSet>>(combobox_index++, tagset.second));
+  }
+  return user_tagsets;
+}
+
+std::optional<Tag::TagSet> NetPlaySetupDialog::GetTagSet()
+{
+  return tagset_map[m_host_game_mode->currentIndex()];
 }
 
 void NetPlaySetupDialog::PopulateGameList()
@@ -579,26 +641,24 @@ void NetPlaySetupDialog::PopulateGameList()
   QSignalBlocker blocker(m_host_games);
 
   m_host_games->clear();
+  host_games_map.clear();
+  int itemIndex = 0;
   for (int i = 0; i < m_game_list_model.rowCount(QModelIndex()); i++)
   {
     std::shared_ptr<const UICommon::GameFile> game = m_game_list_model.GetGameFile(i);
-    if ((m_game_list_model.GetNetPlayName(*game) == "Mario Superstar Baseball (GYQE01)"))
+    if (m_game_list_model.ShouldDisplayGameListItem(i))
     {
-      auto* item =
-          new QListWidgetItem(QString::fromStdString(m_game_list_model.GetNetPlayName(*game)));
-      item->setData(Qt::UserRole, QVariant::fromValue(std::move(game)));
+      auto item = QString::fromStdString(m_game_list_model.GetNetPlayName(*game));
       m_host_games->addItem(item);
+      host_games_map.insert(std::pair<int, UICommon::GameFile>(itemIndex++, *(game.get())));
     }
   }
 
-  m_host_games->sortItems();
-
   const QString selected_game =
       Settings::GetQSettings().value(QStringLiteral("netplay/hostgame"), QString{}).toString();
-  const auto find_list = m_host_games->findItems(selected_game, Qt::MatchFlag::MatchExactly);
+  const int find_list = m_host_games->findText(selected_game, Qt::MatchFlag::MatchExactly);
 
-  if (find_list.count() > 0)
-    m_host_games->setCurrentItem(find_list[0]);
+  m_host_games->setCurrentIndex(find_list);
 }
 
 void NetPlaySetupDialog::ResetTraversalHost()
@@ -686,8 +746,8 @@ void NetPlaySetupDialog::UpdateListBrowser()
 
   m_table_widget->clear();
   m_table_widget->setColumnCount(7);
-  m_table_widget->setHorizontalHeaderLabels({tr("Region"), tr("Name"), tr("Ranked Mode"),
-                                             tr("Game Mode"), tr("Password?"), tr("Players"),
+  m_table_widget->setHorizontalHeaderLabels({tr("Region"), tr("Name"), tr("Game Mode"),
+                                             tr("In Game"), tr("Password?"), tr("Players"),
                                              tr("Version")});
 
   auto* hor_header = m_table_widget->horizontalHeader();
@@ -710,20 +770,25 @@ void NetPlaySetupDialog::UpdateListBrowser()
     auto* region = new QTableWidgetItem(QString::fromStdString(entry.region));
     auto* name = new QTableWidgetItem(QString::fromStdString(game_tags[0]));
     auto* password = new QTableWidgetItem(entry.has_password ? tr("Yes") : tr("No"));
-    auto* is_ranked = new QTableWidgetItem(game_tags[1] == "Ranked" ? tr("Ranked") : tr("Unranked"));
-    auto* gamemode = new QTableWidgetItem(QString::fromStdString(game_tags[2]));
+    auto* in_game = new QTableWidgetItem(entry.in_game ? tr("Yes") : tr("No"));
+    auto* gamemode = new QTableWidgetItem(QString::fromStdString(game_tags[1]));
     auto* player_count = new QTableWidgetItem(QStringLiteral("%1").arg(entry.player_count));
     auto* version = new QTableWidgetItem(QString::fromStdString(entry.version));
 
-    const bool enabled = Common::GetRioRevStr() == entry.version;
+    bool enabled = Common::GetRioRevStr() == entry.version;
+    int tagset_id = stoi(game_tags[2]); // should make this safe in the future to catch when it can't convert to int cleanly
+    if (user_tagsets.find(tagset_id) == user_tagsets.end())
+      enabled = false;
+    if (tagset_id == 0)
+      enabled = true;
 
-    for (const auto& item : {region, name, is_ranked, gamemode, password, player_count, version})
+    for (const auto& item : {region, name, in_game, gamemode, password, player_count, version})
       item->setFlags(enabled ? Qt::ItemIsEnabled | Qt::ItemIsSelectable : Qt::NoItemFlags);
 
     m_table_widget->setItem(i, 0, region);
     m_table_widget->setItem(i, 1, name);
-    m_table_widget->setItem(i, 2, is_ranked); // was in_game
-    m_table_widget->setItem(i, 3, gamemode);   // was game_id
+    m_table_widget->setItem(i, 2, gamemode);  // was game_id
+    m_table_widget->setItem(i, 3, in_game);
     m_table_widget->setItem(i, 4, password);
     m_table_widget->setItem(i, 5, player_count);
     m_table_widget->setItem(i, 6, version);
@@ -809,9 +874,13 @@ std::string NetPlaySetupDialog::LobbyNameString()
   std::string lobby_string = m_host_server_name->text().toStdString();
   std::string delimiter = "%%";
   lobby_string += delimiter;
-  lobby_string += m_host_ranked->isChecked() ? "Ranked" : "Unranked";
-  lobby_string += delimiter;
   lobby_string += m_host_game_mode->currentText().toStdString();
-  // potentially add more here for each tag
+  lobby_string += delimiter;
+  if (tagset_map[m_host_game_mode->currentIndex()].has_value())
+  {
+    lobby_string += std::to_string(tagset_map[m_host_game_mode->currentIndex()].value().id);
+  } else {
+    lobby_string += "0";
+  }
   return lobby_string;
 }

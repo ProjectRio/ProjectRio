@@ -46,8 +46,8 @@ mkdir -p AppDir
 ./Tools/linuxdeploy \
 	--appdir=./AppDir \
 	-e ./build/Binaries/dolphin-emu \
-	-d ./Data/lylat-online.desktop \
-	-i ./Data/dolphin-emu.png
+	-d ./Data/dolphin-emu.desktop \
+	-i ./Data/RioLogo.png
 
 # Add the Sys dir to the AppDir for packaging
 cp -r Data/Sys ${APPDIR_BIN}

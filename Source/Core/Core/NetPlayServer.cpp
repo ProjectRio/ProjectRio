@@ -60,6 +60,7 @@
 #include "Core/NetPlayClient.h"  //for NetPlayUI
 #include "Core/NetPlayCommon.h"
 #include "Core/SyncIdentifier.h"
+#include "Core/LocalPlayersConfig.h"
 
 #include "DiscIO/Enums.h"
 #include "DiscIO/RiivolutionPatcher.h"
@@ -412,8 +413,9 @@ ConnectionError NetPlayServer::OnConnect(ENetPeer* socket, sf::Packet& rpac)
 
   rpac >> player.revision;
   rpac >> player.name;
+  rpac >> player.riokey;
 
-  if (StringUTF8CodePointCount(player.name) > MAX_NAME_LENGTH)
+  if (StringUTF8CodePointCount(LocalPlayers::m_online_player.username) > MAX_NAME_LENGTH)
     return ConnectionError::NameTooLong;
 
   // Extend reliable traffic timeout
@@ -435,7 +437,7 @@ ConnectionError NetPlayServer::OnConnect(ENetPeer* socket, sf::Packet& rpac)
   // send join message to already connected clients
   sf::Packet spac;
   spac << MessageID::PlayerJoin;
-  spac << player.pid << player.name << player.revision;
+  spac << player.pid << player.name << player.riokey << player.revision;
   SendToClients(spac);
 
   // send new client success message with their ID
@@ -463,18 +465,12 @@ ConnectionError NetPlayServer::OnConnect(ENetPeer* socket, sf::Packet& rpac)
     Send(player.socket, spac);
   }
 
-  // send ranked box state
-  spac.clear();
-  spac << MessageID::RankedBox;
-  m_current_ranked_value = Config::Get(Config::NETPLAY_RANKED);
-  spac << m_current_ranked_value;
-  Send(player.socket, spac);
-
   // send Game Mode state
+  int tagset_id = m_tagset_id.has_value() ? m_tagset_id.value() : 0;
   spac.clear();
   spac << MessageID::GameMode;
-  std::string game_mode = Config::Get(Config::NETPLAY_GAME_MODE);
-  spac << game_mode;
+  spac << m_tagset_id.has_value();
+  spac << tagset_id;
   Send(player.socket, spac);
 
   // send night stadium state
@@ -500,7 +496,7 @@ ConnectionError NetPlayServer::OnConnect(ENetPeer* socket, sf::Packet& rpac)
   {
     spac.clear();
     spac << MessageID::PlayerJoin;
-    spac << p.second.pid << p.second.name << p.second.revision;
+    spac << p.second.pid << p.second.name << p.second.riokey << p.second.revision;
     Send(player.socket, spac);
 
     spac.clear();
@@ -701,19 +697,6 @@ void NetPlayServer::AdjustPadBufferSize(unsigned int size)
   }
 }
 
-void NetPlayServer::AdjustRankedBox(const bool is_ranked)
-{
-  std::lock_guard lkg(m_crit.game);
-  m_current_ranked_value = is_ranked;
-
-  // tell clients to change ranked box
-  sf::Packet spac;
-  spac << MessageID::RankedBox;
-  spac << m_current_ranked_value;
-
-  SendAsyncToClients(std::move(spac));
-}
-
 void NetPlayServer::AdjustNightStadium(const bool is_night)
 {
   std::lock_guard lkg(m_crit.game);
@@ -736,6 +719,20 @@ void NetPlayServer::AdjustReplays(const bool disable)
   sf::Packet spac;
   spac << MessageID::DisableReplays;
   spac << m_current_disable_replays_value;
+
+  SendAsyncToClients(std::move(spac));
+}
+
+void NetPlayServer::SetTagSet(bool exists, int tagset_id)
+{
+  m_tagset_id = exists ? std::make_optional(tagset_id) : std::nullopt;
+
+  // tell clients about the new value
+  int temp_tagset_id = m_tagset_id.has_value() ? m_tagset_id.value() : 0;
+  sf::Packet spac;
+  spac << MessageID::GameMode;
+  spac << m_tagset_id.has_value();
+  spac << temp_tagset_id;
 
   SendAsyncToClients(std::move(spac));
 }
@@ -935,23 +932,6 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
   }
   break;
 
-  case MessageID::PlayerData:
-  {
-    u8 port;
-    packet >> port;
-    std::string userinfoStr;
-    packet >> userinfoStr;
-
-    // send userinfo to other clients
-    sf::Packet spac;
-    spac << MessageID::PlayerData;
-    spac << port;
-    spac << userinfoStr;
-
-    SendToClients(spac);
-  }
-  break;
-
   case MessageID::ChunkedDataProgress:
   {
     u32 cid;
@@ -1087,6 +1067,7 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
 
   case MessageID::GolfRequest:
   {
+    NOTICE_LOG_FMT(NETPLAY, "Received GolfRequest");
     PlayerId pid;
     packet >> pid;
 
@@ -1102,12 +1083,14 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
       sf::Packet spac;
       spac << MessageID::GolfPrepare;
       Send(m_players[pid].socket, spac);
+      NOTICE_LOG_FMT(NETPLAY, "Sent GolfPrepare to Player {}", pid);
     }
   }
   break;
 
   case MessageID::GolfRelease:
   {
+    NOTICE_LOG_FMT(NETPLAY, "Received GolfRelease");
     if (m_pending_golfer == 0)
       break;
 
@@ -1115,11 +1098,13 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
     spac << MessageID::GolfSwitch;
     spac << m_pending_golfer;
     SendToClients(spac);
+    NOTICE_LOG_FMT(NETPLAY, "Sending GolfSwitch to clients. m_pending_golfer: {}", m_pending_golfer);
   }
   break;
 
   case MessageID::GolfAcquire:
   {
+    NOTICE_LOG_FMT(NETPLAY, "Received GolfRelease");
     if (m_pending_golfer == 0)
       break;
 
@@ -1130,6 +1115,7 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
 
   case MessageID::GolfPrepare:
   {
+    NOTICE_LOG_FMT(NETPLAY, "Received GolfPrepare");
     if (m_pending_golfer == 0)
       break;
 
@@ -1139,6 +1125,8 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
     spac << MessageID::GolfSwitch;
     spac << PlayerId{0};
     SendToClients(spac);
+    NOTICE_LOG_FMT(NETPLAY, "Sending GolfSwitch to all clients. m_pending_golfer: {}",
+                   m_pending_golfer);
   }
   break;
 
@@ -1598,8 +1586,6 @@ bool NetPlayServer::SetupNetSettings()
   settings.m_GolfMode = Config::Get(Config::NETPLAY_NETWORK_MODE) == "golf";
   settings.m_UseFMA = DoAllPlayersHaveHardwareFMA();
   settings.m_HideRemoteGBAs = Config::Get(Config::NETPLAY_HIDE_REMOTE_GBAS);
-  settings.m_RankedMode = Config::Get(Config::NETPLAY_RANKED);
-  settings.m_GameMode = Config::Get(Config::NETPLAY_GAME_MODE);
 
   // Unload GameINI to restore things to normal
   Config::RemoveLayer(Config::LayerType::GlobalGame);

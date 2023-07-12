@@ -39,6 +39,7 @@
 #define CONFIG_DIR "Config"
 #define GAMESETTINGS_DIR "GameSettings"
 #define STATFILES_DIR "StatFiles"
+#define MSSBFILES_DIR "MarioSuperstarBaseball"
 #define HUDFILES_DIR "HudFiles"
 #define STATELOGGERFILES_DIR "StateLoggerFiles"
 #define MAPS_DIR "Maps"

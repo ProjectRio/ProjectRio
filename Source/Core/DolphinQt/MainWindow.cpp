@@ -131,6 +131,8 @@
 #include "VideoCommon/NetPlayChatUI.h"
 #include "VideoCommon/VideoConfig.h"
 
+#include "Common/TagSet.h"
+
 #ifdef HAVE_XRANDR
 #include "UICommon/X11Utils.h"
 // This #define within X11/X.h conflicts with our WiimoteSource enum.
@@ -1309,27 +1311,30 @@ void MainWindow::ShowGraphicsWindow()
 
 void MainWindow::ShowNetPlaySetupDialog()
 {
+  // Validate Rio User
+  LocalPlayers::LocalPlayers::AccountValidationType type = LocalPlayers::m_online_player.ValidateAccount(m_http);
+
+  if (type == LocalPlayers::LocalPlayers::Invalid)
+  {
+    ModalMessageBox::critical(
+        this, tr("Error"),
+        tr("The Username and Rio Key of the Online Player could not be validated. You must make a "
+           "Rio account to access online play.\n\n"
+           "To access online play, please follow these steps:\n"
+           "- open the \"Rio Config\" tab and click the \"Add Player\" button.\n"
+           "- click \"Create Account\" and create a Rio account through the Project Rio website.\n"
+           "- make sure to verify your email and receive your Rio Key.\n"
+           "- enter your username and Rio Key into the appropriate text boxes, then click "
+           "\"Save\".\n"
+           "- set the \"Online Player\" combo box to your newly added account."));
+    return;
+  }
+
   m_netplay_setup_dialog->show();
   m_netplay_setup_dialog->raise();
   m_netplay_setup_dialog->activateWindow();
-
-  // Validate Rio User
-  std::string url =
-      "https://api.projectrio.app/validate_user_from_client/?username=" +
-      LocalPlayers::m_local_player_1.GetUsername() +
-      "&rio_key=" + LocalPlayers::m_local_player_1.GetUserID();
-  const Common::HttpRequest::Response response = m_http.Get(url);
-  if (!response)
-  {
-    // TODO Error if user is not validated when full beta releases
-    // ModalMessageBox::critical(this, tr("Error"), tr("Username and Rio Key could not be
-    // validated"));
-    ModalMessageBox::warning(
-        this, tr("Warning"),
-        tr("The Username and Rio Key of the account mapped to Port 1 could not be validated.\n\n"
-           "Stat files will not be properly sent to the database if your account is invalid. You can create an account "
-           "through the \"Local Players\" tab, or through the Project Rio website."));
-  }
+  user_tagsets = m_netplay_setup_dialog->assignOnlineAccount(LocalPlayers::m_online_player);
+  m_active_account.SetUserInfo(LocalPlayers::m_online_player);
 }
 
 void MainWindow::ShowNetPlayBrowser()
@@ -1516,24 +1521,24 @@ bool MainWindow::NetPlayJoin()
 
   const std::string traversal_host = Config::Get(Config::NETPLAY_TRAVERSAL_SERVER);
   const u16 traversal_port = Config::Get(Config::NETPLAY_TRAVERSAL_PORT);
-  const std::string nickname = Config::Get(Config::NETPLAY_NICKNAME);
   const std::string network_mode = Config::Get(Config::NETPLAY_NETWORK_MODE);
   const bool host_input_authority = network_mode == "hostinputauthority" || network_mode == "golf";
 
-
-  if (server)
+  const bool is_hosting_netplay = server != nullptr;
+  if (is_hosting_netplay)
   {
     server->SetHostInputAuthority(host_input_authority);
     server->AdjustPadBufferSize(Config::Get(Config::NETPLAY_BUFFER_SIZE));
-    //server->AdjustRankedBox(Config::Get(Config::NETPLAY_RANKED));
+    bool tagset_exists = m_netplay_setup_dialog->GetTagSet().has_value();
+    int tagset_id = tagset_exists ? m_netplay_setup_dialog->GetTagSet().value().id : 0;
+    server->SetTagSet(tagset_exists, tagset_id);
   }
 
   // Create Client
-  const bool is_hosting_netplay = server != nullptr;
   Settings::Instance().ResetNetPlayClient(new NetPlay::NetPlayClient(
-      host_ip, host_port, m_netplay_dialog, nickname,
+      host_ip, host_port, m_netplay_dialog,
       NetPlay::NetTraversalConfig{is_hosting_netplay ? false : is_traversal, traversal_host,
-                                  traversal_port}));
+                                  traversal_port}, &m_active_account, &user_tagsets));
 
   if (!Settings::Instance().GetNetPlayClient()->IsConnected())
   {
@@ -1542,7 +1547,7 @@ bool MainWindow::NetPlayJoin()
   }
 
   m_netplay_setup_dialog->close();
-  m_netplay_dialog->show(nickname, is_traversal);
+  m_netplay_dialog->show(is_traversal);
 
   return true;
 }

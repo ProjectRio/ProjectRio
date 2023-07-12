@@ -23,6 +23,7 @@
 #include "Core/SyncIdentifier.h"
 #include "InputCommon/GCPadStatus.h"
 #include "Core/LocalPlayers.h"
+#include <Common/HttpRequest.h>
 
 class BootSessionData;
 
@@ -34,6 +35,10 @@ class FileSystem;
 namespace UICommon
 {
 class GameFile;
+}
+
+namespace Tag {
+  class TagSet;
 }
 
 namespace NetPlay
@@ -67,9 +72,9 @@ public:
   virtual void OnTraversalStateChanged(TraversalClient::State state) = 0;
   virtual void OnGameStartAborted() = 0;
   virtual void OnGolferChanged(bool is_golfer, const std::string& golfer_name) = 0;
-  virtual void OnRankedEnabled(bool is_ranked) = 0;
-  virtual void OnGameMode(std::string mode) = 0;
-  virtual void RankedStartingMsg(bool is_ranked) = 0;
+  virtual void OnGameMode(std::string mode, std::string description,
+                          std::vector<std::string> tags) = 0;
+  virtual void StartingMsg(bool is_tagset) = 0;
   virtual void OnCoinFlipResult(int coinFlip) = 0;
   virtual void OnNightResult(bool is_night) = 0;
   virtual void OnDisableReplaysResult(bool disable) = 0;
@@ -105,6 +110,7 @@ class Player
 public:
   PlayerId pid{};
   std::string name;
+  std::string riokey;
   std::string revision;
   u32 ping = 0;
   SyncIdentifierComparison game_status = SyncIdentifierComparison::Unknown;
@@ -119,15 +125,14 @@ public:
   void SendAsync(sf::Packet&& packet, u8 channel_id = DEFAULT_CHANNEL);
 
   NetPlayClient(const std::string& address, const u16 port, NetPlayUI* dialog,
-                const std::string& name, const NetTraversalConfig& traversal_config);
+                const NetTraversalConfig& traversal_config,
+                LocalPlayers::LocalPlayers::Player* player, std::map<int, Tag::TagSet>* tagset_map);
   ~NetPlayClient();
 
   std::vector<const Player*> GetPlayers();
   const NetSettings& GetNetSettings() const;
-  std::map<int, LocalPlayers::LocalPlayers::Player> NetplayerUserInfo; // int is port
-
-  void SendLocalPlayerNetplay(LocalPlayers::LocalPlayers::Player userinfo);
-  LocalPlayers::LocalPlayers::Player GetLocalPlayerNetplay();
+  LocalPlayers::LocalPlayers::Player* ActiveOnlinePlayer;
+  std::map<int, Tag::TagSet>* TagSetMap;
 
   // Called from the GUI thread.
   bool IsConnected() const { return m_is_connected; }
@@ -178,17 +183,15 @@ public:
 
   static void AutoGolfMode(bool isField, int BatPort, int FieldPort);
   static void DisplayBatterFielder(u8 BatterPortInt, u8 FielderPortInt);
-  static bool isRanked();
   static bool isNight();
   static bool isDisableReplays();
   static u32 sGetPlayersMaxPing();
-  static std::string sGetPortPlayer(int PortInt);
   static std::map<int, LocalPlayers::LocalPlayers::Player> getNetplayerUserInfo();
   static void SendGameID(u32 gameId);
-  bool m_ranked_client = false;
   bool m_night_stadium = false;
   bool m_disable_replays = false;
-  
+  u32 maxPing;
+
   const PadMappingArray& GetPadMapping() const;
   const GBAConfigArray& GetGBAConfig() const;
   const PadMappingArray& GetWiimoteMapping() const;
@@ -290,7 +293,6 @@ private:
   void ComputeMD5(const SyncIdentifier& sync_identifier);
   void DisplayPlayersPing();
 
-  std::string GetPortPlayer(int PortInt);
   void AutoGolfModeLogic(bool isField, int BatPort, int FieldPort);
   u32 GetPlayersMaxPing() const;
 
@@ -339,8 +341,6 @@ private:
   void OnMD5Error(sf::Packet& packet);
   void OnMD5Abort();
   void OnGameModeMsg(sf::Packet& packet);
-  void OnRankedBoxMsg(sf::Packet& packet);
-  void OnPlayerDataMsg(sf::Packet& packet);
   void OnSendCodesMsg(sf::Packet& packet);
   void OnCoinFlipMsg(sf::Packet& packet);
   void OnNightMsg(sf::Packet& packet);
@@ -359,6 +359,7 @@ private:
   std::map<PlayerId, Player> m_players;
   std::string m_host_spec;
   std::string m_player_name;
+  std::string m_player_key;
   bool m_connecting = false;
   TraversalClient* m_traversal_client = nullptr;
   std::thread m_MD5_thread;
@@ -383,6 +384,7 @@ private:
   std::unique_ptr<IOS::HLE::FS::FileSystem> m_wii_sync_fs;
   std::vector<u64> m_wii_sync_titles;
   std::string m_wii_sync_redirect_folder;
+  Common::HttpRequest m_http{std::chrono::minutes{3}};
 };
 
 void NetPlay_Enable(NetPlayClient* const np);
