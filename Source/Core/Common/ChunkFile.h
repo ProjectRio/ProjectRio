@@ -8,7 +8,7 @@
 // (mis)-features:
 // + Super fast
 // + Very simple
-// + Same code is used for serialization and deserializaition (in most cases)
+// + Same code is used for serialization and deserialization (in most cases)
 // - Zero backwards/forwards compatibility
 // - Serialization code for anything complex has to be manually written.
 
@@ -215,7 +215,7 @@ public:
   }
 
   // The caller is required to inspect the mode of this PointerWrap
-  // and deal with the pointer returned from this function themself.
+  // and deal with the pointer returned from this function themselves.
   [[nodiscard]] u8* DoExternal(u32& count)
   {
     Do(count);

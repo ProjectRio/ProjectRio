@@ -37,7 +37,7 @@ std::vector<BBoxType> OGLBoundingBox::Read(u32 index, u32 length)
   if (!DriverDetails::HasBug(DriverDetails::BUG_SLOW_GETBUFFERSUBDATA) &&
       !static_cast<Renderer*>(g_renderer.get())->IsGLES())
   {
-    // We also need to ensure the the CPU does not receive stale values which have been updated by
+    // We also need to ensure the CPU does not receive stale values which have been updated by
     // the GPU. Apparently the buffer here is not coherent on NVIDIA drivers. Not sure if this is a
     // driver bug/spec violation or not, one would think that glGetBufferSubData() would invalidate
     // any caches as needed, but this path is only used on NVIDIA anyway, so it's fine. A point to

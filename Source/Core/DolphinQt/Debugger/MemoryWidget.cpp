@@ -671,7 +671,7 @@ QByteArray MemoryWidget::GetInputData() const
   if (combo_id == InputID::ASCII)
     return QByteArray(m_data_edit->text().toUtf8());
 
-  // If we are doing a large aray of hex bytes
+  // If we are doing a large array of hex bytes
   if (combo_id == InputID::HEXSTR)
     return QByteArray::fromHex(m_data_edit->text().toUtf8());
 

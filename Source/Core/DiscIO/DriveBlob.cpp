@@ -36,7 +36,7 @@ DriveReader::DriveReader(const std::string& drive)
   // 32 sectors is roughly the optimal amount a CD Drive can read in
   // a single IO cycle. Larger values yield no performance improvement
   // and just cause IO stalls from the read delay. Smaller values allow
-  // the OS IO and seeking overhead to ourstrip the time actually spent
+  // the OS IO and seeking overhead to outstrip the time actually spent
   // transferring bytes from the media.
   SetChunkSize(32);  // 32*2048 = 64KiB
   SetSectorSize(2048);

@@ -134,7 +134,7 @@ enum Bug
   // Because of their threaded behavior, they seem not to handle unsync mapping complete unsync,
   // in fact, they serialize the driver which adds a much bigger overhead.
   // Workaround: Use BufferSubData
-  // The Mali behavior is even worse: They just ignore the unsychronized flag and stall the GPU.
+  // The Mali behavior is even worse: They just ignore the unsynchronized flag and stall the GPU.
   // Workaround: As they were even too lazy to implement asynchronous buffer updates,
   //             BufferSubData stalls as well, so we have to use the slowest possible path:
   //             Alloc one buffer per draw call with BufferData.
@@ -315,7 +315,7 @@ enum Bug
 
   // BUG: Some driver and Apple Silicon GPU combinations have problems with fragment discard when
   // early depth test is enabled. Discarded fragments may appear corrupted (Super Mario Sunshine,
-  // Sonic Adventure 2: Battle, Phantasy Star Online Epsiodes 1 & 2, etc).
+  // Sonic Adventure 2: Battle, Phantasy Star Online Episodes 1 & 2, etc).
   // Affected devices: Apple Silicon GPUs of Apple family 4 and newer.
   // Started version: -1
   // Ended version: -1

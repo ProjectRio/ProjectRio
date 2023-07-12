@@ -235,7 +235,7 @@ bool NANDImporter::ExtractCertificates()
 
     if (search_result == content_bytes.end())
     {
-      ERROR_LOG_FMT(DISCIO, "ExtractCertificates: Could not find offset for certficate '{}'",
+      ERROR_LOG_FMT(DISCIO, "ExtractCertificates: Could not find offset for certificate '{}'",
                     certificate.filename);
       return false;
     }

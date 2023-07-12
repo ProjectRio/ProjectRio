@@ -222,7 +222,7 @@ static u32 CalculateUnitSize(TextureUnitState::BankConfig bank_config)
     }
   }
 
-  // However, the registers allow a much larger amount of configurablity.
+  // However, the registers allow a much larger amount of configurability.
   // Maybe other sizes are broken?
   // Until hardware tests are done, this is a guess at the size algorithm
 

@@ -264,7 +264,7 @@ static void HotplugThreadFunc()
     {
       // Selector's wait treats a timeout of zero as infinite timeout, which we don't want,
       // but we also don't want risk waiting for the whole SERVER_LISTPORTS_INTERVAL and hang
-      // the thead trying to close this one in case we received no answers.
+      // the thread trying to close this one in case we received no answers.
       const auto current_timeout = std::max(std::min(timeout, THREAD_MAX_WAIT_INTERVAL), 1ms);
       timeout -= current_timeout;
       // This will return at the first answer

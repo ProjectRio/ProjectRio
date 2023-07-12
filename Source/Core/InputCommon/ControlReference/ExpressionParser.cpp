@@ -569,7 +569,7 @@ private:
 // right-hand child. Its intended use is for supporting old-style barewords expressions.
 // Note that if you have a keyboard device as default device and the expression is a single digit
 // number, this will usually resolve in a numerical key instead of a numerical value.
-// Though if this expression belongs to NumericSetting, it will likely be simplifed back to a value.
+// Though if this expression belongs to NumericSetting, it will likely be simplified back to a value.
 class CoalesceExpression : public Expression
 {
 public:

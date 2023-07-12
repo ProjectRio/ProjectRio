@@ -98,7 +98,7 @@ ControlState InputReference::State(const ControlState ignore)
 // Set the state of all binded outputs
 // overrides ControlReference::State .. combined them so I could make the GUI simple / inputs ==
 // same as outputs one list
-// I was lazy and it works so watever
+// I was lazy and it works so whatever
 //
 ControlState OutputReference::State(const ControlState state)
 {

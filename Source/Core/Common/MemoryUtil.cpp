@@ -54,7 +54,7 @@ void* AllocateExecutableMemory(size_t size)
   return ptr;
 }
 // This function is used to provide a counter for the JITPageWrite*Execute*
-// functions to enable nesting. The static variable is wrapped in a a function
+// functions to enable nesting. The static variable is wrapped in a function
 // to allow those functions to be called inside of the constructor of a static
 // variable portably.
 //

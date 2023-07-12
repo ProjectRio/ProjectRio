@@ -119,7 +119,7 @@ signals:
   void RecordingStatusChanged(bool recording);
   void ReadOnlyModeChanged(bool read_only);
 
-  // Synbols
+  // Symbols
   void NotifySymbolsUpdated();
 
 private:

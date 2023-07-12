@@ -192,7 +192,6 @@ namespace Tag
         }
     };
 
-
     static std::optional<picojson::value> ParseResponse(const std::vector<u8>& response)
     {
        const std::string response_string(reinterpret_cast<const char*>(response.data()),response.size());

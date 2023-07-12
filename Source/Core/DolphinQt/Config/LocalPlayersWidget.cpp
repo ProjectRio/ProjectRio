@@ -156,7 +156,7 @@ void LocalPlayersWidget::UpdatePlayers()
   m_player_map = localplayers.GetPlayerMap();
   m_player_index_map = localplayers.GetPlayerIndexMap();
 
-  // List avalable players in LocalPlayers.ini
+  // List available players in LocalPlayers.ini
   for (size_t i = 0; i < m_local_players.size(); i++)
   {
     const auto& player = m_local_players[i];

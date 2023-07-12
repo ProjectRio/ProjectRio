@@ -62,7 +62,7 @@ void PopulateDevices(void* const hwnd)
   if (!XQueryExtension(dpy, "XInputExtension", &xi_opcode, &event, &error))
     return;
 
-  // verify that the XInput extension is at at least version 2.0
+  // verify that the XInput extension is at least version 2.0
   int major = 2, minor = 0;
 
   if (XIQueryVersion(dpy, &major, &minor) != Success)

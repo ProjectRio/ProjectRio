@@ -700,7 +700,7 @@ void TexDecoder_DecodeTexel(u8* dst, const u8* src, int s, int t, int imageWidth
   {
     size_t offset = (t * imageWidth + (s & (~1))) * 2;
 
-    // We do this one color sample (aka 2 RGB pixles) at a time
+    // We do this one color sample (aka 2 RGB pixels) at a time
     int Y = int((s & 1) == 0 ? src[offset] : src[offset + 2]) - 16;
     int U = int(src[offset + 1]) - 128;
     int V = int(src[offset + 3]) - 128;
