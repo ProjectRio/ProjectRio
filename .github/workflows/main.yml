@@ -26,7 +26,7 @@ jobs:
     env:
       DXSDK_DIR: "C:\\Program Files (x86)\\Microsoft DirectX SDK (June 2010)\\"
     name: "Windows ${{ matrix.build_type }}"
-    runs-on: windows-2022
+    runs-on: windows-latest
     steps:
       - name: "Checkout"
         uses: actions/checkout@v2
