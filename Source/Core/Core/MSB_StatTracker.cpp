@@ -1302,10 +1302,10 @@ std::string StatTracker::getHUDJSON(std::string in_event_num, Event& in_curr_eve
 
             u8 captain_roster_loc = 0;
             if (team == 0){
-                captain_roster_loc = (m_game_info.home_port == m_game_info.team0_port) ? m_game_info.team0_captain_roster_loc : m_game_info.team1_captain_roster_loc;
+                captain_roster_loc = (m_game_info.away_port == m_game_info.team0_port) ? m_game_info.team0_captain_roster_loc : m_game_info.team1_captain_roster_loc;
             }
             else{ // team == 1
-                captain_roster_loc = (m_game_info.away_port == m_game_info.team0_port) ? m_game_info.team0_captain_roster_loc : m_game_info.team1_captain_roster_loc;
+                captain_roster_loc = (m_game_info.home_port == m_game_info.team0_port) ? m_game_info.team0_captain_roster_loc : m_game_info.team1_captain_roster_loc;
             }
 
             std::string team_string = (team == 0) ? "Away" : "Home";
