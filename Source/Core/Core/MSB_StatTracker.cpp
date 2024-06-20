@@ -1278,9 +1278,18 @@ std::string StatTracker::getHUDJSON(std::string in_event_num, Event& in_curr_eve
 
     json_stream << "{\n";
 
+    std::string tag_set_id_str = "\"\"";
+    if (m_game_info.tag_set_id.has_value()){
+        tag_set_id_str = std::to_string(m_game_info.tag_set_id.value());
+    }
+
+    json_stream << "  \"GameID\": \""                << m_game_info.game_id << "\",\n";
+    json_stream << "  \"TagSetID\": "                << tag_set_id_str << ",\n";
+    json_stream << "  \"StadiumID\": "               << decode("Stadium", m_game_info.stadium, inDecode) << ",\n";
     json_stream << "  \"Event Num\": \""             << in_event_num << "\",\n";
     json_stream << "  \"Away Player\": \""           << m_game_info.getAwayTeamPlayer().GetUsername() << "\",\n";
     json_stream << "  \"Home Player\": \""           << m_game_info.getHomeTeamPlayer().GetUsername() << "\",\n";
+    json_stream << "  \"Innings Selected\": "        << std::to_string(m_game_info.innings_selected) << ",\n";
     json_stream << "  \"Inning\": "                  << std::to_string(in_curr_event.inning) << ",\n";
     json_stream << "  \"Half Inning\": "             << std::to_string(in_curr_event.half_inning) << ",\n";
     json_stream << "  \"Away Score\": "              << std::dec << in_curr_event.away_score << ",\n";
@@ -1372,6 +1381,17 @@ std::string StatTracker::getHUDJSON(std::string in_event_num, Event& in_curr_eve
                     if (m_fielder_tracker[team].fielder_map[roster].out_count_by_position[pos] > 0){
                         std::string comma = (m_fielder_tracker[team].outsAtAnyPosition(roster, pos+1)) ? "," : "";
                         json_stream << "            \"" << cPosition.at(pos) << "\": " << std::to_string(m_fielder_tracker[team].fielder_map[roster].out_count_by_position[pos]) << comma << "\n";
+                    }
+                }
+                json_stream << "        }\n";
+            }
+            json_stream << "      \"Pitches Per Position\": [\n";
+            if (m_fielder_tracker[team].pitchesAtAnyPosition(roster, 0)){
+                json_stream << "        {\n";
+                for (int pos = 0; pos < cNumOfPositions; ++pos) {
+                    if (m_fielder_tracker[team].fielder_map[roster].pitch_count_by_position[pos] > 0){
+                        std::string comma = (m_fielder_tracker[team].pitchesAtAnyPosition(roster, pos+1)) ? "," : "";
+                        json_stream << "            \"" << cPosition.at(pos) << "\": " << std::to_string(m_fielder_tracker[team].fielder_map[roster].pitch_count_by_position[pos]) << comma << "\n";
                     }
                 }
                 json_stream << "        }\n";
