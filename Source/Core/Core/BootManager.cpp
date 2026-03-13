@@ -53,8 +53,8 @@
 
 #include "VideoCommon/VideoBackendBase.h"
 
-#include "MSB_GenerateCustomMatchStateGeckoCode.h"
-#include "MSB_CustomMatchStateDebugLoader.h"
+#include "Core/MSB_GenerateCustomMatchStateGeckoCode.h"
+#include "Core/MSB_CustomMatchStateDebugLoader.h"
 
 
 namespace BootManager
