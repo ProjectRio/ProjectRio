@@ -129,22 +129,41 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
 {
     std::vector<std::string> lines;
 
-    // Score functions
-    GenerateTeamScoreGeckoCodes(state.awayScore, state.awayInningScores, SCORE_AWAY_ADDR, SCORE_BYINNING_AWAY_BASE, lines, "Away", SCORE_STRIDE);
-    GenerateTeamScoreGeckoCodes(state.homeScore, state.homeInningScores, SCORE_HOME_ADDR, SCORE_BYINNING_HOME_BASE, lines, "Home", SCORE_STRIDE);
+    // Pre-game codes - only runs on the main menu when rel = 4.
+    // These are mainly for addresses related to game settings.
+    lines.push_back(ToGeckoLine(0x28, REL_ADDR, MAIN_MENU_REL));
+
+    lines.push_back("E0000000 80008000"); // end main menu conditional
     
-    // 3. Count state (balls, strikes, outs)
-    if (state.balls.has_value())
-        lines.push_back(ToGeckoLine(0x00, BALLS_ADDR, state.balls.value()));
 
-    if (state.strikes.has_value())
-        lines.push_back(ToGeckoLine(0x00, STRIKES_ADDR, state.strikes.value()));
+    // In-game codes - only runs on the in-game rel = 5 and game has not started.
+    // These are for addresses that efffect the game state, and can be set after the match loads.
+    lines.push_back(ToGeckoLine(0x28, REL_ADDR, IN_GAME_REL));
+        lines.push_back(ToGeckoLine(0x28, HAS_GAME_STARTED_ADDR, (GAME_STARTED_MASK << 16) | GAME_NOT_STARTED));
 
-    if (state.outs.has_value())
-        lines.push_back(ToGeckoLine(0x00, OUTS_ADDR, state.outs.value()));
+            // Score functions
+            GenerateTeamScoreGeckoCodes(state.awayScore, state.awayInningScores, SCORE_AWAY_ADDR, SCORE_BYINNING_AWAY_BASE, lines, "Away", SCORE_STRIDE);
+            GenerateTeamScoreGeckoCodes(state.homeScore, state.homeInningScores, SCORE_HOME_ADDR, SCORE_BYINNING_HOME_BASE, lines, "Home", SCORE_STRIDE);
 
-    // 4. Ad-hoc "if codes" or special codes can be added here
-    // lines.push_back(ToGeckoLine(0x04, some_address, some_value));
+            // 3. Count state (balls, strikes, outs)
+            if (state.balls.has_value())
+                lines.push_back(ToGeckoLine(0x00, BALLS_ADDR, state.balls.value()));
+
+            if (state.strikes.has_value())
+                lines.push_back(ToGeckoLine(0x00, STRIKES_ADDR, state.strikes.value()));
+
+            if (state.outs.has_value())
+                lines.push_back(ToGeckoLine(0x00, OUTS_ADDR, state.outs.value()));
+
+        lines.push_back("E0000000 80008000"); // end game-not-started conditional
+        
+        // after match started codes - generally everyting should be set before this, but there is some post processing that could be needed.
+        lines.push_back(ToGeckoLine(0x28, HAS_GAME_STARTED_ADDR, (GAME_STARTED_MASK << 16) | GAME_STARTED));
+
+        lines.push_back("E0000000 80008000"); // end game-has-started conditional
+    lines.push_back("E0000000 80008000"); // end in-game conditional
+
+
 
     // 5. Write all generated lines to the INI
     GeckoCodeGenerator::WriteGeneratedCode(game_id, code_name, lines);
