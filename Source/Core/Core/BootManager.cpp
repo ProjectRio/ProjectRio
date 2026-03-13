@@ -53,6 +53,10 @@
 
 #include "VideoCommon/VideoBackendBase.h"
 
+#include "MSB_GenerateCustomMatchStateGeckoCode.h"
+#include "MSB_CustomMatchStateDebugLoader.h"
+
+
 namespace BootManager
 {
 // Boot the ISO or file
@@ -76,6 +80,14 @@ bool BootCore(std::unique_ptr<BootParameters> boot, const WindowSystemInfo& wsi)
                 "games other than Mario Superstar Baseball.");
     return false;
   }
+
+  MSBGameState state = LoadDebugState("User/Debug/msb_state.txt");
+
+  MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
+    "GYQE01",
+    state,
+    "Debug Match State"
+);
 
   // Movie settings
   auto& movie = system.GetMovie();
