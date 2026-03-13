@@ -129,6 +129,8 @@ add_library(core
   GeckoCode.h
   GeckoCodeConfig.cpp
   GeckoCodeConfig.h
+  GeckoCodeGenerator.cpp
+  GeckoCodeGenerator.h
   HLE/HLE_Misc.cpp
   HLE/HLE_Misc.h
   HLE/HLE_OS.cpp
@@ -456,6 +458,10 @@ add_library(core
   LibusbUtils.h
   MSB_StatTracker.cpp
   MSB_StatTracker.h
+  MSB_GenerateCustomMatchStateGeckoCode.cpp
+  MSB_GenerateCustomMatchStateGeckoCode.h
+  MSB_CustomMatchStateDebugLoader.cpp
+  MSB_CustomMatchStateDebugLoader.h
   LocalPlayers.cpp
   LocalPlayers.h
   LocalPlayersConfig.cpp
