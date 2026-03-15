@@ -73,9 +73,6 @@
     <ClCompile Include="Core\PowerPC\DivUtilsTest.cpp" />
     <ClCompile Include="VideoCommon\VertexLoaderTest.cpp" />
     <ClCompile Include="StubHost.cpp" />
-    <ClCompile Include="Core\Core\MSB_CustomMatchStateDebugLoader.cpp" />
-    <ClCompile Include="Core\Core\MSB_GenerateCustomMatchStateGeckoCode.cpp" />
-    <ClCompile Include="Core\Core\GeckoCodeGenerator.cpp" />
   </ItemGroup>
   <!--Arch-specific tests-->
   <ItemGroup Condition="'$(Platform)'=='x64'">
