@@ -3,24 +3,22 @@
 #include <string>
 #include <sstream>
 #include <iostream>
+#include <iomanip>
 #include <optional>
 #include <algorithm>
 #include <cstdint>
 
 // Helper: convert address, value, and Gecko type to Gecko code line
-static std::string ToGeckoLine(uint32_t geckoType, uint32_t address, uint32_t value)
+static std::string ToGeckoLine(uint8_t geckoType, uint32_t address, uint32_t value)
 {
     std::ostringstream oss;
-    oss << std::hex;
 
-    // Gecko type: 00, 02, 04, etc.
-    oss.width(2); oss.fill('0'); oss << geckoType;
+    uint32_t firstWord = (static_cast<uint32_t>(geckoType) << 24) | (address & 0x00FFFFFF);
 
-    // Address: always 6 hex digits
-    oss.width(6); oss.fill('0'); oss << address << " ";
-
-    // Value: always 8 hex digits
-    oss.width(8); oss.fill('0'); oss << value;
+    oss << std::uppercase << std::hex << std::setfill('0')
+        << std::setw(8) << firstWord
+        << " "
+        << std::setw(8) << value;
 
     return oss.str();
 }
@@ -32,7 +30,6 @@ void GenerateTeamScoreGeckoCodes(
     uint32_t currentScoreAddress,
     uint32_t inningScoresBaseAddress,
     std::vector<std::string>& outLines,
-    const std::string& teamName = "",
     uint32_t stride = 2  // default 2 bytes between innings
 )
 {
@@ -142,18 +139,32 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
         lines.push_back(ToGeckoLine(0x28, HAS_GAME_STARTED_ADDR, (GAME_STARTED_MASK << 16) | GAME_NOT_STARTED));
 
             // Score functions
-            GenerateTeamScoreGeckoCodes(state.awayScore, state.awayInningScores, SCORE_AWAY_ADDR, SCORE_BYINNING_AWAY_BASE, lines, "Away", SCORE_STRIDE);
-            GenerateTeamScoreGeckoCodes(state.homeScore, state.homeInningScores, SCORE_HOME_ADDR, SCORE_BYINNING_HOME_BASE, lines, "Home", SCORE_STRIDE);
+            GenerateTeamScoreGeckoCodes(state.awayScore, state.awayInningScores, SCORE_AWAY_ADDR, SCORE_BYINNING_AWAY_BASE, lines, SCORE_STRIDE);
+            GenerateTeamScoreGeckoCodes(state.homeScore, state.homeInningScores, SCORE_HOME_ADDR, SCORE_BYINNING_HOME_BASE, lines, SCORE_STRIDE);
 
-            // 3. Count state (balls, strikes, outs)
+            // count
             if (state.balls.has_value())
-                lines.push_back(ToGeckoLine(0x00, BALLS_ADDR, state.balls.value()));
+                lines.push_back(ToGeckoLine(0x04, BALLS_ADDR, state.balls.value()));
 
             if (state.strikes.has_value())
-                lines.push_back(ToGeckoLine(0x00, STRIKES_ADDR, state.strikes.value()));
+                lines.push_back(ToGeckoLine(0x04, STRIKES_ADDR, state.strikes.value()));
 
-            if (state.outs.has_value())
-                lines.push_back(ToGeckoLine(0x00, OUTS_ADDR, state.outs.value()));
+            if (state.outs.has_value()) 
+            {
+                lines.push_back(ToGeckoLine(0x04, OUTS_ADDR, state.outs.value()));
+                lines.push_back(ToGeckoLine(0x04, OUTS_STORED_ADDR, state.outs.value())); // need to both addrs
+            }
+
+            // team stars
+            if (state.awayTeamStars.has_value())
+                lines.push_back(ToGeckoLine(0x00, TEAM_STARS_AWAY_ADDR, state.awayTeamStars.value()));
+
+            if (state.homeTeamStars.has_value())
+                lines.push_back(ToGeckoLine(0x00, TEAM_STARS_HOME_ADDR, state.homeTeamStars.value()));
+
+            // star chance
+            if (state.isStarChance.has_value())
+                lines.push_back(ToGeckoLine(0x00, IS_STAR_CHANCE_ADDR, state.isStarChance.value()));
 
         lines.push_back("E0000000 80008000"); // end game-not-started conditional
         
