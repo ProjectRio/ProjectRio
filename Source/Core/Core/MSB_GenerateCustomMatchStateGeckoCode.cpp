@@ -168,6 +168,13 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
             lines.push_back(ToGeckoLine(0x02, GAME_SETTINGS_CURSOR_LEFT_INSTR_ADDR, 0x0000));
         }
 
+        if (state.logoP1.has_value())
+            lines.push_back(ToGeckoLine(0x00, LOGO_P1_ADDR, state.logoP1.value()));
+
+        if (state.logoP2.has_value())
+            lines.push_back(ToGeckoLine(0x00, LOGO_P2_ADDR, state.logoP2.value()));
+
+
     lines.push_back("E0000000 80008000"); // end main menu conditional
     
 

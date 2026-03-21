@@ -22,6 +22,9 @@ struct MSBGameState
 
     std::optional<uint8_t> mercy; // 0=off, 1=on
     
+    std::optional<uint8_t> logoP1; // 0-47
+    std::optional<uint8_t> logoP2; // 0-47
+
 
     // In-game constants
     std::optional<uint32_t> inning; 
@@ -72,6 +75,9 @@ public:
     static constexpr uint32_t MERCY_ADDR = 0x803c5f43;
     static constexpr uint32_t GAME_SETTINGS_CURSOR_RIGHT_INSTR_ADDR = 0x80049616;
     static constexpr uint32_t GAME_SETTINGS_CURSOR_LEFT_INSTR_ADDR = 0x800495da;
+
+    static constexpr uint32_t LOGO_P1_ADDR = 0x803530AD;
+    static constexpr uint32_t LOGO_P2_ADDR = 0x803530AE;
 
 
     // In game addresses
