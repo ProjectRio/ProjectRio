@@ -10,6 +10,18 @@
 struct MSBGameState
 {
     // Pre-game constants
+    std::optional<uint8_t> stadium; // 0=Mario, 1=Bowser, 2=Wario, 3=Yoshi, 4=Peach, 5=DK, 6=TF
+
+    //TODO add first batter
+    std::optional<uint8_t> starSkills; // 0=off, 1=on
+    
+    // actual int of the innings, not the cursor index. 
+    // only odd numbers work. Evens will result in (value - 1) since we're setting the cursor index.
+    // values > 9 also work.
+    std::optional<uint8_t> inningsSelected; 
+
+    std::optional<uint8_t> mercy; // 0=off, 1=on
+    
 
     // In-game constants
     std::optional<uint16_t> homeScore;
@@ -24,7 +36,7 @@ struct MSBGameState
     std::optional<uint8_t> awayTeamStars;
     std::optional<uint8_t> homeTeamStars;
 
-    std::optional<uint8_t> isStarChance;
+    std::optional<uint8_t> isStarChance; // 0=off, 1=on
 };
 
 class MSBMatchCodeBuilder
@@ -47,6 +59,17 @@ public:
 
 
     // Pre game addresses
+    static constexpr uint32_t STADIUM_ADDR = 0x80750c37;
+    static constexpr uint32_t STADIUM_CURSOR_RIGHT_INSTR_ADDR = 0x80650586;
+    static constexpr uint32_t STADIUM_CURSOR_LEFT_INSTR_ADDR = 0x80650536;
+
+    //static constexpr uint32_t FIRST_BATTER_ADDR = 0x803c5f40;
+    static constexpr uint32_t STAR_SKILLS_ADDR = 0x803c5f41;
+    static constexpr uint32_t INNINGS_SELECTED_ADDR = 0x803c5f42;
+    static constexpr uint32_t MERCY_ADDR = 0x803c5f43;
+    static constexpr uint32_t GAME_SETTINGS_CURSOR_RIGHT_INSTR_ADDR = 0x80049616;
+    static constexpr uint32_t GAME_SETTINGS_CURSOR_LEFT_INSTR_ADDR = 0x800495da;
+
 
     // In game addresses
     static constexpr uint32_t STRIKES_ADDR = 0x80892968;

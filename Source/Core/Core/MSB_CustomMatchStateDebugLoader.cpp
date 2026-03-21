@@ -33,7 +33,14 @@ MSBGameState LoadDebugState(const std::string& path)
 
         int v = std::stoi(value);
 
-        if (key == "awayScore") state.awayScore = v;
+        if (key == "stadium") state.stadium = v;
+
+        //TODO add first batter
+        else if (key == "starSkills") state.starSkills = v;
+        else if (key == "inningsSelected") state.inningsSelected = v;
+        else if (key == "mercy") state.mercy = v;
+
+        else if (key == "awayScore") state.awayScore = v;
         else if (key == "homeScore") state.homeScore = v;
 
         else if (key == "strikes") state.strikes = v;

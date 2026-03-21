@@ -130,6 +130,44 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
     // These are mainly for addresses related to game settings.
     lines.push_back(ToGeckoLine(0x28, REL_ADDR, MAIN_MENU_REL));
 
+        if (state.stadium.has_value())
+        {
+            // 0=Mario, 1=Bowser, 2=Wario, 3=Yoshi, 4=Peach, 5=DK, 6=TF
+            lines.push_back(ToGeckoLine(0x00, STADIUM_ADDR, state.stadium.value()));
+
+            // prevent cursor movement on stadium select screen
+            lines.push_back(ToGeckoLine(0x02, STADIUM_CURSOR_RIGHT_INSTR_ADDR, 0x0000));
+            lines.push_back(ToGeckoLine(0x02, STADIUM_CURSOR_LEFT_INSTR_ADDR, 0x0000));
+        };
+
+        // TODO: add first bat logic
+
+        if (state.starSkills.has_value())
+            lines.push_back(ToGeckoLine(0x00, STAR_SKILLS_ADDR, state.starSkills.value()));
+
+        if (state.inningsSelected.has_value())
+        {
+            // the address being set is the cursor index.
+            // this code does the inverse of the bit manipulation to get from the index to the innings.
+            // currently has a limitation that the innings selected can only be odd.
+            // even numbers will result in the innings selected to be (value - 1)
+            uint8_t inningsDesired = state.inningsSelected.value();
+            uint8_t inningsMenuIndex = (inningsDesired - 1) >> 1;
+            lines.push_back(ToGeckoLine(0x00, INNINGS_SELECTED_ADDR, inningsMenuIndex));
+        }
+
+        if (state.mercy.has_value())
+            lines.push_back(ToGeckoLine(0x00, MERCY_ADDR, state.mercy.value()));
+
+        if (state.starSkills.has_value() &&
+            state.inningsSelected.has_value() &&
+            state.mercy.has_value()) // TODO add first batter here
+        {
+            // if all options are set, prevent cursor movement on game settings screen
+            lines.push_back(ToGeckoLine(0x02, GAME_SETTINGS_CURSOR_RIGHT_INSTR_ADDR, 0x0000));
+            lines.push_back(ToGeckoLine(0x02, GAME_SETTINGS_CURSOR_LEFT_INSTR_ADDR, 0x0000));
+        }
+
     lines.push_back("E0000000 80008000"); // end main menu conditional
     
 
