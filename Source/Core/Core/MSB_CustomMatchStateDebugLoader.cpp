@@ -40,6 +40,9 @@ MSBGameState LoadDebugState(const std::string& path)
         else if (key == "inningsSelected") state.inningsSelected = v;
         else if (key == "mercy") state.mercy = v;
 
+        else if (key == "inning") state.inning = v;
+        else if (key == "halfInning") state.halfInning = v;
+
         else if (key == "awayScore") state.awayScore = v;
         else if (key == "homeScore") state.homeScore = v;
 

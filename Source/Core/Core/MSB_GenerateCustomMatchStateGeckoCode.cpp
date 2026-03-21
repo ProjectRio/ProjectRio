@@ -176,16 +176,23 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
     lines.push_back(ToGeckoLine(0x28, REL_ADDR, IN_GAME_REL));
         lines.push_back(ToGeckoLine(0x28, HAS_GAME_STARTED_ADDR, (GAME_STARTED_MASK << 16) | GAME_NOT_STARTED));
 
+            // Innings
+            if (state.inning.has_value())
+                lines.push_back(ToGeckoLine(0x04, INNING_ADDR, state.inning.value()));
+
+            if (state.halfInning.has_value())
+                lines.push_back(ToGeckoLine(0x00, HALF_INNING_ADDR, state.halfInning.value()));
+
             // Score functions
             GenerateTeamScoreGeckoCodes(state.awayScore, state.awayInningScores, SCORE_AWAY_ADDR, SCORE_BYINNING_AWAY_BASE, lines, SCORE_STRIDE);
             GenerateTeamScoreGeckoCodes(state.homeScore, state.homeInningScores, SCORE_HOME_ADDR, SCORE_BYINNING_HOME_BASE, lines, SCORE_STRIDE);
 
             // count
-            if (state.balls.has_value())
-                lines.push_back(ToGeckoLine(0x04, BALLS_ADDR, state.balls.value()));
-
             if (state.strikes.has_value())
                 lines.push_back(ToGeckoLine(0x04, STRIKES_ADDR, state.strikes.value()));
+
+            if (state.balls.has_value())
+                lines.push_back(ToGeckoLine(0x04, BALLS_ADDR, state.balls.value()));
 
             if (state.outs.has_value()) 
             {

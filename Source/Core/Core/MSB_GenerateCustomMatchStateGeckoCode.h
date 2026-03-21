@@ -24,6 +24,9 @@ struct MSBGameState
     
 
     // In-game constants
+    std::optional<uint32_t> inning; 
+    std::optional<uint8_t> halfInning; // 0=top, 1=bottom
+
     std::optional<uint16_t> homeScore;
     std::optional<uint16_t> awayScore;
     std::optional<uint16_t> homeInningScores[18];  // 18 innings is max the game holds in memory
@@ -72,16 +75,19 @@ public:
 
 
     // In game addresses
-    static constexpr uint32_t STRIKES_ADDR = 0x80892968;
-    static constexpr uint32_t BALLS_ADDR = 0x8089296C;
-    static constexpr uint32_t OUTS_ADDR = 0x80892970;
-    static constexpr uint32_t OUTS_STORED_ADDR = 0x80892974;
-    
+    static constexpr uint32_t INNING_ADDR = 0x808928A0;
+    static constexpr uint32_t HALF_INNING_ADDR = 0x8089294D;
+
     static constexpr uint32_t SCORE_AWAY_ADDR = 0x808928a4;
     static constexpr uint32_t SCORE_HOME_ADDR = 0x808928CA;
     static constexpr uint32_t SCORE_BYINNING_AWAY_BASE = 0x808928a6;
     static constexpr uint32_t SCORE_BYINNING_HOME_BASE = 0x808928cc;
     static constexpr uint32_t SCORE_STRIDE = 0x02; 
+
+    static constexpr uint32_t STRIKES_ADDR = 0x80892968;
+    static constexpr uint32_t BALLS_ADDR = 0x8089296C;
+    static constexpr uint32_t OUTS_ADDR = 0x80892970;
+    static constexpr uint32_t OUTS_STORED_ADDR = 0x80892974;
 
     static constexpr uint32_t TEAM_STARS_AWAY_ADDR = 0x80892ad6;
     static constexpr uint32_t TEAM_STARS_HOME_ADDR = 0x80892ad7;
