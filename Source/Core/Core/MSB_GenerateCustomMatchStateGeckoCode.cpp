@@ -12,6 +12,7 @@
 static std::string ToGeckoLine(uint8_t geckoType, uint32_t address, uint32_t value)
 {
     std::ostringstream oss;
+    oss.imbue(std::locale::classic()); //avoid adding thousands separators.
 
     uint32_t firstWord = (static_cast<uint32_t>(geckoType) << 24) | (address & 0x00FFFFFF);
 
