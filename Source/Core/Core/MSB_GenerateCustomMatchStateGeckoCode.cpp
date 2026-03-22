@@ -150,6 +150,12 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
     // Pre-game codes - only runs on the main menu when rel = 4.
     // These are mainly for addresses related to game settings.
     lines.push_back(ToGeckoLine(0x28, REL_ADDR, MAIN_MENU_REL));
+    
+        if (state.captainCharacterP1.has_value())
+            lines.push_back(ToGeckoLine(0x04, CAPTAIN_CHARACTER_P1_ADDR, state.captainCharacterP1.value()));
+
+        if (state.captainCharacterP2.has_value())
+            lines.push_back(ToGeckoLine(0x04, CAPTAIN_CHARACTER_P2_ADDR, state.captainCharacterP2.value()));
         
         GenerateRosterGeckoCodes(state.charactersP1ByPosition, CHARACTERS_P1_BASE, CHARACTER_STRIDE, lines);
         GenerateRosterGeckoCodes(state.charactersP2ByPosition, CHARACTERS_P2_BASE, CHARACTER_STRIDE, lines);

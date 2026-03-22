@@ -33,7 +33,10 @@ MSBGameState LoadDebugState(const std::string& path)
 
         int v = std::stoi(value);
 
-        if (key.rfind("p1Character", 0) == 0)
+        if (key == "captainCharacterP1") state.captainCharacterP1 = v;
+        else if (key == "captainCharacterP2") state.captainCharacterP2 = v;
+
+        else if (key.rfind("p1Character", 0) == 0)
         {
             int characterNumber = std::stoi(key.substr(11));
             if (characterNumber >= 0 && characterNumber < 10)
