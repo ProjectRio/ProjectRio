@@ -167,6 +167,44 @@ void GenerateTeamScoreGeckoCodes(
     }
 }
 
+void GenerateOrderAndPositionGeckoCodes(
+    const std::optional<uint32_t> positionByBattingOrder[9],
+    uint32_t structBase,
+    std::vector<std::string>& outLines
+)
+{
+    bool positionsProvided = false;
+    for (int i = 0; i < 9; i++)
+    {
+        if (positionByBattingOrder[i].has_value()) 
+        {
+            positionsProvided = true;
+            break;
+        }
+    }
+
+    if (positionsProvided)
+    {
+        for (int i = 0; i < 10; i++)
+        {
+            // i + 1 since first index is a copy of the pitchers spot in the order + position.
+            uint32_t address = 
+                structBase + 
+                MSBMatchCodeBuilder::ORDER_AND_POSITION_STRUCT_CHARACTER_STRIDE * (i + 1) + 
+                MSBMatchCodeBuilder::ORDER_AND_POSITION_STRUCT_POSITION_STRIDE;
+
+            outLines.push_back(ToGeckoLine(0x04, address, positionByBattingOrder[i].value()));
+
+            // if pitcher, fill in their spot in the batting order
+            if (positionByBattingOrder[i].value() == 0)
+            {
+                outLines.push_back(ToGeckoLine(0x04, structBase, i));
+                outLines.push_back(ToGeckoLine(0x04, structBase + MSBMatchCodeBuilder::ORDER_AND_POSITION_STRUCT_POSITION_STRIDE, 0x00000000));
+            }
+        }
+    }
+}
+
 void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
     const std::string& game_id,
     const MSBGameState& state,
@@ -294,6 +332,17 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
             // star chance
             if (state.isStarChance.has_value())
                 lines.push_back(ToGeckoLine(0x00, IS_STAR_CHANCE_ADDR, state.isStarChance.value()));
+
+            // batting order and position struct
+            GenerateOrderAndPositionGeckoCodes(
+                state.awayPositionByBattingOrder, 
+                ORDER_AND_POSITION_STRUCT_AWAY_BASE,
+                lines);
+            
+            GenerateOrderAndPositionGeckoCodes(
+                state.homePositionByBattingOrder, 
+                ORDER_AND_POSITION_STRUCT_HOME_BASE,
+                lines);
 
         lines.push_back("E0000000 80008000"); // end game-not-started conditional
         

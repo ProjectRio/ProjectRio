@@ -89,6 +89,20 @@ MSBGameState LoadDebugState(const std::string& path)
                 state.awayInningScores[inning] = v;
         }
 
+        else if (key.rfind("awayPosition", 0) == 0)
+        {
+            int order = std::stoi(key.substr(12));
+            if (order >= 0 && order < 10)
+                state.awayPositionByBattingOrder[order] = v;
+        }
+
+        else if (key.rfind("homePosition", 0) == 0)
+        {
+            int order = std::stoi(key.substr(12));
+            if (order >= 0 && order < 10)
+                state.awayPositionByBattingOrder[order] = v;
+        }
+
         else
         {
             // Optional logging for unknown keys

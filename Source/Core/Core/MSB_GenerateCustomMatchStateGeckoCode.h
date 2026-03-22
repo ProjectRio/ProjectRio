@@ -50,6 +50,10 @@ struct MSBGameState
     std::optional<uint8_t> homeTeamStars;
 
     std::optional<uint8_t> isStarChance; // 0=off, 1=on
+
+    // for each spot in the batting order, enter the batters position
+    std::optional<uint32_t> awayPositionByBattingOrder[9];
+    std::optional<uint32_t> homePositionByBattingOrder[9];
 };
 
 class MSBMatchCodeBuilder
@@ -120,5 +124,10 @@ public:
     static constexpr uint32_t TEAM_STARS_HOME_ADDR = 0x80892ad7;
 
     static constexpr uint32_t IS_STAR_CHANCE_ADDR = 0x80892ad8;
+
+    static constexpr uint32_t ORDER_AND_POSITION_STRUCT_AWAY_BASE = 0x808929c8;
+    static constexpr uint32_t ORDER_AND_POSITION_STRUCT_HOME_BASE = 0x80892a18;
+    static constexpr uint32_t ORDER_AND_POSITION_STRUCT_CHARACTER_STRIDE = 0x08;
+    static constexpr uint32_t ORDER_AND_POSITION_STRUCT_POSITION_STRIDE = 0x04;
 
 };
