@@ -24,14 +24,34 @@ static std::string ToGeckoLine(uint8_t geckoType, uint32_t address, uint32_t val
     return oss.str();
 }
 
+void GenerateRosterGeckoCodes(
+    const std::optional<uint8_t> charactersByPosition[9],
+    uint32_t rosterBaseAddress,
+    uint32_t stride = 1,
+    std::vector<std::string>& outLines
+)
+{
+    for (int i = 0; i < 9; i++)
+    {
+        if (charactersByPosition[i].has_value())
+            outLines.push_back(ToGeckoLine(0x00, rosterBaseAddress + i*stride, charactersByPosition[i].value()));
+        else 
+        {
+            // if character not given, default to Mario
+            outLines.push_back(ToGeckoLine(0x00, rosterBaseAddress + i*stride, 0x00));
+            std::cout << "Missing character " << i << " to put at address " << rosterBaseAddress + i*stride << std::endl;
+        }
+    }
+}
+
 // score helper function to manage cases related to providing current and/or inning scores.
 void GenerateTeamScoreGeckoCodes(
     const std::optional<uint16_t>& currentScore,
     const std::optional<uint16_t> inningScores[18],
     uint32_t currentScoreAddress,
     uint32_t inningScoresBaseAddress,
-    std::vector<std::string>& outLines,
-    uint32_t stride = 2  // default 2 bytes between innings
+    uint32_t stride = 2,  // default 2 bytes between innings
+    std::vector<std::string>& outLines
 )
 {
     // Determine if any inning scores are provided
@@ -130,6 +150,15 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
     // Pre-game codes - only runs on the main menu when rel = 4.
     // These are mainly for addresses related to game settings.
     lines.push_back(ToGeckoLine(0x28, REL_ADDR, MAIN_MENU_REL));
+        
+        GenerateRosterGeckoCodes(state.charactersP1ByPosition, CHARACTERS_P1_BASE, CHARACTER_STRIDE, lines);
+        GenerateRosterGeckoCodes(state.charactersP2ByPosition, CHARACTERS_P2_BASE, CHARACTER_STRIDE, lines);
+
+        if (state.logoP1.has_value())
+            lines.push_back(ToGeckoLine(0x00, LOGO_P1_ADDR, state.logoP1.value()));
+
+        if (state.logoP2.has_value())
+            lines.push_back(ToGeckoLine(0x00, LOGO_P2_ADDR, state.logoP2.value()));
 
         if (state.stadium.has_value())
         {
@@ -171,13 +200,6 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
             lines.push_back(ToGeckoLine(0x02, GAME_SETTINGS_CURSOR_LEFT_INSTR_ADDR, 0x0000));
         }
 
-        if (state.logoP1.has_value())
-            lines.push_back(ToGeckoLine(0x00, LOGO_P1_ADDR, state.logoP1.value()));
-
-        if (state.logoP2.has_value())
-            lines.push_back(ToGeckoLine(0x00, LOGO_P2_ADDR, state.logoP2.value()));
-
-
     lines.push_back("E0000000 80008000"); // end main menu conditional
     
 
@@ -194,8 +216,8 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
                 lines.push_back(ToGeckoLine(0x00, HALF_INNING_ADDR, state.halfInning.value()));
 
             // Score functions
-            GenerateTeamScoreGeckoCodes(state.awayScore, state.awayInningScores, SCORE_AWAY_ADDR, SCORE_BYINNING_AWAY_BASE, lines, SCORE_STRIDE);
-            GenerateTeamScoreGeckoCodes(state.homeScore, state.homeInningScores, SCORE_HOME_ADDR, SCORE_BYINNING_HOME_BASE, lines, SCORE_STRIDE);
+            GenerateTeamScoreGeckoCodes(state.awayScore, state.awayInningScores, SCORE_AWAY_ADDR, SCORE_BYINNING_AWAY_BASE, SCORE_STRIDE, lines);
+            GenerateTeamScoreGeckoCodes(state.homeScore, state.homeInningScores, SCORE_HOME_ADDR, SCORE_BYINNING_HOME_BASE, SCORE_STRIDE, lines);
 
             // count
             if (state.strikes.has_value())

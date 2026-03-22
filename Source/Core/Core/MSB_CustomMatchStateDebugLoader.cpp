@@ -33,15 +33,29 @@ MSBGameState LoadDebugState(const std::string& path)
 
         int v = std::stoi(value);
 
-        if (key == "stadium") state.stadium = v;
+        if (key.rfind("p1Character", 0) == 0)
+        {
+            int characterNumber = std::stoi(key.substr(11));
+            if (characterNumber >= 0 && characterNumber < 10)
+                state.charactersP1ByPosition[characterNumber] = v;
+        }
+
+        else if (key.rfind("p2Character", 0) == 0)
+        {
+            int characterNumber = std::stoi(key.substr(11));
+            if (characterNumber >= 0 && characterNumber < 10)
+                state.charactersP2ByPosition[characterNumber] = v;
+        }
+        
+        else if (key == "logoP1") state.logoP1 = v;
+        else if (key == "logoP2") state.logoP2 = v;
+
+        else if (key == "stadium") state.stadium = v;
 
         else if (key == "firstBatter") state.firstBatter = v;
         else if (key == "starSkills") state.starSkills = v;
         else if (key == "inningsSelected") state.inningsSelected = v;
         else if (key == "mercy") state.mercy = v;
-        
-        else if (key == "logoP1") state.logoP1 = v;
-        else if (key == "logoP2") state.logoP2 = v;
 
         else if (key == "inning") state.inning = v;
         else if (key == "halfInning") state.halfInning = v;

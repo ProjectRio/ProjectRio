@@ -10,6 +10,13 @@
 struct MSBGameState
 {
     // Pre-game constants
+    // rosters need to be given in position order (P, C, 1B, 2B, 3B, SS, LF, CF, RF)
+    std::optional<uint8_t> charactersP1ByPosition[9]; 
+    std::optional<uint8_t> charactersP2ByPosition[9];  
+
+    std::optional<uint8_t> logoP1; // 0-47
+    std::optional<uint8_t> logoP2; // 0-47
+
     std::optional<uint8_t> stadium; // 0=Mario, 1=Bowser, 2=Wario, 3=Yoshi, 4=Peach, 5=DK, 6=TF
 
     std::optional<uint8_t> firstBatter; // 0=P1, 1=P2
@@ -21,9 +28,6 @@ struct MSBGameState
     std::optional<uint8_t> inningsSelected; 
 
     std::optional<uint8_t> mercy; // 0=off, 1=on
-    
-    std::optional<uint8_t> logoP1; // 0-47
-    std::optional<uint8_t> logoP2; // 0-47
 
 
     // In-game constants
@@ -65,6 +69,10 @@ public:
 
 
     // Pre game addresses
+    static constexpr uint32_t CHARACTERS_P1_BASE = 0x803C6726;
+    static constexpr uint32_t CHARACTERS_P2_BASE = 0x803C672F;
+    static constexpr uint32_t CHARACTER_STRIDE = 0x01; 
+
     static constexpr uint32_t STADIUM_ADDR = 0x80750c37;
     static constexpr uint32_t STADIUM_CURSOR_RIGHT_INSTR_ADDR = 0x80650586;
     static constexpr uint32_t STADIUM_CURSOR_LEFT_INSTR_ADDR = 0x80650536;
