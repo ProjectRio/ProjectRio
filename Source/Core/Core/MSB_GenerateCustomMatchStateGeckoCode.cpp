@@ -28,18 +28,45 @@ void GenerateRosterGeckoCodes(
     const std::optional<uint8_t> charactersByPosition[9],
     uint32_t rosterBaseAddress,
     uint32_t stride = 1,
+    uint32_t spotFilledAddress,
+    uint32_t okButtonActiveAddress,
+    uint32_t cursorLocationAddress,
     std::vector<std::string>& outLines
 )
 {
+    // check if any character ID is given
+    bool rosterProvided = false;
     for (int i = 0; i < 9; i++)
     {
-        if (charactersByPosition[i].has_value())
-            outLines.push_back(ToGeckoLine(0x00, rosterBaseAddress + i*stride, charactersByPosition[i].value()));
-        else 
+        if (charactersByPosition[i].has_value()) 
         {
-            // if character not given, default to Mario
-            outLines.push_back(ToGeckoLine(0x00, rosterBaseAddress + i*stride, 0x00));
-            std::cout << "Missing character " << i << " to put at address " << rosterBaseAddress + i*stride << std::endl;
+            rosterProvided = true;
+            break;
+        }
+    }
+
+    if (rosterProvided)
+    {
+        // set spot filled indicators
+        outLines.push_back(ToGeckoLine(0x00, spotFilledAddress, 0x10000001));
+
+        // make OK button selectable
+        outLines.push_back(ToGeckoLine(0x00, okButtonActiveAddress, 0x01));
+
+        // put corsor on OK button
+        outLines.push_back(ToGeckoLine(0x04, cursorLocationAddress, 0x09));
+
+        // fill rosters with character IDs
+        for (int i = 0; i < 9; i++)
+        {
+            if (charactersByPosition[i].has_value())
+                outLines.push_back(ToGeckoLine(0x00, rosterBaseAddress + i*stride, charactersByPosition[i].value()));
+            else 
+            {
+                // if character not given, default to Mario
+                outLines.push_back(ToGeckoLine(0x00, rosterBaseAddress + i*stride, 0x00));
+                std::cout << "Missing character " << i << " to put at address " << rosterBaseAddress + i*stride << std::endl;
+            }
         }
     }
 }
@@ -157,8 +184,27 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
         if (state.captainCharacterP2.has_value())
             lines.push_back(ToGeckoLine(0x04, CAPTAIN_CHARACTER_P2_ADDR, state.captainCharacterP2.value()));
         
-        GenerateRosterGeckoCodes(state.charactersP1ByPosition, CHARACTERS_P1_BASE, CHARACTER_STRIDE, lines);
-        GenerateRosterGeckoCodes(state.charactersP2ByPosition, CHARACTERS_P2_BASE, CHARACTER_STRIDE, lines);
+        GenerateRosterGeckoCodes(
+            state.charactersP1ByPosition, 
+            CHARACTERS_P1_BASE, 
+            CHARACTER_STRIDE, 
+            CHARACTER_SELECT_P1_SPOT_FILLED_ADDR,
+            CHARACTER_SELECT_P1_OK_ACTIVE_ADDR,
+            CHARACTER_SELECT_P1_CURSOR_ADDR,
+            lines);
+
+        GenerateRosterGeckoCodes(
+            state.charactersP2ByPosition, 
+            CHARACTERS_P2_BASE, 
+            CHARACTER_STRIDE, 
+            CHARACTER_SELECT_P2_SPOT_FILLED_ADDR,
+            CHARACTER_SELECT_P2_OK_ACTIVE_ADDR,
+            CHARACTER_SELECT_P2_CURSOR_ADDR,
+            lines);
+
+        // if both rosters provided, prevent cursor movement by nop'ing function call.
+        if (state.charactersP1ByPosition[0].has_value() && state.charactersP2ByPosition[0].has_value())
+            lines.push_back(ToGeckoLine(0x04, CHARACTER_SELECT_PREVENT_CURSOR_MOVEMENT_ADDR, 0x60000000));
 
         if (state.logoP1.has_value())
             lines.push_back(ToGeckoLine(0x00, LOGO_P1_ADDR, state.logoP1.value()));

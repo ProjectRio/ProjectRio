@@ -78,6 +78,13 @@ public:
     static constexpr uint32_t CHARACTERS_P1_BASE = 0x803C6726;
     static constexpr uint32_t CHARACTERS_P2_BASE = 0x803C672F;
     static constexpr uint32_t CHARACTER_STRIDE = 0x01; 
+    static constexpr uint32_t CHARACTER_SELECT_P1_SPOT_FILLED_ADDR = 0x803C676E;
+    static constexpr uint32_t CHARACTER_SELECT_P2_SPOT_FILLED_ADDR = 0x803C6777;
+    static constexpr uint32_t CHARACTER_SELECT_P1_OK_ACTIVE_ADDR = 0x80750C7F;
+    static constexpr uint32_t CHARACTER_SELECT_P2_OK_ACTIVE_ADDR = 0x80750C80;
+    static constexpr uint32_t CHARACTER_SELECT_P1_CURSOR_ADDR = 0x80750c48;
+    static constexpr uint32_t CHARACTER_SELECT_P2_CURSOR_ADDR = 0x80750c4C;
+    static constexpr uint32_t CHARACTER_SELECT_PREVENT_CURSOR_MOVEMENT_ADDR = 0x8064df60;
 
     static constexpr uint32_t STADIUM_ADDR = 0x80750c37;
     static constexpr uint32_t STADIUM_CURSOR_RIGHT_INSTR_ADDR = 0x80650586;
