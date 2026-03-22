@@ -27,7 +27,7 @@ static std::string ToGeckoLine(uint8_t geckoType, uint32_t address, uint32_t val
 void GenerateRosterGeckoCodes(
     const std::optional<uint8_t> charactersByPosition[9],
     uint32_t rosterBaseAddress,
-    uint32_t stride = 1,
+    uint32_t stride,
     uint32_t spotFilledAddress,
     uint32_t okButtonActiveAddress,
     uint32_t cursorLocationAddress,
@@ -77,7 +77,7 @@ void GenerateTeamScoreGeckoCodes(
     const std::optional<uint16_t> inningScores[18],
     uint32_t currentScoreAddress,
     uint32_t inningScoresBaseAddress,
-    uint32_t stride = 2,  // default 2 bytes between innings
+    uint32_t stride,  // default 2 bytes between innings
     std::vector<std::string>& outLines
 )
 {
