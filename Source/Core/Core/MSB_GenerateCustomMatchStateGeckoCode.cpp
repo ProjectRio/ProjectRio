@@ -344,10 +344,36 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
                 ORDER_AND_POSITION_STRUCT_HOME_BASE,
                 lines);
 
+            // runners on base
+            // will only work if the characterByPosition argument is also given. 
+            // take care to ensure the values given align with characterByPosition.
+            for (int i = 0; i < 3; i++) 
+            {
+                if (state.runnerRosterSpot[i].has_value() && state.runnerCharacterID[i].has_value())
+                {
+                    lines.push_back(ToGeckoLine(0x02, RUNNER_ROSTER_LOCATION_BASE + RUNNER_STRIDE * i, state.runnerRosterSpot[i].value()));
+                    lines.push_back(ToGeckoLine(0x02, RUNNER_CHARACTER_ID_BASE + RUNNER_STRIDE * i, state.runnerCharacterID[i].value()));
+
+                    // nop the instruction that clears the roster ID when the game starts
+                    lines.push_back(ToGeckoLine(0x04, RUNNER_NOP_BASE + RUNNER_NOP_STRIDE * i, 0x60000000));
+                }
+            }
+            
+
+
         lines.push_back("E0000000 80008000"); // end game-not-started conditional
         
         // after match started codes - generally everyting should be set before this, but there is some post processing that could be needed.
         lines.push_back(ToGeckoLine(0x28, HAS_GAME_STARTED_ADDR, (GAME_STARTED_MASK << 16) | GAME_STARTED));
+
+            // if runners initialized, replace the nop'd instruction once the game starts
+            for (int i = 0; i < 3; i++) 
+            {
+                if (state.runnerRosterSpot[i].has_value() && state.runnerCharacterID[i].has_value())
+                {
+                    lines.push_back(ToGeckoLine(0x04, RUNNER_NOP_BASE + RUNNER_NOP_STRIDE * i, RUNNER_REPLACEMENT_INSTRUCTIONS[i]));
+                }
+            }
 
         lines.push_back("E0000000 80008000"); // end game-has-started conditional
     lines.push_back("E0000000 80008000"); // end in-game conditional

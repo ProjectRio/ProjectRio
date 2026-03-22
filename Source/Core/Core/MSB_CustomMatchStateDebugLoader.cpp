@@ -103,6 +103,20 @@ MSBGameState LoadDebugState(const std::string& path)
                 state.awayPositionByBattingOrder[order] = v;
         }
 
+        else if (key.rfind("runnerRosterID", 0) == 0)
+        {
+            int runner = std::stoi(key.substr(14));
+            if (runner >= 0 && runner < 3)
+                state.runnerRosterSpot[runner] = v;
+        }
+
+        else if (key.rfind("runnerCharacterID", 0) == 0)
+        {
+            int runner = std::stoi(key.substr(17));
+            if (runner >= 0 && runner < 3)
+                state.runnerCharacterID[runner] = v;
+        }
+
         else
         {
             // Optional logging for unknown keys
