@@ -12,7 +12,7 @@ struct MSBGameState
     // Pre-game constants
     std::optional<uint8_t> stadium; // 0=Mario, 1=Bowser, 2=Wario, 3=Yoshi, 4=Peach, 5=DK, 6=TF
 
-    //TODO add first batter
+    std::optional<uint8_t> firstBatter; // 0=P1, 1=P2
     std::optional<uint8_t> starSkills; // 0=off, 1=on
     
     // actual int of the innings, not the cursor index. 
@@ -69,7 +69,7 @@ public:
     static constexpr uint32_t STADIUM_CURSOR_RIGHT_INSTR_ADDR = 0x80650586;
     static constexpr uint32_t STADIUM_CURSOR_LEFT_INSTR_ADDR = 0x80650536;
 
-    //static constexpr uint32_t FIRST_BATTER_ADDR = 0x803c5f40;
+    static constexpr uint32_t FIRST_BATTER_ADDR = 0x803c5f40;
     static constexpr uint32_t STAR_SKILLS_ADDR = 0x803c5f41;
     static constexpr uint32_t INNINGS_SELECTED_ADDR = 0x803c5f42;
     static constexpr uint32_t MERCY_ADDR = 0x803c5f43;

@@ -141,7 +141,8 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
             lines.push_back(ToGeckoLine(0x02, STADIUM_CURSOR_LEFT_INSTR_ADDR, 0x0000));
         };
 
-        // TODO: add first bat logic
+        if (state.firstBatter.has_value())
+            lines.push_back(ToGeckoLine(0x00, FIRST_BATTER_ADDR, state.firstBatter.value()));
 
         if (state.starSkills.has_value())
             lines.push_back(ToGeckoLine(0x00, STAR_SKILLS_ADDR, state.starSkills.value()));
@@ -160,11 +161,12 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
         if (state.mercy.has_value())
             lines.push_back(ToGeckoLine(0x00, MERCY_ADDR, state.mercy.value()));
 
-        if (state.starSkills.has_value() &&
+        // if all game settings are specified, prevent cursor movement on that screen
+        if (state.firstBatter.has_value() &&
+            state.starSkills.has_value() &&
             state.inningsSelected.has_value() &&
-            state.mercy.has_value()) // TODO add first batter here
+            state.mercy.has_value()) 
         {
-            // if all options are set, prevent cursor movement on game settings screen
             lines.push_back(ToGeckoLine(0x02, GAME_SETTINGS_CURSOR_RIGHT_INSTR_ADDR, 0x0000));
             lines.push_back(ToGeckoLine(0x02, GAME_SETTINGS_CURSOR_LEFT_INSTR_ADDR, 0x0000));
         }

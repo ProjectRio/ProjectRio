@@ -35,7 +35,7 @@ MSBGameState LoadDebugState(const std::string& path)
 
         if (key == "stadium") state.stadium = v;
 
-        //TODO add first batter
+        else if (key == "firstBatter") state.firstBatter = v;
         else if (key == "starSkills") state.starSkills = v;
         else if (key == "inningsSelected") state.inningsSelected = v;
         else if (key == "mercy") state.mercy = v;
@@ -81,3 +81,23 @@ MSBGameState LoadDebugState(const std::string& path)
 
     return state;
 }
+
+// User/Debug/msb_state.txt
+// stadium=1
+// starSkills=1
+// inningsSelected=9
+// mercy=1
+// logoP1=5
+// logoP2=30
+// inning=4
+// halfInning=1
+// awayScore=4
+// homeScore=6
+// homeInning0=1
+// homeInning1=3
+// homeInning2=2
+// strikes=1
+// balls=2
+// outs=1
+// awayTeamStars=4
+// homeTeamStars=2
