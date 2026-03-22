@@ -48,7 +48,7 @@ void GenerateRosterGeckoCodes(
     if (rosterProvided)
     {
         // set spot filled indicators
-        outLines.push_back(ToGeckoLine(0x00, spotFilledAddress, 0x10000001));
+        outLines.push_back(ToGeckoLine(0x00, spotFilledAddress, 0x00080001));
 
         // make OK button selectable
         outLines.push_back(ToGeckoLine(0x00, okButtonActiveAddress, 0x01));
