@@ -22,7 +22,7 @@ static std::string ToGeckoLine(uint8_t geckoType, uint32_t address, uint32_t val
         << " "
         << std::setw(8) << value;
 
-    INFO_LOG_FMT(COMMON, "Gecko code produced: {}". oss.str());
+    INFO_LOG_FMT(COMMON, "Gecko code produced: {}", oss.str());
 
     return oss.str();
 }
@@ -58,7 +58,7 @@ void GenerateRosterGeckoCodes(
         // make OK button selectable
         outLines.push_back(ToGeckoLine(0x00, okButtonActiveAddress, 0x01));
 
-        // put corsor on OK button
+        // put cursor on OK button
         outLines.push_back(ToGeckoLine(0x04, cursorLocationAddress, 0x09));
 
         // fill rosters with character IDs
@@ -70,7 +70,7 @@ void GenerateRosterGeckoCodes(
             {
                 // if character not given, default to Mario
                 outLines.push_back(ToGeckoLine(0x00, rosterBaseAddress + i*stride, 0x00));
-                std::cout << "Missing character " << i << " to put at address " << rosterBaseAddress + i*stride << std::endl;
+                ERROR_LOG_FMT(COMMON, "Missing character {} at address {:#010x}, defaulting to Mario", i, rosterBaseAddress + i*stride);
             }
         }
     }
@@ -90,27 +90,19 @@ void GenerateTeamScoreGeckoCodes(
 
     // Determine if any inning scores are provided
     bool inningScoresProvided = false;
-    uint32_t inningScoresSum = 0;
+    uint16_t inningScoresSum = 0;
     for (int i = 0; i < 18; ++i)
     {
         const auto& scoreOpt = inningScores[i];
         if (scoreOpt.has_value())
         {
             inningScoresProvided = true;
-            int val = scoreOpt.value();
-            // Validate value
-            if (val < 0) val = 0;
-            inningScoresSum += val;
+            inningScoresSum += scoreOpt.value();
         }
     }
 
     bool totalScoreProvided = currentScore.has_value();
     uint16_t totalScore = totalScoreProvided ? currentScore.value() : 0;
-    if (totalScore <0)
-    {
-        totalScore = 0;
-        std::cout << "Error: Total score: " << totalScore << " less than 0. Changing to 0." << std::endl;
-    }
 
     // Case: both total score and inning scores provided
     if (totalScoreProvided && inningScoresProvided)
@@ -119,8 +111,8 @@ void GenerateTeamScoreGeckoCodes(
         if (totalScore != inningScoresSum)
         {
             // mismatch → set total to 99 to show error
+            ERROR_LOG_FMT(COMMON, "Score mismatch: {} vs sum {}", totalScore, inningScoresSum);
             totalScore = 99;
-            std::cout << "Score mismatch: " << totalScore << " vs sum " << inningScoresSum << std::endl;
         }
 
         // Generate total score Gecko code
@@ -133,7 +125,6 @@ void GenerateTeamScoreGeckoCodes(
             if (scoreOpt.has_value())
             {
                 uint16_t val = scoreOpt.value();
-                val = std::max<uint16_t>(0, scoreOpt.value()); // validate non-negative
                 outLines.push_back(ToGeckoLine(0x02, inningScoresBaseAddress + i*stride, val));
             }
         }
@@ -226,7 +217,7 @@ void GeneratePitcherStaminaGeckoCodes(
 {
     INFO_LOG_FMT(COMMON, "Running GeneratePitcherStaminaGeckoCodes function");
 
-    for (i = 0; i < 9; i++)
+    for (int i = 0; i < 9; i++)
     {
         if (staminaList[i].has_value())
         {
@@ -290,7 +281,7 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
             // prevent cursor movement on stadium select screen
             lines.push_back(ToGeckoLine(0x02, STADIUM_CURSOR_RIGHT_INSTR_ADDR, 0x0000));
             lines.push_back(ToGeckoLine(0x02, STADIUM_CURSOR_LEFT_INSTR_ADDR, 0x0000));
-        };
+        }
 
         if (state.firstBatter.has_value())
             lines.push_back(ToGeckoLine(0x00, FIRST_BATTER_ADDR, state.firstBatter.value()));
@@ -397,7 +388,7 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
 
         lines.push_back("E0000000 80008000"); // end game-not-started conditional
         
-        // after match started codes - generally everyting should be set before this, but there is some post processing that could be needed.
+        // after match started codes - generally everything should be set before this, but there is some post processing that could be needed.
         lines.push_back(ToGeckoLine(0x28, HAS_GAME_STARTED_ADDR, (GAME_STARTED_MASK << 16) | GAME_STARTED));
 
             // if runners initialized, replace the nop'd instruction once the game starts
