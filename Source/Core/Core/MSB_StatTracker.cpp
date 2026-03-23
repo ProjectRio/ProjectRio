@@ -245,10 +245,18 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                     logGameInfo(guard);
 
                     if (m_game_info.getCurrentEvent().write_hud_ab.first) {
+                        // decoded version
                         std::string hud_file_path = File::GetUserPath(D_HUDFILES_IDX) + "decoded.hud.json";
                         std::string json = getHUDJSON(std::to_string(m_game_info.event_num) + "a", m_game_info.getCurrentEvent(), m_game_info.previous_state, true);
                         File::Delete(hud_file_path);
                         File::WriteStringToFile(hud_file_path, json);
+
+                        // encoded version
+                        hud_file_path = File::GetUserPath(D_HUDFILES_IDX) + "hud.json";
+                        json = getHUDJSON(std::to_string(m_game_info.event_num) + "a", m_game_info.getCurrentEvent(), m_game_info.previous_state, false);
+                        File::Delete(hud_file_path);
+                        File::WriteStringToFile(hud_file_path, json);
+  
                         //No longer need to write HUD B
                         m_game_info.getCurrentEvent().write_hud_ab.first = false;
                     }
@@ -436,8 +444,15 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                     //Store current state as previous state
                     m_game_info.previous_state = m_game_info.getCurrentEvent();
 
+                    // decoded version
                     std::string hud_file_path = File::GetUserPath(D_HUDFILES_IDX) + "decoded.hud.json";
                     std::string json = getHUDJSON(std::to_string(m_game_info.event_num) + "b", m_game_info.getCurrentEvent(), m_game_info.previous_state, true);
+                    File::Delete(hud_file_path);
+                    File::WriteStringToFile(hud_file_path, json);
+
+                    // encoded version
+                    hud_file_path = File::GetUserPath(D_HUDFILES_IDX) + "hud.json";
+                    json = getHUDJSON(std::to_string(m_game_info.event_num) + "b", m_game_info.getCurrentEvent(), m_game_info.previous_state, false);
                     File::Delete(hud_file_path);
                     File::WriteStringToFile(hud_file_path, json);
 
