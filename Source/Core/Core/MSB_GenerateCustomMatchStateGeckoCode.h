@@ -59,7 +59,7 @@ struct MSBGameState
     std::optional<uint16_t> runnerRosterSpot[3]; // use their index in the characterByPosition struct.
     std::optional<uint16_t> runnerCharacterID[3];
 
-    // note the P1/P2 basis. Also, array based on roster ID, not batting order.
+    // note the P1/P2 basis. Also, array based on batting order.
     std::optional<uint16_t> pitcherStaminaP1[9];
     std::optional<uint16_t> pitcherStaminaP2[9];
 };
