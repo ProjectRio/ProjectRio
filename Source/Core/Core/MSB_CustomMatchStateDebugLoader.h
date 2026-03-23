@@ -3,4 +3,4 @@
 #include <string>
 #include "MSB_GenerateCustomMatchStateGeckoCode.h"
 
-MSBGameState LoadDebugState(const std::string& path);
+bool LoadDebugState(const std::string& path, MSBGameState& outState);

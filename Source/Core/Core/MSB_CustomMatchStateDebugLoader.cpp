@@ -36,7 +36,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         std::getline(ss, value);
 
         int v = 0;
-        std::istringstream iss(value);
+        std::istringstream indexIss(value);
         if (!(iss >> v))
         {
             WARN_LOG_FMT(COMMON, "Failed to parse value for key={}", key);
@@ -51,7 +51,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         else if (key.rfind("p1Character", 0) == 0)
         {
             int characterNumber = 0;
-            std::istringstream iss(key.substr(11));
+            std::istringstream indexIss(key.substr(11));
             if (!(iss >> characterNumber)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
@@ -64,7 +64,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         else if (key.rfind("p2Character", 0) == 0)
         {
             int characterNumber = 0;
-            std::istringstream iss(key.substr(11));
+            std::istringstream indexIss(key.substr(11));
             if (!(iss >> characterNumber)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
@@ -102,7 +102,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         else if (key.rfind("awayInning", 0) == 0)
         {
             int inning = 0;
-            std::istringstream iss(key.substr(10));
+            std::istringstream indexIss(key.substr(10));
             if (!(iss >> inning)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
@@ -115,7 +115,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         else if (key.rfind("homeInning", 0) == 0)
         {
             int inning = 0;
-            std::istringstream iss(key.substr(10));
+            std::istringstream indexIss(key.substr(10));
             if (!(iss >> inning)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
@@ -128,7 +128,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         else if (key.rfind("awayPosition", 0) == 0)
         {
             int order = 0;
-            std::istringstream iss(key.substr(12));
+            std::istringstream indexIss(key.substr(12));
             if (!(iss >> order)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
@@ -141,7 +141,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         else if (key.rfind("homePosition", 0) == 0)
         {
             int order = 0;
-            std::istringstream iss(key.substr(12));
+            std::istringstream indexIss(key.substr(12));
             if (!(iss >> order)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
@@ -156,7 +156,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         else if (key.rfind("runnerRosterID", 0) == 0)
         {
             int runner = 0;
-            std::istringstream iss(key.substr(14));
+            std::istringstream indexIss(key.substr(14));
             if (!(iss >> runner)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
@@ -169,7 +169,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         else if (key.rfind("runnerCharacterID", 0) == 0)
         {
             int runner = 0;
-            std::istringstream iss(key.substr(17));
+            std::istringstream indexIss(key.substr(17));
             if (!(iss >> runner)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
@@ -182,7 +182,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         else if (key.rfind("p1Stamina", 0) == 0)
         {
             int pitcher = 0;
-            std::istringstream iss(key.substr(9));
+            std::istringstream indexIss(key.substr(9));
             if (!(iss >> pitcher)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
@@ -195,7 +195,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         else if (key.rfind("p2Stamina", 0) == 0)
         {
             int pitcher = 0;
-            std::istringstream iss(key.substr(9));
+            std::istringstream indexIss(key.substr(9));
             if (!(iss >> pitcher)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
