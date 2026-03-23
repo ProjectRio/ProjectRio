@@ -58,6 +58,10 @@ struct MSBGameState
     // needs to align the batting team's given roster order and characters
     std::optional<uint16_t> runnerRosterSpot[3]; // use their index in the characterByPosition struct.
     std::optional<uint16_t> runnerCharacterID[3];
+
+    // note the P1/P2 basis. Also, array based on roster ID, not batting order.
+    std::optional<uint16_t> pitcherStaminaP1[9];
+    std::optional<uint16_t> pitcherStaminaP2[9];
 };
 
 class MSBMatchCodeBuilder
@@ -141,4 +145,7 @@ public:
     static constexpr uint32_t RUNNER_NOP_STRIDE = 0x30;
     static constexpr uint32_t RUNNER_REPLACEMENT_INSTRUCTIONS[3] = {0xB0650234, 0xB06500E0, 0xB06500E0};
 
+    static constexpr uint32_t PITCHER_STAMINA_P1_BASE = 0x803535d8;
+    static constexpr uint32_t PITCHER_STAMINA_P2_BASE = 0x803536e6;
+    static constexpr uint32_t PITCHER_STAMINA_STRIDE = 0x1E;
 };

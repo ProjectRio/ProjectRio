@@ -120,6 +120,20 @@ MSBGameState LoadDebugState(const std::string& path)
                 state.runnerCharacterID[runner] = v;
         }
 
+        else if (key.rfind("p1Stamina", 0) == 0)
+        {
+            int pitcher = std::stoi(key.substr(9));
+            if (pitcher >= 0 && pitcher < 9)
+                state.pitcherStaminaP1[pitcher] = v;
+        }
+
+        else if (key.rfind("p2Stamina", 0) == 0)
+        {
+            int pitcher = std::stoi(key.substr(9));
+            if (pitcher >= 0 && pitcher < 9)
+                state.pitcherStaminaP2[pitcher] = v;
+        }
+
         else
         {
             WARN_LOG_FMT(COMMON, "Failed to find key match. key={}, value={}", key, value);

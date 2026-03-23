@@ -218,6 +218,25 @@ void GenerateOrderAndPositionGeckoCodes(
     }
 }
 
+void GeneratePitcherStaminaGeckoCodes(
+    const std::optional<uint16_t> staminaList[9],
+    uint32_t baseAddr,
+    std::vector<std::string>& outLines
+)
+{
+    INFO_LOG_FMT(COMMON, "Running GeneratePitcherStaminaGeckoCodes function");
+
+    for (i = 0; i < 9; i++)
+    {
+        if (staminaList[i].has_value())
+        {
+            uint32_t address = baseAddr + MSBMatchCodeBuilder::PITCHER_STAMINA_STRIDE * i;
+            outLines.push_back(ToGeckoLine(0x02, address, staminaList[i].value()));
+
+        }
+    }
+}
+
 void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
     const std::string& game_id,
     const MSBGameState& state,
@@ -371,8 +390,10 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
                     lines.push_back(ToGeckoLine(0x04, RUNNER_NOP_BASE + RUNNER_NOP_STRIDE * i, 0x60000000));
                 }
             }
-            
 
+            // pitcher stamina. On a P1/P2 basis, and uses roster ID instead of batting order.
+            GeneratePitcherStaminaGeckoCodes(state.pitcherStaminaP1, PITCHER_STAMINA_P1_BASE, lines);
+            GeneratePitcherStaminaGeckoCodes(state.pitcherStaminaP2, PITCHER_STAMINA_P2_BASE, lines);
 
         lines.push_back("E0000000 80008000"); // end game-not-started conditional
         
