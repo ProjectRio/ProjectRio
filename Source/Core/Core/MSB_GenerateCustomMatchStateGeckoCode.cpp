@@ -185,7 +185,7 @@ void GenerateOrderAndPositionGeckoCodes(
 
     if (positionsProvided)
     {
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < 9; i++)
         {
             // i + 1 since first index is a copy of the pitchers spot in the order + position.
             uint32_t address = 
@@ -193,13 +193,17 @@ void GenerateOrderAndPositionGeckoCodes(
                 MSBMatchCodeBuilder::ORDER_AND_POSITION_STRUCT_CHARACTER_STRIDE * (i + 1) + 
                 MSBMatchCodeBuilder::ORDER_AND_POSITION_STRUCT_POSITION_STRIDE;
 
-            outLines.push_back(ToGeckoLine(0x04, address, positionByBattingOrder[i].value()));
-
-            // if pitcher, fill in their spot in the batting order
-            if (positionByBattingOrder[i].value() == 0)
+            if (positionByBattingOrder[i].has_value())
             {
-                outLines.push_back(ToGeckoLine(0x04, structBase, i));
-                outLines.push_back(ToGeckoLine(0x04, structBase + MSBMatchCodeBuilder::ORDER_AND_POSITION_STRUCT_POSITION_STRIDE, 0x00000000));
+                uint32_t val = positionByBattingOrder[i].value();
+                outLines.push_back(ToGeckoLine(0x04, address, val));
+
+                // if pitcher, fill in their spot in the batting order
+                if (val == 0)
+                {
+                    outLines.push_back(ToGeckoLine(0x04, structBase, static_cast<uint32_t>(i)));
+                    outLines.push_back(ToGeckoLine(0x04, structBase + MSBMatchCodeBuilder::ORDER_AND_POSITION_STRUCT_POSITION_STRIDE, 0x00000000));
+                }
             }
         }
     }
