@@ -36,7 +36,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         std::getline(ss, value);
 
         int v = 0;
-        std::istringstream indexIss(value);
+        std::istringstream iss(value);
         if (!(iss >> v))
         {
             WARN_LOG_FMT(COMMON, "Failed to parse value for key={}", key);
@@ -52,7 +52,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         {
             int characterNumber = 0;
             std::istringstream indexIss(key.substr(11));
-            if (!(iss >> characterNumber)) 
+            if (!(indexIss >> characterNumber)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
                 continue;
@@ -65,7 +65,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         {
             int characterNumber = 0;
             std::istringstream indexIss(key.substr(11));
-            if (!(iss >> characterNumber)) 
+            if (!(indexIss >> characterNumber)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
                 continue;
@@ -103,7 +103,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         {
             int inning = 0;
             std::istringstream indexIss(key.substr(10));
-            if (!(iss >> inning)) 
+            if (!(indexIss >> inning)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
                 continue;
@@ -116,7 +116,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         {
             int inning = 0;
             std::istringstream indexIss(key.substr(10));
-            if (!(iss >> inning)) 
+            if (!(indexIss >> inning)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
                 continue;
@@ -129,7 +129,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         {
             int order = 0;
             std::istringstream indexIss(key.substr(12));
-            if (!(iss >> order)) 
+            if (!(indexIss >> order)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
                 continue;
@@ -142,7 +142,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         {
             int order = 0;
             std::istringstream indexIss(key.substr(12));
-            if (!(iss >> order)) 
+            if (!(indexIss >> order)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
                 continue;
@@ -157,7 +157,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         {
             int runner = 0;
             std::istringstream indexIss(key.substr(14));
-            if (!(iss >> runner)) 
+            if (!(indexIss >> runner)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
                 continue;
@@ -170,7 +170,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         {
             int runner = 0;
             std::istringstream indexIss(key.substr(17));
-            if (!(iss >> runner)) 
+            if (!(indexIss >> runner)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
                 continue;
@@ -183,7 +183,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         {
             int pitcher = 0;
             std::istringstream indexIss(key.substr(9));
-            if (!(iss >> pitcher)) 
+            if (!(indexIss >> pitcher)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
                 continue;
@@ -196,7 +196,7 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
         {
             int pitcher = 0;
             std::istringstream indexIss(key.substr(9));
-            if (!(iss >> pitcher)) 
+            if (!(indexIss >> pitcher)) 
             {
                 WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
                 continue;
