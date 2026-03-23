@@ -5,15 +5,18 @@
 #include <string>
 #include "Common/Logging/Log.h"
 
-// If using Dolphin logging
-// #include "Common/Logging/Log.h"
-
-MSBGameState LoadDebugState(const std::string& path)
+bool LoadDebugState(const std::string& path, MSBGameState& outState)
 {
     MSBGameState state;
 
     std::ifstream file(path);
     std::string line;
+
+    if (!file.is_open())
+    {
+        ERROR_LOG_FMT(COMMON, "Failed to open debug state file: {}", path);
+        return false;
+    }
 
     while (std::getline(file, line))
     {
@@ -33,10 +36,10 @@ MSBGameState LoadDebugState(const std::string& path)
         std::getline(ss, value);
 
         int v = 0;
-        try {
-            v = std::stoi(value);
-        } catch (const std::exception& e) {
-            WARN_LOG_FMT(COMMON, "Failed to parse value for key={}: {}", key, e.what());
+        std::istringstream iss(value);
+        if (!(iss >> v))
+        {
+            WARN_LOG_FMT(COMMON, "Failed to parse value for key={}", key);
             continue;
         }
 
@@ -47,14 +50,26 @@ MSBGameState LoadDebugState(const std::string& path)
 
         else if (key.rfind("p1Character", 0) == 0)
         {
-            int characterNumber = std::stoi(key.substr(11));
+            int characterNumber = 0;
+            std::istringstream iss(key.substr(11));
+            if (!(iss >> characterNumber)) 
+            {
+                WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
+                continue;
+            }
             if (characterNumber >= 0 && characterNumber < 9)
                 state.charactersP1ByPosition[characterNumber] = v;
         }
 
         else if (key.rfind("p2Character", 0) == 0)
         {
-            int characterNumber = std::stoi(key.substr(11));
+            int characterNumber = 0;
+            std::istringstream iss(key.substr(11));
+            if (!(iss >> characterNumber)) 
+            {
+                WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
+                continue;
+            }
             if (characterNumber >= 0 && characterNumber < 9)
                 state.charactersP2ByPosition[characterNumber] = v;
         }
@@ -84,58 +99,108 @@ MSBGameState LoadDebugState(const std::string& path)
 
         else if (key == "isStarChance") state.isStarChance = v;
 
-        else if (key.rfind("homeInning", 0) == 0)
-        {
-            int inning = std::stoi(key.substr(10));
-            if (inning >= 0 && inning < 18)
-                state.homeInningScores[inning] = v;
-        }
-
         else if (key.rfind("awayInning", 0) == 0)
         {
-            int inning = std::stoi(key.substr(10));
+            int inning = 0;
+            std::istringstream iss(key.substr(10));
+            if (!(iss >> inning)) 
+            {
+                WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
+                continue;
+            }
             if (inning >= 0 && inning < 18)
                 state.awayInningScores[inning] = v;
         }
 
+        else if (key.rfind("homeInning", 0) == 0)
+        {
+            int inning = 0;
+            std::istringstream iss(key.substr(10));
+            if (!(iss >> inning)) 
+            {
+                WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
+                continue;
+            }
+            if (inning >= 0 && inning < 18)
+                state.homeInningScores[inning] = v;
+        }
+
         else if (key.rfind("awayPosition", 0) == 0)
         {
-            int order = std::stoi(key.substr(12));
+            int order = 0;
+            std::istringstream iss(key.substr(12));
+            if (!(iss >> order)) 
+            {
+                WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
+                continue;
+            }
             if (order >= 0 && order < 9)
                 state.awayPositionByBattingOrder[order] = v;
         }
 
         else if (key.rfind("homePosition", 0) == 0)
         {
-            int order = std::stoi(key.substr(12));
+            int order = 0;
+            std::istringstream iss(key.substr(12));
+            if (!(iss >> order)) 
+            {
+                WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
+                continue;
+            }
             if (order >= 0 && order < 9)
                 state.homePositionByBattingOrder[order] = v;
         }
+    
+
 
         else if (key.rfind("runnerRosterID", 0) == 0)
         {
-            int runner = std::stoi(key.substr(14));
+            int runner = 0;
+            std::istringstream iss(key.substr(14));
+            if (!(iss >> runner)) 
+            {
+                WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
+                continue;
+            }
             if (runner >= 0 && runner < 3)
                 state.runnerRosterSpot[runner] = v;
         }
 
         else if (key.rfind("runnerCharacterID", 0) == 0)
         {
-            int runner = std::stoi(key.substr(17));
+            int runner = 0;
+            std::istringstream iss(key.substr(17));
+            if (!(iss >> runner)) 
+            {
+                WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
+                continue;
+            }
             if (runner >= 0 && runner < 3)
                 state.runnerCharacterID[runner] = v;
         }
 
         else if (key.rfind("p1Stamina", 0) == 0)
         {
-            int pitcher = std::stoi(key.substr(9));
+            int pitcher = 0;
+            std::istringstream iss(key.substr(9));
+            if (!(iss >> pitcher)) 
+            {
+                WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
+                continue;
+            }
             if (pitcher >= 0 && pitcher < 9)
                 state.pitcherStaminaP1[pitcher] = v;
         }
 
         else if (key.rfind("p2Stamina", 0) == 0)
         {
-            int pitcher = std::stoi(key.substr(9));
+            int pitcher = 0;
+            std::istringstream iss(key.substr(9));
+            if (!(iss >> pitcher)) 
+            {
+                WARN_LOG_FMT(COMMON, "Failed to parse index for key={}", key);
+                continue;
+            }
             if (pitcher >= 0 && pitcher < 9)
                 state.pitcherStaminaP2[pitcher] = v;
         }
@@ -146,7 +211,8 @@ MSBGameState LoadDebugState(const std::string& path)
         }
     }
 
-    return state;
+    outState = state;
+    return true;
 }
 
 // User/Debug/msb_state.txt

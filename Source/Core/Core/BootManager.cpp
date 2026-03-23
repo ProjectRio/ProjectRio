@@ -82,32 +82,14 @@ bool BootCore(std::unique_ptr<BootParameters> boot, const WindowSystemInfo& wsi)
   }
 
 MSBGameState state;
-bool loadSucceeded = false;
 
-try 
+if (LoadDebugState("User/Debug/msb_state.txt", state))
 {
-    state = LoadDebugState("User/Debug/msb_state.txt");
-    loadSucceeded = true;
-}
-catch (...)
-{
-    ERROR_LOG_FMT(COMMON, "Debug loader failed");
-}
-
-if (loadSucceeded)
-{
-    try 
-    {
-        MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
-            "GYQE01",
-            state,
-            "Debug Match State"
-        );
-    }
-    catch (...)
-    {
-        ERROR_LOG_FMT(COMMON, "Code builder failed");
-    }
+    MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
+        "GYQE01",
+        state,
+        "Debug Match State"
+    );
 }
 
   // Movie settings
