@@ -65,13 +65,15 @@ void GenerateRosterGeckoCodes(
         for (int i = 0; i < 9; i++)
         {
             if (charactersByPosition[i].has_value())
-                outLines.push_back(ToGeckoLine(0x00, rosterBaseAddress + i*stride, charactersByPosition[i].value()));
-            else 
             {
-                // if character not given, default to Mario
-                outLines.push_back(ToGeckoLine(0x00, rosterBaseAddress + i*stride, 0x00));
-                ERROR_LOG_FMT(COMMON, "Missing character {} at address {:#010x}, defaulting to Mario", i, rosterBaseAddress + i*stride);
+                uint8_t val = charactersByPosition[i].value();
+                if (val > 0x35)
+                    WARN_LOG_FMT(COMMON, "{} not a valid character ID for position {}. No gecko code produced.", val, i);
+                else
+                    outLines.push_back(ToGeckoLine(0x00, rosterBaseAddress + i*stride, val));
             }
+            else 
+                ERROR_LOG_FMT(COMMON, "Missing character {} at address {:#010x}.", i, rosterBaseAddress + i*stride);
         }
     }
 }
@@ -153,7 +155,6 @@ void GenerateTeamScoreGeckoCodes(
             if (scoreOpt.has_value())
             {
                 uint16_t val = scoreOpt.value();
-                val = std::max<uint16_t>(0, scoreOpt.value()); // validate non-negative
                 outLines.push_back(ToGeckoLine(0x02, inningScoresBaseAddress + i*stride, val));
             }
         }
@@ -196,7 +197,10 @@ void GenerateOrderAndPositionGeckoCodes(
             if (positionByBattingOrder[i].has_value())
             {
                 uint32_t val = positionByBattingOrder[i].value();
-                outLines.push_back(ToGeckoLine(0x04, address, val));
+                if (val > 0x8)
+                    WARN_LOG_FMT(COMMON, "Position not valid: {} for batting order index {}. No gecko code produced.", val, i);
+                else
+                    outLines.push_back(ToGeckoLine(0x04, address, val));
 
                 // if pitcher, fill in their spot in the batting order
                 if (val == 0)
@@ -240,10 +244,22 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
     lines.push_back(ToGeckoLine(0x28, REL_ADDR, MAIN_MENU_REL));
     
         if (state.captainCharacterP1.has_value())
-            lines.push_back(ToGeckoLine(0x04, CAPTAIN_CHARACTER_P1_ADDR, state.captainCharacterP1.value()));
+        {
+            uint32_t val = state.captainCharacterP1.value();
+            if (val > 0x35)
+                WARN_LOG_FMT(COMMON, "P1 captain not a valid character ID: {}. No gecko code produced.", val);
+            else
+                lines.push_back(ToGeckoLine(0x04, CAPTAIN_CHARACTER_P1_ADDR, state.captainCharacterP1.value()));
+        }
 
         if (state.captainCharacterP2.has_value())
-            lines.push_back(ToGeckoLine(0x04, CAPTAIN_CHARACTER_P2_ADDR, state.captainCharacterP2.value()));
+        {
+            uint32_t val = state.captainCharacterP2.value();
+            if (val > 0x35)
+                WARN_LOG_FMT(COMMON, "P2 captain not a valid character ID: {}. No gecko code produced.", val);
+            else
+                lines.push_back(ToGeckoLine(0x04, CAPTAIN_CHARACTER_P2_ADDR, state.captainCharacterP2.value()));
+        }
         
         GenerateRosterGeckoCodes(
             state.charactersP1ByPosition, 
@@ -268,26 +284,56 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
             lines.push_back(ToGeckoLine(0x04, CHARACTER_SELECT_PREVENT_CURSOR_MOVEMENT_ADDR, 0x60000000));
 
         if (state.logoP1.has_value())
-            lines.push_back(ToGeckoLine(0x00, LOGO_P1_ADDR, state.logoP1.value()));
+        {
+            uint8_t val = state.logoP1.value();
+            if (val > 0x2F)
+                WARN_LOG_FMT(COMMON, "P1 logo ID not valid: {}. No gecko code produced.", val);
+            else
+                lines.push_back(ToGeckoLine(0x00, LOGO_P1_ADDR, val));
+        }
 
         if (state.logoP2.has_value())
-            lines.push_back(ToGeckoLine(0x00, LOGO_P2_ADDR, state.logoP2.value()));
+        {
+            uint8_t val = state.logoP2.value();
+            if (val > 0x2F)
+                WARN_LOG_FMT(COMMON, "P2 logo ID not valid: {}. No gecko code produced.", val);
+            else
+                lines.push_back(ToGeckoLine(0x00, LOGO_P2_ADDR, val));
+        }
 
         if (state.stadium.has_value())
         {
-            // 0=Mario, 1=Bowser, 2=Wario, 3=Yoshi, 4=Peach, 5=DK, 6=TF
-            lines.push_back(ToGeckoLine(0x00, STADIUM_ADDR, state.stadium.value()));
+            uint8_t val = state.stadium.value();
+            if (val > 0x6)
+                WARN_LOG_FMT(COMMON, "Stadium ID not valid: {}. No gecko code produced.", val);
+            else
+            {
+                // 0=Mario, 1=Bowser, 2=Wario, 3=Yoshi, 4=Peach, 5=DK, 6=TF
+                lines.push_back(ToGeckoLine(0x00, STADIUM_ADDR, val));
 
-            // prevent cursor movement on stadium select screen
-            lines.push_back(ToGeckoLine(0x02, STADIUM_CURSOR_RIGHT_INSTR_ADDR, 0x0000));
-            lines.push_back(ToGeckoLine(0x02, STADIUM_CURSOR_LEFT_INSTR_ADDR, 0x0000));
+                // prevent cursor movement on stadium select screen
+                lines.push_back(ToGeckoLine(0x02, STADIUM_CURSOR_RIGHT_INSTR_ADDR, 0x0000));
+                lines.push_back(ToGeckoLine(0x02, STADIUM_CURSOR_LEFT_INSTR_ADDR, 0x0000));
+            }
         }
 
         if (state.firstBatter.has_value())
-            lines.push_back(ToGeckoLine(0x00, FIRST_BATTER_ADDR, state.firstBatter.value()));
+        {
+            uint8_t val = state.firstBatter.value();
+            if (val > 0x1)
+                WARN_LOG_FMT(COMMON, "First bat setting not valid: {}. No gecko code produced.", val);
+            else
+                lines.push_back(ToGeckoLine(0x00, FIRST_BATTER_ADDR, val));
+        }
 
         if (state.starSkills.has_value())
-            lines.push_back(ToGeckoLine(0x00, STAR_SKILLS_ADDR, state.starSkills.value()));
+        {
+            uint8_t val = state.starSkills.value();
+            if (val > 0x1)
+                WARN_LOG_FMT(COMMON, "Star skill setting not valid: {}. No gecko code produced.", val);
+            else
+                lines.push_back(ToGeckoLine(0x00, STAR_SKILLS_ADDR, val));
+        }
 
         if (state.inningsSelected.has_value())
         {
@@ -296,12 +342,22 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
             // currently has a limitation that the innings selected can only be odd.
             // even numbers will result in the innings selected to be (value - 1)
             uint8_t inningsDesired = state.inningsSelected.value();
+
+            if (inningsDesired % 2 == 0)
+                WARN_LOG_FMT(COMMON, "Innings selected is even: {}. Only odd values work. Result will be {}", inningsDesired, inningsDesired - 1);
+
             uint8_t inningsMenuIndex = (inningsDesired - 1) >> 1;
             lines.push_back(ToGeckoLine(0x00, INNINGS_SELECTED_ADDR, inningsMenuIndex));
         }
 
         if (state.mercy.has_value())
-            lines.push_back(ToGeckoLine(0x00, MERCY_ADDR, state.mercy.value()));
+        {
+            uint8_t val = state.mercy.value();
+            if (val > 0x1)
+                WARN_LOG_FMT(COMMON, "Mercy setting not valid: {}. No gecko code produced.", val);
+            else
+                lines.push_back(ToGeckoLine(0x00, MERCY_ADDR, val));
+        }
 
         // if all game settings are specified, prevent cursor movement on that screen
         if (state.firstBatter.has_value() &&
@@ -317,16 +373,28 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
     
 
     // In-game codes - only runs on the in-game rel = 5 and game has not started.
-    // These are for addresses that efffect the game state, and can be set after the match loads.
+    // These are for addresses that affect the game state, and can be set after the match loads.
     lines.push_back(ToGeckoLine(0x28, REL_ADDR, IN_GAME_REL));
         lines.push_back(ToGeckoLine(0x28, HAS_GAME_STARTED_ADDR, (GAME_STARTED_MASK << 16) | GAME_NOT_STARTED));
 
             // Innings
             if (state.inning.has_value())
-                lines.push_back(ToGeckoLine(0x04, INNING_ADDR, state.inning.value()));
+            {
+                uint32_t val = state.inning.value();
+                if (val > 0x12)
+                    WARN_LOG_FMT(COMMON, "Inning setting not valid: {}. Max is 18. No gecko code produced.", val);
+                else
+                    lines.push_back(ToGeckoLine(0x04, INNING_ADDR, val));
+            }
 
             if (state.halfInning.has_value())
-                lines.push_back(ToGeckoLine(0x00, HALF_INNING_ADDR, state.halfInning.value()));
+            {
+                uint8_t val = state.halfInning.value();
+                if (val > 0x1)
+                    WARN_LOG_FMT(COMMON, "Half inning setting not valid: {}. No gecko code produced.", val);
+                else
+                    lines.push_back(ToGeckoLine(0x00, HALF_INNING_ADDR, val));
+            }
 
             // Score functions
             GenerateTeamScoreGeckoCodes(state.awayScore, state.awayInningScores, SCORE_AWAY_ADDR, SCORE_BYINNING_AWAY_BASE, SCORE_STRIDE, lines);
@@ -334,27 +402,63 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
 
             // count
             if (state.strikes.has_value())
-                lines.push_back(ToGeckoLine(0x04, STRIKES_ADDR, state.strikes.value()));
+            {
+                uint32_t val = state.strikes.value();
+                if (val > 0x2)
+                    WARN_LOG_FMT(COMMON, "Strikes setting not valid: {}. No gecko code produced.", val);
+                else
+                    lines.push_back(ToGeckoLine(0x04, STRIKES_ADDR, val));
+            }
 
             if (state.balls.has_value())
-                lines.push_back(ToGeckoLine(0x04, BALLS_ADDR, state.balls.value()));
+            {
+                uint32_t val = state.balls.value();
+                if (val > 0x3)
+                    WARN_LOG_FMT(COMMON, "Balls setting not valid: {}. No gecko code produced.", val);
+                else
+                    lines.push_back(ToGeckoLine(0x04, BALLS_ADDR, val));
+            }
 
             if (state.outs.has_value()) 
             {
-                lines.push_back(ToGeckoLine(0x04, OUTS_ADDR, state.outs.value()));
-                lines.push_back(ToGeckoLine(0x04, OUTS_STORED_ADDR, state.outs.value())); // need to both addrs
+                uint32_t val = state.outs.value();
+                if (val > 0x2)
+                    WARN_LOG_FMT(COMMON, "Outs setting not valid: {}. No gecko code produced.", val);
+                else
+                {
+                    lines.push_back(ToGeckoLine(0x04, OUTS_ADDR, val));
+                    lines.push_back(ToGeckoLine(0x04, OUTS_STORED_ADDR, val)); // need to both addrs
+                }
             }
 
             // team stars
             if (state.awayTeamStars.has_value())
-                lines.push_back(ToGeckoLine(0x00, TEAM_STARS_AWAY_ADDR, state.awayTeamStars.value()));
+            {
+                uint8_t val = state.awayTeamStars.value();
+                if (val > 0x5)
+                    WARN_LOG_FMT(COMMON, "Away team stars not valid: {}. No gecko code produced.", val);
+                else
+                    lines.push_back(ToGeckoLine(0x00, TEAM_STARS_AWAY_ADDR, val));
+            }
 
             if (state.homeTeamStars.has_value())
-                lines.push_back(ToGeckoLine(0x00, TEAM_STARS_HOME_ADDR, state.homeTeamStars.value()));
+            {
+                uint8_t val = state.homeTeamStars.value();
+                if (val > 0x5)
+                    WARN_LOG_FMT(COMMON, "Home team stars not valid: {}. No gecko code produced.", val);
+                else
+                    lines.push_back(ToGeckoLine(0x00, TEAM_STARS_HOME_ADDR, val));
+            }
 
             // star chance
             if (state.isStarChance.has_value())
-                lines.push_back(ToGeckoLine(0x00, IS_STAR_CHANCE_ADDR, state.isStarChance.value()));
+            {
+                uint8_t val = state.isStarChance.value();
+                if (val > 0x1)
+                    WARN_LOG_FMT(COMMON, "Star chance setting not valid: {}. No gecko code produced.", val);
+                else
+                    lines.push_back(ToGeckoLine(0x00, IS_STAR_CHANCE_ADDR, val));
+            }
 
             // batting order and position struct
             GenerateOrderAndPositionGeckoCodes(
@@ -374,15 +478,24 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
             {
                 if (state.runnerRosterSpot[i].has_value() && state.runnerCharacterID[i].has_value())
                 {
-                    lines.push_back(ToGeckoLine(0x02, RUNNER_ROSTER_LOCATION_BASE + RUNNER_STRIDE * i, state.runnerRosterSpot[i].value()));
-                    lines.push_back(ToGeckoLine(0x02, RUNNER_CHARACTER_ID_BASE + RUNNER_STRIDE * i, state.runnerCharacterID[i].value()));
+                    uint16_t val_roster = state.runnerRosterSpot[i].value();
+                    if (val_roster > 0x8)
+                        WARN_LOG_FMT(COMMON, "Runner roster ID not valid: {} for runner index {}. No gecko code produced.", val_roster, i);
+                    else
+                        lines.push_back(ToGeckoLine(0x02, RUNNER_ROSTER_LOCATION_BASE + RUNNER_STRIDE * i, val_roster));
+
+                    uint16_t val_charID = state.runnerCharacterID[i].value();
+                    if (val_charID> 0x35)
+                        WARN_LOG_FMT(COMMON, "Runner character ID not valid: {} for runner index {}. No gecko code produced.", val_charID, i);
+                    else
+                        lines.push_back(ToGeckoLine(0x02, RUNNER_CHARACTER_ID_BASE + RUNNER_STRIDE * i, val_charID));
 
                     // nop the instruction that clears the roster ID when the game starts
                     lines.push_back(ToGeckoLine(0x04, RUNNER_NOP_BASE + RUNNER_NOP_STRIDE * i, 0x60000000));
                 }
             }
 
-            // pitcher stamina. On a P1/P2 basis, and uses roster ID instead of batting order.
+            // pitcher stamina. On a P1/P2 basis, and by batting order.
             GeneratePitcherStaminaGeckoCodes(state.pitcherStaminaP1, PITCHER_STAMINA_P1_BASE, lines);
             GeneratePitcherStaminaGeckoCodes(state.pitcherStaminaP2, PITCHER_STAMINA_P2_BASE, lines);
 
@@ -405,6 +518,6 @@ void MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
 
 
 
-    // 5. Write all generated lines to the INI
+    // Write all generated lines to the INI
     GeckoCodeGenerator::WriteGeneratedCode(game_id, code_name, lines);
 }
