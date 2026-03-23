@@ -32,7 +32,13 @@ MSBGameState LoadDebugState(const std::string& path)
         std::getline(ss, key, '=');
         std::getline(ss, value);
 
-        int v = std::stoi(value);
+        int v = 0;
+        try {
+            v = std::stoi(value);
+        } catch (const std::exception& e) {
+            WARN_LOG_FMT(COMMON, "Failed to parse value for key={}: {}", key, e.what());
+            continue;
+        }
 
         INFO_LOG_FMT(COMMON, "Loading key={}, value={}", key, value);
 
@@ -42,14 +48,14 @@ MSBGameState LoadDebugState(const std::string& path)
         else if (key.rfind("p1Character", 0) == 0)
         {
             int characterNumber = std::stoi(key.substr(11));
-            if (characterNumber >= 0 && characterNumber < 10)
+            if (characterNumber >= 0 && characterNumber < 9)
                 state.charactersP1ByPosition[characterNumber] = v;
         }
 
         else if (key.rfind("p2Character", 0) == 0)
         {
             int characterNumber = std::stoi(key.substr(11));
-            if (characterNumber >= 0 && characterNumber < 10)
+            if (characterNumber >= 0 && characterNumber < 9)
                 state.charactersP2ByPosition[characterNumber] = v;
         }
         
@@ -95,15 +101,15 @@ MSBGameState LoadDebugState(const std::string& path)
         else if (key.rfind("awayPosition", 0) == 0)
         {
             int order = std::stoi(key.substr(12));
-            if (order >= 0 && order < 10)
+            if (order >= 0 && order < 9)
                 state.awayPositionByBattingOrder[order] = v;
         }
 
         else if (key.rfind("homePosition", 0) == 0)
         {
             int order = std::stoi(key.substr(12));
-            if (order >= 0 && order < 10)
-                state.awayPositionByBattingOrder[order] = v;
+            if (order >= 0 && order < 9)
+                state.homePositionByBattingOrder[order] = v;
         }
 
         else if (key.rfind("runnerRosterID", 0) == 0)

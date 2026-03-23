@@ -81,35 +81,34 @@ bool BootCore(std::unique_ptr<BootParameters> boot, const WindowSystemInfo& wsi)
     return false;
   }
 
-  try 
-  {
-    MSBGameState state = LoadDebugState("User/Debug/msb_state.txt");
-  }
-  catch (const std::exception& e)
-  {
-      ERROR_LOG_FMT(COMMON, "Debug loaded failed: {}", e.what());
-  }
-  catch (...)
-  {
-      ERROR_LOG_FMT(COMMON, "Debug loader failed with unknown exception");
-  }
+MSBGameState state;
+bool loadSucceeded = false;
 
-  try 
-  {
-    MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
-      "GYQE01",
-      state,
-      "Debug Match State"
-    );
-  }
-  catch (const std::exception& e)
-  {
-      ERROR_LOG_FMT(COMMON, "Code builder failed: {}", e.what());
-  }
-  catch (...)
-  {
-      ERROR_LOG_FMT(COMMON, "Code builder failed with unknown exception");
-  }
+try 
+{
+    state = LoadDebugState("User/Debug/msb_state.txt");
+    loadSucceeded = true;
+}
+catch (...)
+{
+    ERROR_LOG_FMT(COMMON, "Debug loader failed");
+}
+
+if (loadSucceeded)
+{
+    try 
+    {
+        MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
+            "GYQE01",
+            state,
+            "Debug Match State"
+        );
+    }
+    catch (...)
+    {
+        ERROR_LOG_FMT(COMMON, "Code builder failed");
+    }
+}
 
   // Movie settings
   auto& movie = system.GetMovie();
