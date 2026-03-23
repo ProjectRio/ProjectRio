@@ -7,6 +7,7 @@
 #include <optional>
 #include <algorithm>
 #include <cstdint>
+#include "Common/Logging/Log.h"
 
 // Helper: convert address, value, and Gecko type to Gecko code line
 static std::string ToGeckoLine(uint8_t geckoType, uint32_t address, uint32_t value)
@@ -21,6 +22,8 @@ static std::string ToGeckoLine(uint8_t geckoType, uint32_t address, uint32_t val
         << " "
         << std::setw(8) << value;
 
+    INFO_LOG_FMT(COMMON, "Gecko code produced: {}". oss.str());
+
     return oss.str();
 }
 
@@ -34,6 +37,8 @@ void GenerateRosterGeckoCodes(
     std::vector<std::string>& outLines
 )
 {
+    INFO_LOG_FMT(COMMON, "Running GenerateRosterGeckoCodes function");
+
     // check if any character ID is given
     bool rosterProvided = false;
     for (int i = 0; i < 9; i++)
@@ -81,6 +86,8 @@ void GenerateTeamScoreGeckoCodes(
     std::vector<std::string>& outLines
 )
 {
+    INFO_LOG_FMT(COMMON, "Running GenerateTeamScoreGeckoCodes function");
+
     // Determine if any inning scores are provided
     bool inningScoresProvided = false;
     uint32_t inningScoresSum = 0;
@@ -173,6 +180,8 @@ void GenerateOrderAndPositionGeckoCodes(
     std::vector<std::string>& outLines
 )
 {
+    INFO_LOG_FMT(COMMON, "Running GenerateOrderAndPositionGeckoCodes function");
+
     bool positionsProvided = false;
     for (int i = 0; i < 9; i++)
     {

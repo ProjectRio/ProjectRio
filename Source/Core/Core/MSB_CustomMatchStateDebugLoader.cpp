@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include "Common/Logging/Log.h"
 
 // If using Dolphin logging
 // #include "Common/Logging/Log.h"
@@ -32,6 +33,8 @@ MSBGameState LoadDebugState(const std::string& path)
         std::getline(ss, value);
 
         int v = std::stoi(value);
+
+        INFO_LOG_FMT(COMMON, "Loading key={}, value={}", key, value);
 
         if (key == "captainCharacterP1") state.captainCharacterP1 = v;
         else if (key == "captainCharacterP2") state.captainCharacterP2 = v;
@@ -119,8 +122,7 @@ MSBGameState LoadDebugState(const std::string& path)
 
         else
         {
-            // Optional logging for unknown keys
-            // WARN_LOG_FMT(CORE, "Unknown debug key: {}", key);
+            WARN_LOG_FMT(COMMON, "Failed to find key match. key={}, value={}", key, value);
         }
     }
 
@@ -146,3 +148,25 @@ MSBGameState LoadDebugState(const std::string& path)
 // outs=1
 // awayTeamStars=4
 // homeTeamStars=2
+// p1Character0=0
+// p1Character1=1
+// p1Character2=2
+// p1Character3=3
+// p1Character4=4
+// p1Character5=5
+// p1Character6=6
+// p1Character7=7
+// p1Character8=8
+// p2Character0=10
+// p2Character1=11
+// p2Character2=12
+// p2Character3=13
+// p2Character4=14
+// p2Character5=15
+// p2Character6=16
+// p2Character7=16
+// p2Character8=17
+// captainCharacterP1=3
+// captainCharacterP2=2
+// runnerRosterID0=0
+// runnerCharacterID0=0
