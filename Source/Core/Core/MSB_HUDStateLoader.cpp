@@ -3,9 +3,7 @@
 #include "Common/StringUtil.h"
 #include <fstream>
 #include <string>
-
-#include <Common/JsonUtil.h>
-#include <Externals/picojson.h>
+#include <picojson.h>
 
 
 bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
