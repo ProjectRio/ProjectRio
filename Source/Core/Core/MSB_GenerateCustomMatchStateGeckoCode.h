@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GeckoCodeGenerator.h"
+#include "Core/GeckoCode.h"
 #include <string>
 #include <vector>
 #include <cstdint>

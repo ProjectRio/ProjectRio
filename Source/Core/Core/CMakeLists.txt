@@ -129,8 +129,6 @@ add_library(core
   GeckoCode.h
   GeckoCodeConfig.cpp
   GeckoCodeConfig.h
-  GeckoCodeGenerator.cpp
-  GeckoCodeGenerator.h
   HLE/HLE_Misc.cpp
   HLE/HLE_Misc.h
   HLE/HLE_OS.cpp
