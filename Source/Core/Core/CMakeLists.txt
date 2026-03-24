@@ -460,6 +460,8 @@ add_library(core
   MSB_GenerateCustomMatchStateGeckoCode.h
   MSB_CustomMatchStateDebugLoader.cpp
   MSB_CustomMatchStateDebugLoader.h
+  MSB_HUDStateLoader.cpp
+  MSB_HUDStateLoader.h
   LocalPlayers.cpp
   LocalPlayers.h
   LocalPlayersConfig.cpp

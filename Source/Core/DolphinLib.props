@@ -849,6 +849,7 @@
     <ClCompile Include="Core\BootManager.cpp" />
     <ClCompile Include="Core\MSB_GenerateCustomMatchStateGeckoCode.cpp" />
     <ClCompile Include="Core\MSB_CustomMatchStateDebugLoader.cpp" />
+    <ClCompile Include="Core\MSB_HUDStateLoader.cpp" />
     <ClCompile Include="Core\CheatGeneration.cpp" />
     <ClCompile Include="Core\CheatSearch.cpp" />
     <ClCompile Include="Core\Config\AchievementSettings.cpp" />

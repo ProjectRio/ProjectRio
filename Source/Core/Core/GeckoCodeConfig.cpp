@@ -193,6 +193,13 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
           for (auto& code : hudCodes)
               gcodes.push_back(std::move(code));
       }
+      else if (LoadStateFromHud("User/HudFiles/hud.json", state))
+          {
+              auto hudCodes = MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(state);
+              for (auto& code : hudCodes)
+                  gcodes.push_back(std::move(code));
+          }
+      }
   }
 
   for (const auto* ini : {&globalIni, &localIni})
