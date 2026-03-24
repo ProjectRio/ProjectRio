@@ -970,6 +970,7 @@ std::string StatTracker::getStatJSON(bool inDecode, bool hide_riokey){
     }
     json_stream << "  \"TagSetID\": " << tag_set_id_str << ",\n";
     json_stream << "  \"Netplay\": " << std::to_string(m_game_info.netplay) << ",\n";
+    json_stream << "  \"Loaded from HUD\": " << std::to_string(m_game_info.fastResetFromHUD) << ",\n";
     json_stream << "  \"StadiumID\": " << decode("Stadium", m_game_info.stadium, inDecode) << ",\n";
     json_stream << "  \"Away Player\": \"" << away_player_info << "\",\n"; //TODO MAKE THIS AN ID
     json_stream << "  \"Home Player\": \"" << home_player_info << "\",\n";
@@ -1312,6 +1313,7 @@ std::string StatTracker::getHUDJSON(std::string in_event_num, Event& in_curr_eve
         tag_set_id_str = std::to_string(m_game_info.tag_set_id.value());
     }
     json_stream << "  \"TagSetID\": " << tag_set_id_str << ",\n";
+    json_stream << "  \"Loaded from HUD\": " << std::to_string(m_game_info.fastResetFromHUD) << ",\n";
     json_stream << "  \"StadiumID\": " << decode("Stadium", m_game_info.stadium, inDecode) << ",\n";
     json_stream << "  \"Innings Selected\": " << std::to_string(m_game_info.innings_selected) << ",\n";
     json_stream << "  \"First Batting Team\": " << std::to_string(m_game_info.first_batting_team) << ",\n";
@@ -1769,10 +1771,9 @@ void StatTracker::clearTagSetId(bool netplay) {
 bool StatTracker::shouldSubmitGame() {
     bool cpuInGame = (m_game_info.getAwayTeamPlayer().GetUserID() == "CPU") || (m_game_info.getHomeTeamPlayer().GetUserID() == "CPU");
     bool tag_set_game = m_game_info.tag_set_id.has_value();
-    bool loading_from_hud = Gecko::isLoadingFromHUD;
-    std::cout << "Checking game submission. TagSetSelected=" << tag_set_game << " cpuInGame=" << cpuInGame << " loadingFromHUD=" << loading_from_hud << "\n";
+    std::cout << "Checking game submission. TagSetSelected=" << tag_set_game << " cpuInGame=" << cpuInGame << "\n";
 
-    return (!cpuInGame && tag_set_game && !loading_from_hud);
+    return (!cpuInGame && tag_set_game);
 }
 
 void StatTracker::setNetplaySession(bool netplay_session, std::string opponent_name){
@@ -2112,6 +2113,7 @@ void StatTracker::postOngoingGame(Event& in_curr_event){
         tag_set_id_str = std::to_string(m_game_info.tag_set_id.value());
     }
     json_stream << "  \"TagSetID\": " << tag_set_id_str << ",\n";
+    json_stream << "  \"Loaded from HUD\": " << std::to_string(m_game_info.fastResetFromHUD) << ",\n";
     json_stream << "  \"StadiumID\": " << decode("Stadium", m_game_info.stadium, false) << ",\n";
     json_stream << "  \"Away Player\": \""           << m_game_info.getAwayTeamPlayer().GetUserID() << "\",\n";
     json_stream << "  \"Home Player\": \""           << m_game_info.getHomeTeamPlayer().GetUserID() << "\",\n";

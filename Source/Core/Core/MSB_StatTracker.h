@@ -18,6 +18,7 @@
 #include "Core/LocalPlayers.h"
 #include "Core/Logger.h"
 #include "Core/TrackerAdr.h"
+#include "Core/GeckoCodeConfig.h"
 
 namespace Tag {
 class TagSet;
@@ -871,6 +872,9 @@ public:
         //Netplay info
         bool netplay;
         std::string netplay_opponent_alias;
+
+        //Started mid-game using the fast reset from HUD code.
+        bool fastResetFromHUD = Gecko::isLoadingFromHUD;
 
         //TagSet info
         std::optional<int> tag_set_id = std::nullopt;
