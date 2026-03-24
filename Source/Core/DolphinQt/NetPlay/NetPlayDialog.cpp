@@ -279,7 +279,7 @@ void NetPlayDialog::CreateMainLayout()
   options_widget->addWidget(m_buffer_label, 0, 1, Qt::AlignVCenter);
   options_widget->addWidget(m_buffer_size_box, 0, 2, Qt::AlignVCenter);
   options_widget->addWidget(m_quit_button, 0, 7, Qt::AlignVCenter | Qt::AlignRight);
-  options_widget->setColumnStretch(4, 1000);
+  options_widget->setColumnStretch(5, 1000);
   //options_widget->addWidget(m_coin_flipper, 0, 3, Qt::AlignVCenter);
   options_widget->addWidget(m_night_stadium, 0, 3, Qt::AlignVCenter);
   options_widget->addWidget(m_disable_replays, 0, 4, Qt::AlignVCenter);
