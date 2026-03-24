@@ -50,7 +50,14 @@ bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
         state.inning = j["Inning"].get<uint32_t>();
 
     if (j.contains("Half Inning"))
-        state.halfInning = j["Half Inning"].get<uint8_t>();
+    {
+        uint8_t halfInning = j["Half Inning"].get<uint8_t>();
+
+        state.halfInning = halfInning;
+
+        state.battingTeam = halfInning;
+        state.fieldingTeam = 1 - halfInning;
+    }    
 
     if (j.contains("Away Score"))
         state.awayScore = j["Away Score"].get<uint16_t>();

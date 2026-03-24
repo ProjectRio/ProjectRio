@@ -37,6 +37,10 @@ struct MSBGameState
     std::optional<uint32_t> inning; 
     std::optional<uint8_t> halfInning; // 0=top, 1=bottom
 
+    // In home/away format.
+    std::optional<uint32_t> battingTeam; 
+    std::optional<uint32_t> fieldingTeam; 
+
     std::optional<uint16_t> homeScore;
     std::optional<uint16_t> awayScore;
     std::optional<uint16_t> homeInningScores[18];  // 18 innings is max the game holds in memory
@@ -113,6 +117,9 @@ public:
     // In game addresses
     static constexpr uint32_t INNING_ADDR = 0x808928A0;
     static constexpr uint32_t HALF_INNING_ADDR = 0x8089294D;
+    
+    static constexpr uint32_t BATTING_TEAM_ADDR = 0x80892998;
+    static constexpr uint32_t FIELDING_TEAM_ADDR = 0x8089299C;
 
     static constexpr uint32_t SCORE_AWAY_ADDR = 0x808928a4;
     static constexpr uint32_t SCORE_HOME_ADDR = 0x808928CA;

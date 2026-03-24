@@ -408,6 +408,24 @@ std::vector<Gecko::GeckoCode> MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateG
                     codes.push_back(ToGeckoCode(0x00, HALF_INNING_ADDR, val));
             }
 
+            if (state.battingTeam.has_value())
+            {
+                uint32_t val = state.battingTeam.value();
+                if (val > 0x1)
+                    WARN_LOG_FMT(COMMON, "Batting team setting not valid: {}. No gecko code produced.", val);
+                else
+                    codes.push_back(ToGeckoCode(0x04, BATTING_TEAM_ADDR, val));
+            }
+
+            if (state.FieldingTeam.has_value())
+            {
+                uint32_t val = state.fieldingTeam.value();
+                if (val > 0x1)
+                    WARN_LOG_FMT(COMMON, "Fielding team setting not valid: {}. No gecko code produced.", val);
+                else
+                    codes.push_back(ToGeckoCode(0x04, FIELDING_TEAM_ADDR, val));
+            }
+
             // Score functions
             GenerateTeamScoreGeckoCodes(state.awayScore, state.awayInningScores, SCORE_AWAY_ADDR, SCORE_BYINNING_AWAY_BASE, SCORE_STRIDE, codes);
             GenerateTeamScoreGeckoCodes(state.homeScore, state.homeInningScores, SCORE_HOME_ADDR, SCORE_BYINNING_HOME_BASE, SCORE_STRIDE, codes);

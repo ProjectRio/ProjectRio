@@ -86,6 +86,9 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
 
         else if (key == "inning") state.inning = v;
         else if (key == "halfInning") state.halfInning = v;
+        
+        else if (key == "battingTeam") state.battingTeam = v;
+        else if (key == "fieldingTeam") state.fieldingTeam = v;
 
         else if (key == "awayScore") state.awayScore = v;
         else if (key == "homeScore") state.homeScore = v;
@@ -251,7 +254,17 @@ bool LoadDebugState(const std::string& path, MSBGameState& outState)
 // p2Character5=15
 // p2Character6=16
 // p2Character7=16
-// p2Character8=17
+// p2Character8=17awayPosition0=1
+// awayPosition1=0
+// awayPosition2=2
+// awayPosition3=3
+// awayPosition4=4
+// awayPosition5=5
+// awayPosition6=6
+// awayPosition7=7
+// awayPosition8=8
+// p1Stamina0=4
+// p1Stamina1=9
 // captainCharacterP1=3
 // captainCharacterP2=2
 // runnerRosterID0=0
