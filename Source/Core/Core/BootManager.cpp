@@ -53,7 +53,6 @@
 
 #include "VideoCommon/VideoBackendBase.h"
 
-
 namespace BootManager
 {
 // Boot the ISO or file
