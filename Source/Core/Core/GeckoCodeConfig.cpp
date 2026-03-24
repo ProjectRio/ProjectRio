@@ -343,6 +343,7 @@ void setDisableReplays(bool disable)
   isDisableReplays = disable;
 }
 
+bool isLoadingFromHUD = false;
 void setFastResetFromHUD(bool load_from_hud)
 {
   isLoadingFromHUD = load_from_hud;

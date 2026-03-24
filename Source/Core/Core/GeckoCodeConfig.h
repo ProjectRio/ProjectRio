@@ -28,7 +28,7 @@ static bool isNightStadium = false;
 void setNightStadium(bool is_night);
 static bool isDisableReplays = false;
 void setDisableReplays(bool disable);
-static bool isLoadingFromHUD = false;
+extern bool isLoadingFromHUD;
 void setFastResetFromHUD(bool load_from_hud);
 //static bool isTrainingMode = false;
 

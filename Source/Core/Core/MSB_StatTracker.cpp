@@ -23,6 +23,8 @@
 
 #include "Common/TagSet.h"
 
+#include "Core/GeckoCodeConfig.h"
+
 void StatTracker::Run(const Core::CPUThreadGuard& guard)
 {
     lookForTriggerEvents(guard);
@@ -1767,9 +1769,10 @@ void StatTracker::clearTagSetId(bool netplay) {
 bool StatTracker::shouldSubmitGame() {
     bool cpuInGame = (m_game_info.getAwayTeamPlayer().GetUserID() == "CPU") || (m_game_info.getHomeTeamPlayer().GetUserID() == "CPU");
     bool tag_set_game = m_game_info.tag_set_id.has_value();
-    std::cout << "Checking game submission. TagSetSelected=" << tag_set_game << " cpuInGame=" << cpuInGame << "\n";
+    bool loading_from_hud = Gecko::isLoadingFromHUD;
+    std::cout << "Checking game submission. TagSetSelected=" << tag_set_game << " cpuInGame=" << cpuInGame << " loadingFromHUD=" << loading_from_hud << "\n";
 
-    return (!cpuInGame && tag_set_game);
+    return (!cpuInGame && tag_set_game && !loading_from_hud);
 }
 
 void StatTracker::setNetplaySession(bool netplay_session, std::string opponent_name){
