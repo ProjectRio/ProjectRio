@@ -396,8 +396,8 @@ static const u32 aStadiumId = 0x800E8705;
 static const u32 aTeam0_Captain = 0x80353083;
 static const u32 aTeam1_Captain = 0x80353087;
 
-static const u32 aTeam0_Logo = 0x808929b0;
-static const u32 aTeam1_Logo = 0x808929bc;
+static const u32 aAway_Logo = 0x808929b0;
+static const u32 aHome_Logo = 0x808929bc;
 
 static const u32 aTeam0_Captain_Roster_Loc = 0x80892A83;
 static const u32 aTeam1_Captain_Roster_Loc = 0x80892A87;
@@ -848,8 +848,8 @@ public:
         u8 team0_captain_roster_loc = 0xFF;
         u8 team1_captain_roster_loc = 0xFF;
 
-        u32 team0_logo;
-        u32 team1_logo;
+        u32 away_logo;
+        u32 home_logo;
 
         LocalPlayers::LocalPlayers::Player team0_player;
         LocalPlayers::LocalPlayers::Player team1_player;
