@@ -16,6 +16,7 @@
 #include "Core/CheatCodes.h"
 #include "Core/MSB_GenerateCustomMatchStateGeckoCode.h"
 #include "Core/MSB_CustomMatchStateDebugLoader.h"
+#include "Core/GeckoCode.h"
 
 namespace Gecko
 {
