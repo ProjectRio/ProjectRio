@@ -4,8 +4,8 @@
 #include <fstream>
 #include <string>
 
-#include <nlohmann/json.hpp>
-using json = nlohmann::json;
+#include <Common/JsonUtil.h>
+#include <Externals/picojson.h>
 
 
 bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
@@ -17,12 +17,70 @@ bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
         return false;
     }
 
-    json j = json::parse(file, nullptr, false);
-    if (j.is_discarded())
+    std::string json_str((std::istreambuf_iterator<char>(file)),
+                          std::istreambuf_iterator<char>());
+
+    picojson::value v;
+    std::string err = picojson::parse(v, json_str);
+
+    if (!err.empty())
     {
-        ERROR_LOG_FMT(COMMON, "Failed to parse HUD JSON from file: {}", path);
+        ERROR_LOG_FMT(COMMON, "Failed to parse HUD JSON from file: {} ({})", path, err);
         return false;
     }
+
+    if (!v.is<picojson::object>())
+    {
+        ERROR_LOG_FMT(COMMON, "HUD JSON is not an object: {}", path);
+        return false;
+    }
+
+    const picojson::object& j = v.get<picojson::object>();
+
+        // === P1/P2 to HOME/AWAY MAPPING and VERIFICATION ===
+    std::string localUsername = StripWhitespace(LocalPlayers::m_online_player.username);
+    std::string awayPlayer = j.contains("Away Player") ? StripWhitespace(j["Away Player"].get<std::string>()) : "";
+    std::string homePlayer = j.contains("Home Player") ? StripWhitespace(j["Home Player"].get<std::string>()) : "";
+
+    if (awayPlayer == "No Player Selected" || homePlayer == "No Player Selected")
+    {
+        ERROR_LOG_FMT(COMMON, "HUD file has unselected player. Away='{}', Home='{}'", awayPlayer, homePlayer);
+        return false;
+    }
+
+    // Find the opponent - the port player who isn't the local player
+    std::string opponentUsername = "";
+    auto portPlayers = LocalPlayers::GetPortPlayers();
+    for (const auto& [port, player] : portPlayers)
+    {
+        std::string portUsername = StripWhitespace(player.username);
+        if (portUsername != localUsername && portUsername != "No Player Selected")
+        {
+            opponentUsername = portUsername;
+            break;
+        }
+    }
+
+    if (opponentUsername.empty())
+    {
+        ERROR_LOG_FMT(COMMON, "Could not find opponent in local players config.");
+        return false;
+    }
+
+    // Validate both players match the HUD file
+    bool localIsAway = (localUsername == awayPlayer);
+    bool localIsHome = (localUsername == homePlayer);
+    bool opponentIsAway = (opponentUsername == awayPlayer);
+    bool opponentIsHome = (opponentUsername == homePlayer);
+
+    if (!((localIsAway && opponentIsHome) || (localIsHome && opponentIsAway)))
+    {
+        ERROR_LOG_FMT(COMMON, "Player mismatch. Local='{}', Opponent='{}', HUD Away='{}', HUD Home='{}'",
+                    localUsername, opponentUsername, awayPlayer, homePlayer);
+        return false;
+    }
+
+    bool localPlayerIsAway = localIsAway;
 
     MSBGameState state;
 
@@ -85,88 +143,70 @@ bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
 
     // === INNING SCORES ===
 
-    // if (j.contains("Away Inning Scores"))
-    // {
-    //     const auto& scores = j["Away Inning Scores"];
-    //     for (int i = 0; i < static_cast<int>(scores.size()) && i < 18; i++)
-    //         state.awayInningScores[i] = scores[i].get<uint16_t>();
-    // }
+    if (j.contains("Away Inning Scores"))
+    {
+        const auto& scores = j["Away Inning Scores"];
+        for (int i = 0; i < static_cast<int>(scores.size()) && i < 18; i++)
+            state.awayInningScores[i] = scores[i].get<uint16_t>();
+    }
 
-    // if (j.contains("Home Inning Scores"))
-    // {
-    //     const auto& scores = j["Home Inning Scores"];
-    //     for (int i = 0; i < static_cast<int>(scores.size()) && i < 18; i++)
-    //         state.homeInningScores[i] = scores[i].get<uint16_t>();
-    // }
+    if (j.contains("Home Inning Scores"))
+    {
+        const auto& scores = j["Home Inning Scores"];
+        for (int i = 0; i < static_cast<int>(scores.size()) && i < 18; i++)
+            state.homeInningScores[i] = scores[i].get<uint16_t>();
+    }
 
-    // // === P1/P2 to HOME/AWAY MAPPING ===
-    // // Determine which player is P1 (the local player) and whether they are home or away.
-    // // This is needed to correctly assign rosters and the first batting setting.
+    // firstBatter: 0 = away bats first, 1 = home bats first.
+    // We need to translate this to P1/P2 perspective.
+    // If local player is away, firstBatter maps directly.
+    // If local player is home, we invert it.
+    if (j.contains("First Batting Team"))
+    {
+        uint8_t firstBattingTeam = j["First Batting Team"].get<uint8_t>(); // 0=Original P1, 1=Original P2
+        if (localPlayerIsAway)
+            state.firstBatter = firstBattingTeam;
+        else
+            state.firstBatter = (firstBattingTeam == 0) ? 1 : 0;
+    }
 
-    // std::string localUsername = StripWhitespace(LocalPlayers::m_online_player.username);
-    // std::string awayPlayer = j.contains("Away Player") ? StripWhitespace(j["Away Player"].get<std::string>()) : "";
-    // std::string homePlayer = j.contains("Home Player") ? StripWhitespace(j["Home Player"].get<std::string>()) : "";
+    // === ROSTERS ===
+    // Characters are stored in roster order in the HUD file, but your state
+    // needs them in position order (P, C, 1B, 2B, 3B, SS, LF, CF, RF).
+    // The "Fielding Position" field tells us what position each roster slot plays.
+    // Position mapping: 0=P, 1=C, 2=1B, 3=2B, 4=3B, 5=SS, 6=LF, 7=CF, 8=RF
 
-    // if (localUsername != awayPlayer && localUsername != homePlayer)
-    // {
-    //     ERROR_LOG_FMT(COMMON, "Local player '{}' not found in HUD file. Away='{}', Home='{}'",
-    //                 localUsername, awayPlayer, homePlayer);
-    //     return false;
-    // }
+    // If local player is away, away=P1 and home=P2. Otherwise invert.
 
-    // bool localPlayerIsAway = (localUsername == awayPlayer);
+    for (int i = 0; i < 9; i++)
+    {
+        std::string p1Key = localPlayerIsAway ? "Away Roster " + std::to_string(i)
+                                            : "Home Roster " + std::to_string(i);
+        std::string p2Key = localPlayerIsAway ? "Home Roster " + std::to_string(i)
+                                            : "Away Roster " + std::to_string(i);
 
-    // // firstBatter: 0 = away bats first, 1 = home bats first.
-    // // We need to translate this to P1/P2 perspective.
-    // // If local player is away, firstBatter maps directly.
-    // // If local player is home, we invert it.
-    // if (j.contains("First Batting Team"))
-    // {
-    //     uint8_t firstBattingTeam = j["First Batting Team"].get<uint8_t>(); // 0=away, 1=home
-    //     if (localPlayerIsAway)
-    //         state.firstBatter = firstBattingTeam;
-    //     else
-    //         state.firstBatter = (firstBattingTeam == 0) ? 1 : 0;
-    // }
+        if (j.contains(p1Key))
+        {
+            const auto& roster = j[p1Key];
+            uint8_t charID = roster["CharID"].get<uint8_t>();
+            uint8_t position = roster["Fielding Position"].get<uint8_t>();
+            if (position < 9)
+                state.charactersP1ByPosition[position] = charID;
+            if (roster.contains("Captain") && roster["Captain"].get<int>() == 1)
+                state.captainCharacterP1 = charID;
+        }
 
-    // // === ROSTERS ===
-    // // Characters are stored in roster order in the HUD file, but your state
-    // // needs them in position order (P, C, 1B, 2B, 3B, SS, LF, CF, RF).
-    // // The "Fielding Position" field tells us what position each roster slot plays.
-    // // Position mapping: 0=P, 1=C, 2=1B, 3=2B, 4=3B, 5=SS, 6=LF, 7=CF, 8=RF
-
-    // // === ROSTERS ===
-    // // If local player is away, away=P1 and home=P2. Otherwise invert.
-
-    // for (int i = 0; i < 9; i++)
-    // {
-    //     std::string p1Key = localPlayerIsAway ? "Away Roster " + std::to_string(i)
-    //                                         : "Home Roster " + std::to_string(i);
-    //     std::string p2Key = localPlayerIsAway ? "Home Roster " + std::to_string(i)
-    //                                         : "Away Roster " + std::to_string(i);
-
-    //     if (j.contains(p1Key))
-    //     {
-    //         const auto& roster = j[p1Key];
-    //         uint8_t charID = roster["CharID"].get<uint8_t>();
-    //         uint8_t position = roster["Fielding Position"].get<uint8_t>();
-    //         if (position < 9)
-    //             state.charactersP1ByPosition[position] = charID;
-    //         if (roster.contains("Captain") && roster["Captain"].get<int>() == 1)
-    //             state.captainCharacterP1 = charID;
-    //     }
-
-    //     if (j.contains(p2Key))
-    //     {
-    //         const auto& roster = j[p2Key];
-    //         uint8_t charID = roster["CharID"].get<uint8_t>();
-    //         uint8_t position = roster["Fielding Position"].get<uint8_t>();
-    //         if (position < 9)
-    //             state.charactersP2ByPosition[position] = charID;
-    //         if (roster.contains("Captain") && roster["Captain"].get<int>() == 1)
-    //             state.captainCharacterP2 = charID;
-    //     }
-    // }
+        if (j.contains(p2Key))
+        {
+            const auto& roster = j[p2Key];
+            uint8_t charID = roster["CharID"].get<uint8_t>();
+            uint8_t position = roster["Fielding Position"].get<uint8_t>();
+            if (position < 9)
+                state.charactersP2ByPosition[position] = charID;
+            if (roster.contains("Captain") && roster["Captain"].get<int>() == 1)
+                state.captainCharacterP2 = charID;
+        }
+    }
 
     // // === STAMINA ===
     // // Stamina is stored per-character in defensive stats.

@@ -17,6 +17,7 @@
 #include "Core/MSB_GenerateCustomMatchStateGeckoCode.h"
 #include "Core/MSB_CustomMatchStateDebugLoader.h"
 #include "Core/GeckoCode.h"
+#include "Core/MSB_HUDStateLoader.h"
 
 namespace Gecko
 {
@@ -195,11 +196,10 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
               gcodes.push_back(std::move(code));
       }
       else if (LoadStateFromHud("User/HudFiles/hud.json", state))
-          {
-              auto hudCodes = MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(state);
-              for (auto& code : hudCodes)
-                  gcodes.push_back(std::move(code));
-          }
+      {
+          auto hudCodes = MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(state);
+          for (auto& code : hudCodes)
+              gcodes.push_back(std::move(code));
       }
   }
 

@@ -417,7 +417,7 @@ std::vector<Gecko::GeckoCode> MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateG
                     codes.push_back(ToGeckoCode(0x04, BATTING_TEAM_ADDR, val));
             }
 
-            if (state.FieldingTeam.has_value())
+            if (state.fieldingTeam.has_value())
             {
                 uint32_t val = state.fieldingTeam.value();
                 if (val > 0x1)
