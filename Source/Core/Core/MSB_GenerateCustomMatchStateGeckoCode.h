@@ -67,10 +67,7 @@ struct MSBGameState
 class MSBMatchCodeBuilder
 {
 public:
-    static void MSB_GenerateCustomMatchStateGeckoCode(
-        const std::string& game_id,
-        const MSBGameState& state,
-        const std::string& code_name = "Custom Match State");
+    static std::vector<Gecko::GeckoCode> MSB_GenerateCustomMatchStateGeckoCode(const MSBGameState& state);
 
     // Logical Constants
     static constexpr uint32_t REL_ADDR = 0x800e877c;

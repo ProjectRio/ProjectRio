@@ -14,6 +14,8 @@
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Core/CheatCodes.h"
+#include "Core/MSB_GenerateCustomMatchStateGeckoCode.h"
+#include "Core/MSB_CustomMatchStateDebugLoader.h"
 
 namespace Gecko
 {
@@ -151,8 +153,6 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
           BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_NightStadium;
         if (isDisableReplays)
           BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_DisableReplays;
-        if (isLoadingFromHUD)
-          BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_FastResetFromHUD;
       }
     }
     // else if (gameId == "GFTE01")
@@ -181,6 +181,18 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
       for (GeckoCode& code : gcodes)
         code.built_in_code = true;
     }
+  }
+
+  // append the gecko codes to allow starting a game from the latest hud game state.
+  if (isLoadingFromHUD)
+  {
+      MSBGameState state;
+      if (LoadDebugState("User/Debug/msb_state.txt", state))
+      {
+          auto hudCodes = MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(state);
+          for (auto& code : hudCodes)
+              gcodes.push_back(std::move(code));
+      }
   }
 
   for (const auto* ini : {&globalIni, &localIni})

@@ -54,16 +54,6 @@ E2000001 00000000
 
 )";
 
-// TODO call loader function
-const std::string MSSB_FastResetFromHUD = R"(
-+$Disable Replays [LittleCoaks]
-206bb214 38000001
-046bb214 38000000
-E2000001 00000000
-*Disables replays
-
-)";
-
 const std::string MSSB_BuiltInGeckoCodes = R"(
 +$Bat Sound On Game Start [LittleCoaks]
 04042cd0 386001bb
