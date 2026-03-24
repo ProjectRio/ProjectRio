@@ -147,10 +147,12 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
       BuiltInGeckoCodes = MSSB_BuiltInGeckoCodes;
       if (is_netplay)
       {
-        if (isDisableReplays)
-          BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_DisableReplays;
         if (isNightStadium)
           BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_NightStadium;
+        if (isDisableReplays)
+          BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_DisableReplays;
+        if (isLoadingFromHUD)
+          BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_FastResetFromHUD;
       }
     }
     // else if (gameId == "GFTE01")
@@ -331,14 +333,19 @@ void ReadLines(std::vector<GeckoCode>& gcodes, std::vector<std::string>& lines, 
   }
 }
 
+void setNightStadium(bool is_night)
+{
+  isNightStadium = is_night;
+}
+
 void setDisableReplays(bool disable)
 {
   isDisableReplays = disable;
 }
 
-void setNightStadium(bool is_night)
+void setFastResetFromHUD(bool load_from_hud)
 {
-  isNightStadium = is_night;
+  isLoadingFromHUD = load_from_hud;
 }
 
 }  // namespace Gecko

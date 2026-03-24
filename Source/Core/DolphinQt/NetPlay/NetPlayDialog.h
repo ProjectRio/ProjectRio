@@ -80,6 +80,7 @@ public:
   void OnRandomStadiumResult(int stadium);
   void OnNightResult(bool is_night);
   void OnDisableReplaysResult(bool disable);
+  void OnFastResetFromHUDResult(bool load_from_hud);
   void OnCourseResult(std::string message);
   void OnActiveGeckoCodes(std::string codeStr);
   bool IsSpectating() override;
@@ -189,6 +190,7 @@ private:
   QPushButton* m_random_18;
   QCheckBox* m_night_stadium;
   QCheckBox* m_disable_replays;
+  QCheckBox* m_fast_reset_from_HUD;
   QCheckBox* m_spectator_toggle;
 
   QGridLayout* m_main_layout;

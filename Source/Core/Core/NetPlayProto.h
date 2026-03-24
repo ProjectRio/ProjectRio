@@ -200,6 +200,7 @@ enum class MessageID : u8
   Stadium = 0xF7,
   DisableReplays = 0xF8,
   Course = 0xF9,
+  FastResetFromHUD = 0xFA,
 };
 
 enum class ConnectionError : u8

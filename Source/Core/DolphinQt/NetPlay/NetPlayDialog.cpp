@@ -143,6 +143,7 @@ void NetPlayDialog::CreateMainLayout()
   m_menu_bar = new QMenuBar(this);
   m_night_stadium = new QCheckBox(tr("Night Mario Stadium"));
   m_disable_replays = new QCheckBox(tr("Disable Replays"));
+  m_fast_reset_from_HUD = new QCheckBox(tr("Fast Reset"));
   m_spectator_toggle = new QCheckBox(tr("Spectator"));
 
   m_data_menu = m_menu_bar->addMenu(tr("Data"));
@@ -282,7 +283,8 @@ void NetPlayDialog::CreateMainLayout()
   //options_widget->addWidget(m_coin_flipper, 0, 3, Qt::AlignVCenter);
   options_widget->addWidget(m_night_stadium, 0, 3, Qt::AlignVCenter);
   options_widget->addWidget(m_disable_replays, 0, 4, Qt::AlignVCenter);
-  options_widget->addWidget(m_spectator_toggle, 0, 5, Qt::AlignVCenter | Qt::AlignRight);
+  options_widget->addWidget(m_fast_reset_from_HUD, 0, 5, Qt::AlignVCenter);
+  options_widget->addWidget(m_spectator_toggle, 0, 6, Qt::AlignVCenter | Qt::AlignRight);
 
   m_main_layout->addLayout(options_widget, 2, 0, 1, -1, Qt::AlignRight);
   m_main_layout->setRowStretch(1, 1000);
@@ -425,6 +427,14 @@ void NetPlayDialog::ConnectWidgets()
       client->SendDisableReplays(disable);
   });
 
+  connect(m_fast_reset_from_HUD, &QCheckBox::stateChanged, [this](bool load_from_hud) {
+    auto client = Settings::Instance().GetNetPlayClient();
+    auto server = Settings::Instance().GetNetPlayServer();
+    if (server)
+      server->AdjustFastResetFromHUD(load_from_hud);
+    else
+      client->SendFastResetFromHUD(load_from_hud);
+  });
 
   connect(m_spectator_toggle, &QCheckBox::stateChanged, this, &NetPlayDialog::OnSpectatorToggle);
 
@@ -650,6 +660,14 @@ void NetPlayDialog::OnDisableReplaysResult(bool disable)
     DisplayMessage(tr("Replays Enabled"), "steelblue");
 }
 
+void NetPlayDialog::OnFastResetFromHUDResult(bool load_from_hud)
+{
+  if (load_from_hud)
+    DisplayMessage(tr("Fast Reset From Latest Game State Enabled"), "steelblue");
+  else
+    DisplayMessage(tr("Fast Reset From Latest Game State Disabled"), "coral");
+}
+
 void NetPlayDialog::OnActiveGeckoCodes(std::string codeStr)
 {
   DisplayMessage(QString::fromStdString(codeStr), "cornflowerblue");
@@ -771,6 +789,8 @@ void NetPlayDialog::show(bool use_traversal)
   m_night_stadium->setEnabled(is_hosting);
   m_disable_replays->setHidden(!is_hosting);
   m_disable_replays->setEnabled(is_hosting);
+  m_fast_reset_from_HUD->setHidden(!is_hosting);
+  m_fast_reset_from_HUD->setEnabled(is_hosting);
 
   UpdateLobbyLayout();
   SetOptionsEnabled(true);
@@ -1071,6 +1091,7 @@ void NetPlayDialog::UpdateLobbyLayout()
     {
       m_night_stadium->setVisible(true);
       m_disable_replays->setVisible(true);
+      m_fast_reset_from_HUD->setVisible(true);
     }
     
     m_random_stadium->setVisible(true);
@@ -1081,6 +1102,7 @@ void NetPlayDialog::UpdateLobbyLayout()
   {
     m_night_stadium->setVisible(false);
     m_disable_replays->setVisible(false);
+    m_fast_reset_from_HUD->setVisible(false);
 
     m_random_stadium->setVisible(false);
     m_random_9->setVisible(true);
@@ -1125,6 +1147,7 @@ void NetPlayDialog::SetOptionsEnabled(bool enabled)
     m_fixed_delay_action->setEnabled(enabled);
     m_night_stadium->setCheckable(enabled);
     m_disable_replays->setCheckable(enabled);
+    m_fast_reset_from_HUD->setCheckable(enabled);
     //m_night_stadium_action->setEnabled(enabled);
     //m_disable_music_action->setEnabled(enabled);
     //m_highlight_ball_shadow_action->setEnabled(enabled);
@@ -1168,6 +1191,7 @@ void NetPlayDialog::OnMsgStartGame()
         client->StartGame(game->GetFilePath());
         m_night_stadium->setEnabled(false);
         m_disable_replays->setEnabled(false);
+        m_fast_reset_from_HUD->setEnabled(false);
       }
       else
         PanicAlertFmtT("Selected game doesn't exist in game list!");
@@ -1188,6 +1212,7 @@ void NetPlayDialog::OnMsgStopGame()
   const bool is_hosting = IsHosting();
   m_night_stadium->setEnabled(is_hosting);
   m_disable_replays->setEnabled(is_hosting);
+  m_fast_reset_from_HUD->setEnabled(is_hosting);
   m_spectator_toggle->setEnabled(true);
 }
 

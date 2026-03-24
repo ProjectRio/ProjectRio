@@ -539,6 +539,10 @@ void NetPlayClient::OnData(sf::Packet& packet)
     OnDisableReplaysMsg(packet);
     break;
 
+  case MessageID::FastResetFromHUD:
+    OnFastResetFromHUDMsg(packet); 
+    break;
+
   case MessageID::Course:
     OnCourseMsg(packet);
     break;
@@ -1654,6 +1658,14 @@ void NetPlayClient::OnDisableReplaysMsg(sf::Packet& packet)
   Gecko::setDisableReplays(disable);
 }
 
+void NetPlayClient::OnFastResetFromHUDMsg(sf::Packet& packet)
+{
+  bool load_from_hud;
+  packet >> load_from_hud;
+  m_dialog->OnFastResetFromHUDResult(load_from_hud);
+  Gecko::setFastResetFromHUD(load_from_hud);
+}
+
 void NetPlayClient::OnChecksumMsg(sf::Packet& packet)
 {
   u32 inChecksum;
@@ -1931,6 +1943,15 @@ void NetPlayClient::SendDisableReplays(bool disable)
   sf::Packet packet;
   packet << MessageID::DisableReplays;
   packet << disable;
+
+  SendAsync(std::move(packet));
+}
+
+void NetPlayClient::SendFastResetFromHUD(bool load_from_hud)
+{
+  sf::Packet packet;
+  packet << MessageID::FastResetFromHUD;
+  packet << load_from_hud;
 
   SendAsync(std::move(packet));
 }

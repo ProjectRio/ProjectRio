@@ -24,20 +24,13 @@ void SaveCodes(Common::IniFile& inifile, const std::vector<GeckoCode>& gcodes);
 std::optional<GeckoCode::Code> DeserializeLine(const std::string& line);
 void ReadLines(std::vector<GeckoCode>& gcodes, std::vector<std::string>& lines, bool user_defined);
 
-static bool isDisableReplays = false;
-void setDisableReplays(bool disable);
 static bool isNightStadium = false;
 void setNightStadium(bool is_night);
+static bool isDisableReplays = false;
+void setDisableReplays(bool disable);
+static bool isLoadingFromHUD = false;
+void setFastResetFromHUD(bool load_from_hud);
 //static bool isTrainingMode = false;
-
-const std::string MSSB_DisableReplays = R"(
-+$Disable Replays [LittleCoaks]
-206bb214 38000001
-046bb214 38000000
-E2000001 00000000
-*Disables replays
-
-)";
 
 const std::string MSSB_NightStadium = R"(
 +$Night Mario Stadium [LittleCoaks]
@@ -49,6 +42,25 @@ C2650678 00000004
 60000000 00000000
 E2000001 00000000
 *Mario Stadium is given the night-time effect as seen in Bom-omb Derby
+
+)";
+
+const std::string MSSB_DisableReplays = R"(
++$Disable Replays [LittleCoaks]
+206bb214 38000001
+046bb214 38000000
+E2000001 00000000
+*Disables replays
+
+)";
+
+// TODO call loader function
+const std::string MSSB_FastResetFromHUD = R"(
++$Disable Replays [LittleCoaks]
+206bb214 38000001
+046bb214 38000000
+E2000001 00000000
+*Disables replays
 
 )";
 

@@ -73,6 +73,7 @@ public:
 
   void AdjustNightStadium(bool is_night);
   void AdjustReplays(bool disable);
+  void AdjustFastResetFromHUD(bool load_from_hud);
 
   void KickPlayer(PlayerId player);
 
@@ -191,6 +192,7 @@ private:
 
   bool m_current_night_value = false;
   bool m_current_disable_replays_value = false;
+  bool m_current_fast_reset_from_HUD_value = false;
   std::optional<int> m_tagset_id = std::nullopt;
 
   std::map<PlayerId, Client> m_players;
