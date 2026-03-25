@@ -366,11 +366,10 @@ bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
     }
 
     // Runners
-    //const std::string runnerLogKeys[3] = {"Runner 1B", "Runner 2B", "Runner 3B"};
     for (int i = 0; i < 3; i++)
     {
         INFO_LOG_FMT(COMMON, "Runner {}: RosterSpot={}, CharID={}",
-                    runnerLogKeys[i],
+                    runnerKeys[i],
                     state.runnerRosterSpot[i].has_value() ? std::to_string(state.runnerRosterSpot[i].value()) : "not set",
                     state.runnerCharacterID[i].has_value() ? std::to_string(state.runnerCharacterID[i].value()) : "not set");
     }
