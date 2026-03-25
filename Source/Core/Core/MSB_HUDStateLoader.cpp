@@ -237,9 +237,31 @@ bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
             }
         }
     }
+        
+    // === RUNNERS ===
+    // Runners are indexed 1-3 for each base (1B, 2B, 3B)
+    // runnerRosterSpot and runnerCharacterID are 0-indexed arrays (0=1B, 1=2B, 2=3B)
 
-    // TODO RUNNERS
+    const std::string runnerKeys[3] = {"Runner 1B", "Runner 2B", "Runner 3B"};
 
+    for (int i = 0; i < 3; i++)
+    {
+        const std::string& key = runnerKeys[i];
+        if (j.count(key))
+        {
+            const picojson::object& runner = j.at(key).get<picojson::object>();
+
+            if (runner.count("Runner Roster Loc"))
+            {
+                uint16_t batterRosterLoc = static_cast<uint16_t>(j.at("Batter Roster Loc").get<double>());
+                uint16_t runnerRosterLocRaw = static_cast<uint16_t>(runner.at("Runner Roster Loc").get<double>());
+                state.runnerRosterSpot[i] = (batterRosterLoc + runnerRosterLocRaw) % 9;
+            }
+
+            if (runner.count("Runner Char Id"))
+                state.runnerCharacterID[i] = static_cast<uint16_t>(runner.at("Runner Char Id").get<double>());
+        }
+    }
 
     // === STAMINA ===
     // Stamina is stored per-character in defensive stats.
@@ -330,6 +352,16 @@ bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
             INFO_LOG_FMT(COMMON, "Home Batting Order {}: Position {}", i, state.homePositionByBattingOrder[i].value());
     }
 
+    // Runners
+    //const std::string runnerLogKeys[3] = {"Runner 1B", "Runner 2B", "Runner 3B"};
+    for (int i = 0; i < 3; i++)
+    {
+        INFO_LOG_FMT(COMMON, "Runner {}: RosterSpot={}, CharID={}",
+                    runnerLogKeys[i],
+                    state.runnerRosterSpot[i].has_value() ? std::to_string(state.runnerRosterSpot[i].value()) : "not set",
+                    state.runnerCharacterID[i].has_value() ? std::to_string(state.runnerCharacterID[i].value()) : "not set");
+    }
+
     // Stamina
     for (int i = 0; i < 9; i++)
     {
@@ -340,7 +372,7 @@ bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
     }
 
     INFO_LOG_FMT(COMMON, "=== End HUD State ===");
-    
+
     outState = state;
     return true;
 }
