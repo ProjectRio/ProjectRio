@@ -36,10 +36,25 @@ bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
 
     const picojson::object& j = v.get<picojson::object>();
 
-        // === P1/P2 to HOME/AWAY MAPPING and VERIFICATION ===
-    std::string localUsername = StripWhitespace(LocalPlayers::m_online_player.username);
-    std::string awayPlayer = j.count("Away Player") ? StripWhitespace(j.at("Away Player").get<std::string>()) : "";
-    std::string homePlayer = j.count("Home Player") ? StripWhitespace(j.at("Home Player").get<std::string>()) : "";
+    // === P1/P2 to HOME/AWAY MAPPING and VERIFICATION ===
+    LocalPlayers::LocalPlayers localPlayersObj;
+
+    // Get the online player (port 0) for local username
+    auto portPlayers = localPlayersObj.GetPortPlayers();
+    std::string localUsername = "";
+    if (portPlayers.count(0))
+        localUsername = std::string(StripWhitespace(portPlayers.at(0).username));
+
+    if (localUsername.empty())
+    {
+        ERROR_LOG_FMT(COMMON, "Could not find online player in local players config.");
+        return false;
+    }
+
+    std::string awayPlayer = j.count("Away Player") ? 
+        std::string(StripWhitespace(j.at("Away Player").get<std::string>())) : "";
+    std::string homePlayer = j.count("Home Player") ? 
+        std::string(StripWhitespace(j.at("Home Player").get<std::string>())) : "";
 
     if (awayPlayer == "No Player Selected" || homePlayer == "No Player Selected")
     {
@@ -47,12 +62,11 @@ bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
         return false;
     }
 
-    // Find the opponent - the port player who isn't the local player
+    // Find opponent - port player who isn't the local player
     std::string opponentUsername = "";
-    auto portPlayers = LocalPlayers::GetPortPlayers();
     for (const auto& [port, player] : portPlayers)
     {
-        std::string portUsername = StripWhitespace(player.username);
+        std::string portUsername = std::string(StripWhitespace(player.username));
         if (portUsername != localUsername && portUsername != "No Player Selected")
         {
             opponentUsername = portUsername;
@@ -65,7 +79,6 @@ bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
         ERROR_LOG_FMT(COMMON, "Could not find opponent in local players config.");
         return false;
     }
-
     // Validate both players match the HUD file
     bool localIsAway = (localUsername == awayPlayer);
     bool localIsHome = (localUsername == homePlayer);
@@ -179,14 +192,14 @@ bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
 
     if (j.count("Away Inning Scores"))
     {
-        const picojson::array& scores = j.at("Away Inning Scores").get<picojson::object>();
+        const picojson::array& scores = j.at("Away Inning Scores").get<picojson::array>();
         for (int i = 0; i < static_cast<int>(scores.size()) && i < 18; i++)
             state.awayInningScores[i] = static_cast<uint16_t>(scores[i].get<double>());
     }
 
     if (j.count("Home Inning Scores"))
     {
-        const picojson::array& scores = j.at("Home Inning Scores").get<picojson::object>();
+        const picojson::array& scores = j.at("Home Inning Scores").get<picojson::array>();
         for (int i = 0; i < static_cast<int>(scores.size()) && i < 18; i++)
             state.homeInningScores[i] = static_cast<uint16_t>(scores[i].get<double>());
     }
