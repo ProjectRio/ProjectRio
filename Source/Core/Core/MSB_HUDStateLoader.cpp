@@ -278,7 +278,69 @@ bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
         }
     }
 
-    INFO_LOG_FMT(COMMON, "HUD state loaded successfully from {}", path);
+    // === DEBUG LOGGING OF LOADED STATE ===
+    INFO_LOG_FMT(COMMON, "=== HUD State Loaded ===");
+
+    // Pre-game
+    INFO_LOG_FMT(COMMON, "Stadium: {}", state.stadium.has_value() ? std::to_string(state.stadium.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "First Batter: {}", state.firstBatter.has_value() ? std::to_string(state.firstBatter.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Star Skills: {}", state.starSkills.has_value() ? std::to_string(state.starSkills.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Innings Selected: {}", state.inningsSelected.has_value() ? std::to_string(state.inningsSelected.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Mercy: {}", state.mercy.has_value() ? std::to_string(state.mercy.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Logo P1: {}", state.logoP1.has_value() ? std::to_string(state.logoP1.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Logo P2: {}", state.logoP2.has_value() ? std::to_string(state.logoP2.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Captain P1: {}", state.captainCharacterP1.has_value() ? std::to_string(state.captainCharacterP1.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Captain P2: {}", state.captainCharacterP2.has_value() ? std::to_string(state.captainCharacterP2.value()) : "not set");
+
+    // Rosters
+    for (int i = 0; i < 9; i++)
+        INFO_LOG_FMT(COMMON, "P1 Position {}: {}", i, state.charactersP1ByPosition[i].has_value() ? std::to_string(state.charactersP1ByPosition[i].value()) : "not set");
+    for (int i = 0; i < 9; i++)
+        INFO_LOG_FMT(COMMON, "P2 Position {}: {}", i, state.charactersP2ByPosition[i].has_value() ? std::to_string(state.charactersP2ByPosition[i].value()) : "not set");
+
+    // In-game
+    INFO_LOG_FMT(COMMON, "Inning: {}", state.inning.has_value() ? std::to_string(state.inning.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Half Inning: {}", state.halfInning.has_value() ? std::to_string(state.halfInning.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Batting Team: {}", state.battingTeam.has_value() ? std::to_string(state.battingTeam.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Fielding Team: {}", state.fieldingTeam.has_value() ? std::to_string(state.fieldingTeam.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Away Score: {}", state.awayScore.has_value() ? std::to_string(state.awayScore.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Home Score: {}", state.homeScore.has_value() ? std::to_string(state.homeScore.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Strikes: {}", state.strikes.has_value() ? std::to_string(state.strikes.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Balls: {}", state.balls.has_value() ? std::to_string(state.balls.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Outs: {}", state.outs.has_value() ? std::to_string(state.outs.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Away Stars: {}", state.awayTeamStars.has_value() ? std::to_string(state.awayTeamStars.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Home Stars: {}", state.homeTeamStars.has_value() ? std::to_string(state.homeTeamStars.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Star Chance: {}", state.isStarChance.has_value() ? std::to_string(state.isStarChance.value()) : "not set");
+
+    // Inning scores
+    for (int i = 0; i < 18; i++)
+    {
+        if (state.awayInningScores[i].has_value())
+            INFO_LOG_FMT(COMMON, "Away Inning {} Score: {}", i, state.awayInningScores[i].value());
+        if (state.homeInningScores[i].has_value())
+            INFO_LOG_FMT(COMMON, "Home Inning {} Score: {}", i, state.homeInningScores[i].value());
+    }
+
+    // Batting order
+    for (int i = 0; i < 9; i++)
+    {
+        if (state.awayPositionByBattingOrder[i].has_value())
+            INFO_LOG_FMT(COMMON, "Away Batting Order {}: Position {}", i, state.awayPositionByBattingOrder[i].value());
+        if (state.homePositionByBattingOrder[i].has_value())
+            INFO_LOG_FMT(COMMON, "Home Batting Order {}: Position {}", i, state.homePositionByBattingOrder[i].value());
+    }
+
+    // Stamina
+    for (int i = 0; i < 9; i++)
+    {
+        if (state.pitcherStaminaP1[i].has_value())
+            INFO_LOG_FMT(COMMON, "P1 Stamina Roster {}: {}", i, state.pitcherStaminaP1[i].value());
+        if (state.pitcherStaminaP2[i].has_value())
+            INFO_LOG_FMT(COMMON, "P2 Stamina Roster {}: {}", i, state.pitcherStaminaP2[i].value());
+    }
+
+    INFO_LOG_FMT(COMMON, "=== End HUD State ===");
+    
     outState = state;
     return true;
 }
