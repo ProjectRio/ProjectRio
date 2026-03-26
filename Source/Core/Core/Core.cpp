@@ -81,6 +81,8 @@
 //#include "Core/LocalPlayers.h"
 #include "Core/LocalPlayersConfig.h"
 
+#include "Core/MSB_GenerateCustomMatchStateGeckoCode.h"
+
 
 #ifdef USE_MEMORYWATCHER
 #include "Core/MemoryWatcher.h"
@@ -88,6 +90,7 @@
 
 #include "DiscIO/RiivolutionPatcher.h"
 #include "Core/MSB_StatTracker.h"
+#include "Core/MSB_GenerateCustomMatchStateGeckoCode.h"
 
 #include "InputCommon/ControlReference/ControlReference.h"
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
@@ -105,6 +108,7 @@
 #include "VideoCommon/VideoConfig.h"
 
 #include "Common/TagSet.h"
+#include "Core/GeckoCodeConfig.h"
 
 namespace Core
 {
@@ -257,6 +261,8 @@ void RunRioFunctions(const Core::CPUThreadGuard& guard)
   }
 
   DisplayPlayerNames(guard);
+  if (Gecko::isLoadingFromHUD)
+    MSBQuickMatchBattingOrderMsg(guard, Gecko::HUDState);
   AutoGolfMode(guard);
   TrainingMode(guard);
 }
@@ -703,6 +709,67 @@ void RunDraftTimer(const Core::CPUThreadGuard& guard)
                              fmt::format("Draft:  {}:0{}", draftMinutes, draftSeconds), 2000);
       }
     }
+  }
+}
+
+void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBGameState& state)
+{
+  // Validate state has been initialized
+  if (!state.firstBatter.has_value())
+    return;
+
+  // make batting order message if not in-game
+  RelNumber rel = static_cast<RelNumber>(PowerPC::MMU::HostRead_U8(guard, aRelNumber));
+  if (rel == RelNumber::MainMenu)
+  {
+
+    // get player names
+    LocalPlayers::LocalPlayers localPlayersObj;
+
+    auto portPlayers = localPlayersObj.GetPortPlayers();
+    std::string localUsername = "";
+    if (portPlayers.count(0))
+      localUsername = std::string(StripWhitespace(portPlayers.at(0).username));
+
+    std::string opponentUsername = "";
+    for (const auto& [port, player] : portPlayers)
+    {
+        std::string portUsername = std::string(StripWhitespace(player.username));
+        if (portUsername != localUsername)
+        {
+            opponentUsername = portUsername;
+            break;
+        }
+    }
+
+    // get batting order strings
+    bool p1IsAway = !state.firstBatter.value();
+
+    std::string p1BattingOrderStr = MSB_QuickMatchBattingOrderStr(state, true, p1IsAway);
+    std::string p2BattingOrderStr = MSB_QuickMatchBattingOrderStr(state, false, !p1IsAway);
+
+
+    // create message
+    OSD::AddTypedMessage
+    (
+      OSD::MessageType::CustomMatchBattingOrder,
+      fmt::format
+      (
+        "Quick Match Setup V1 \n"
+        "Press A to skip through all menus except for the batting order.\n"
+        "The rosters and game settings will be set automatically.\n"
+        "It's normal for the graphics to look buggy.\n"
+        "\n"
+        "Set the batting order EXACTLY as shown.\n"
+        "\n"
+        "P1 {} batting order\n"
+        "{}\n"
+        "\n"
+        "P2 {} batting order\n"
+        "{}", 
+        localUsername, p1BattingOrderStr, opponentUsername, p2BattingOrderStr
+      )
+    );
   }
 }
 

@@ -10,6 +10,7 @@
 #include "Common/Logging/Log.h"
 #include "Core/GeckoCode.h"
 #include "Core/GeckoCodeConfig.h"
+#include "Core/MSB_StatTracker.h"
 
 static Gecko::GeckoCode::Code ToGeckoCode(uint8_t geckoType, uint32_t address, uint32_t value)
 {
@@ -555,4 +556,51 @@ std::vector<Gecko::GeckoCode> MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateG
     geckoCode.codes = std::move(codes);
 
     return { geckoCode };
+}
+
+std::string MSB_QuickMatchBattingOrderStr(const MSBGameState& state, bool isP1, bool isAway)
+{
+    bool inputsValidated = true;
+    for (int i = 0; i < 9; i++)
+    {
+        if (isP1) 
+        {
+            if (!state.charactersP1ByPosition[i].has_value())
+                inputsValidated = false;
+        
+        }
+        else
+        {
+            if (!state.charactersP2ByPosition[i].has_value())
+                inputsValidated = false;
+        }
+        if (isAway)
+        {
+            if (!state.awayPositionByBattingOrder[i].has_value())
+                inputsValidated = false;
+        }
+        else
+        {
+            if (state.homePositionByBattingOrder[i].has_value())
+                inputsValidated = false;
+        }
+    }
+
+    std::string battingOrderStr = "";
+
+    if (inputsValidated)
+    {
+
+        // TODO add handedness, and superstar
+        for (int i = 0; i < 9; i++)
+        {
+            uint32_t position = (isAway) ? state.awayPositionByBattingOrder[i].value() : state.homePositionByBattingOrder[i].value();
+            uint8_t characterID = (isP1) ? state.charactersP1ByPosition[position].value() : state.charactersP2ByPosition[position].value();
+            std::string characterName = (cCharIdToCharName.count(characterID)) ? cCharIdToCharName.at(characterID) : "Invalid CharID";
+
+            battingOrderStr += characterName + " B F" + "\n";
+        }
+    }
+
+    return battingOrderStr;
 }

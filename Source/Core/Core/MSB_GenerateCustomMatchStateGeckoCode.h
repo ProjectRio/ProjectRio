@@ -17,6 +17,9 @@ struct MSBGameState
     std::optional<uint8_t> charactersP1ByPosition[9]; 
     std::optional<uint8_t> charactersP2ByPosition[9];  
 
+    // TODO: add handedness
+    // TODO: add superstars
+
     std::optional<uint8_t> logoP1; // 0-47
     std::optional<uint8_t> logoP2; // 0-47
 
@@ -153,3 +156,5 @@ public:
     static constexpr uint32_t PITCHER_STAMINA_P2_BASE = 0x803536e6;
     static constexpr uint32_t PITCHER_STAMINA_STRIDE = 0x1E;
 };
+
+std::string MSB_QuickMatchBattingOrderStr(const MSBGameState& state, bool isP1, bool isAway);

@@ -19,6 +19,8 @@
 #include "Common/CommonTypes.h"
 
 #include "Core/HW/Memmap.h"
+#include "Core/GeckoCodeConfig.h"
+#include "Core/MSB_GenerateCustomMatchStateGeckoCode.h"
 
 struct BootParameters;
 struct WindowSystemInfo;
@@ -55,6 +57,11 @@ enum class GameName : u8 {
   UnknownGame = 0,
   MarioBaseball = 1,
   ToadstoolTour = 2,
+};
+
+enum class RelNumber : u16 {
+  MainMenu = 4,
+  InGame = 5,
 };
 
 // Console type values based on:
@@ -231,6 +238,7 @@ void MGTTCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer)
 
 void AutoGolfMode(const Core::CPUThreadGuard& guard);
 void TrainingMode(const Core::CPUThreadGuard& guard);
+void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBGameState& state);
 void DisplayPlayerNames(const Core::CPUThreadGuard& guard);
 void SetAvgPing(const Core::CPUThreadGuard& guard);
 void SetNetplayerUserInfo();
@@ -285,6 +293,7 @@ static const u32 aMinigameID = 0x808980DE;  // 3 == Barrel Batter; 2 == Wall Bal
 static const u32 aWhoPaused = 0x8039D7D3; // 2 == fielder, 1 == batter
 //static const u32 aMatchStarted = 0x8036F3B8;  // bool for if a game is in session
 static const u32 aSceneId = 0x800E877F;
+static const u32 aRelNumber = 0x800E877C;
 
 // toadstooltour addresses
 static const u32 aDistanceRemainingToHole = 0x802D7368;

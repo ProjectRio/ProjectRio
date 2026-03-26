@@ -188,16 +188,17 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
   // append the gecko codes to allow starting a game from the latest hud game state.
   if (isLoadingFromHUD)
   {
-      MSBGameState state;
-      if (LoadDebugState("User/Debug/msb_state.txt", state))
+      HUDState = MSBGameState{};
+      
+      if (LoadDebugState("User/Debug/msb_state.txt", HUDState))
       {
-          auto debugCodes = MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(state);
+          auto debugCodes = MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(HUDState);
           for (auto& code : debugCodes)
               gcodes.push_back(std::move(code));
       }
-      else if (LoadStateFromHud("User/HudFiles/hud.json", state))
+      else if (LoadStateFromHud("User/HudFiles/hud.json", HUDState))
       {
-          auto hudCodes = MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(state);
+          auto hudCodes = MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(HUDState);
           for (auto& code : hudCodes)
               gcodes.push_back(std::move(code));
       }
@@ -364,6 +365,8 @@ void setDisableReplays(bool disable)
 }
 
 bool isLoadingFromHUD = false;
+MSBGameState HUDState;
+
 void setFastResetFromHUD(bool load_from_hud)
 {
   isLoadingFromHUD = load_from_hud;
