@@ -1319,8 +1319,8 @@ std::string StatTracker::getHUDJSON(std::string in_event_num, Event& in_curr_eve
     json_stream << "  \"First Batting Team\": " << std::to_string(m_game_info.first_batting_team) << ",\n";
     json_stream << "  \"Star Skills On\": "      << std::to_string(m_game_info.star_skills_on) << ",\n";
     json_stream << "  \"Mercy On\": "            << std::to_string(m_game_info.mercy_on) << ",\n";
-    json_stream << "  \"Away Logo\": \""         << decode("Logo", m_game_info.away_logo, inDecode) << "\",\n";
-    json_stream << "  \"Home Logo\": \""         << decode("Logo", m_game_info.home_logo, inDecode) << "\",\n";
+    json_stream << "  \"Away Logo\": "         << decode("Logo", m_game_info.away_logo, inDecode) << ",\n";
+    json_stream << "  \"Home Logo\": "         << decode("Logo", m_game_info.home_logo, inDecode) << ",\n";
     json_stream << "  \"Event Num\": \""             << in_event_num << "\",\n";
     json_stream << "  \"Away Player\": \""           << m_game_info.getAwayTeamPlayer().GetUsername() << "\",\n";
     json_stream << "  \"Home Player\": \""           << m_game_info.getHomeTeamPlayer().GetUsername() << "\",\n";
