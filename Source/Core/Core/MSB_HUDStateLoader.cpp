@@ -56,18 +56,12 @@ bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
     std::string homePlayer = j.count("Home Player") ? 
         std::string(StripWhitespace(j.at("Home Player").get<std::string>())) : "";
 
-    if (awayPlayer == "No Player Selected" || homePlayer == "No Player Selected")
-    {
-        ERROR_LOG_FMT(COMMON, "HUD file has unselected player. Away='{}', Home='{}'", awayPlayer, homePlayer);
-        return false;
-    }
-
     // Find opponent - port player who isn't the local player
     std::string opponentUsername = "";
     for (const auto& [port, player] : portPlayers)
     {
         std::string portUsername = std::string(StripWhitespace(player.username));
-        if (portUsername != localUsername && portUsername != "No Player Selected")
+        if (portUsername != localUsername)
         {
             opponentUsername = portUsername;
             break;
