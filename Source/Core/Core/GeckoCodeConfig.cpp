@@ -191,8 +191,8 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
       MSBGameState state;
       if (LoadDebugState("User/Debug/msb_state.txt", state))
       {
-          auto hudCodes = MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(state);
-          for (auto& code : hudCodes)
+          auto debugCodes = MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(state);
+          for (auto& code : debugCodes)
               gcodes.push_back(std::move(code));
       }
       else if (LoadStateFromHud("User/HudFiles/hud.json", state))
