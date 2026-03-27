@@ -142,7 +142,13 @@ bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
             uint8_t charID = static_cast<uint8_t>(roster.at("CharID").get<double>());
             uint8_t position = static_cast<uint8_t>(roster.at("Fielding Position").get<double>());
             if (position < 9)
+            {
                 state.charactersP1ByPosition[position] = charID;
+                state.battingHandP1ByPosition[position] = static_cast<uint8_t>(roster.at("Batting Hand").get<double>());
+                state.fieldingHandP1ByPosition[position] = static_cast<uint8_t>(roster.at("Fielding Hand").get<double>());
+                state.superstarP1ByPosition[position] = static_cast<uint8_t>(roster.at("Superstar").get<double>());
+            }
+
             if (roster.count("Captain") && roster.at("Captain").get<double>() == 1)
                 state.captainCharacterP1 = charID;
         }
@@ -153,15 +159,31 @@ bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
             uint8_t charID = static_cast<uint8_t>(roster.at("CharID").get<double>());
             uint8_t position = static_cast<uint8_t>(roster.at("Fielding Position").get<double>());
             if (position < 9)
+            {
                 state.charactersP2ByPosition[position] = charID;
+                state.battingHandP2ByPosition[position] = static_cast<uint8_t>(roster.at("Batting Hand").get<double>());
+                state.fieldingHandP2ByPosition[position] = static_cast<uint8_t>(roster.at("Fielding Hand").get<double>());
+                state.superstarP2ByPosition[position] = static_cast<uint8_t>(roster.at("Superstar").get<double>());
+            }
+            
             if (roster.count("Captain") && roster.at("Captain").get<double>() == 1)
                 state.captainCharacterP2 = charID;
         }
     }
     for (int i = 0; i < 9; i++)
+    {
         INFO_LOG_FMT(COMMON, "P1 Position {}: {}", i, state.charactersP1ByPosition[i].has_value() ? std::to_string(state.charactersP1ByPosition[i].value()) : "not set");
+        INFO_LOG_FMT(COMMON, "P1 batting hand {}: {}", i, state.battingHandP1ByPosition[i].has_value() ? std::to_string(state.battingHandP1ByPosition[i].value()) : "not set");
+        INFO_LOG_FMT(COMMON, "P1 fielding hand {}: {}", i, state.fieldingHandP1ByPosition[i].has_value() ? std::to_string(state.fieldingHandP1ByPosition[i].value()) : "not set");
+        INFO_LOG_FMT(COMMON, "P1 superstar {}: {}", i, state.superstarP1ByPosition[i].has_value() ? std::to_string(state.superstarP1ByPosition[i].value()) : "not set");
+    }
     for (int i = 0; i < 9; i++)
+    {
         INFO_LOG_FMT(COMMON, "P2 Position {}: {}", i, state.charactersP2ByPosition[i].has_value() ? std::to_string(state.charactersP2ByPosition[i].value()) : "not set");
+        INFO_LOG_FMT(COMMON, "P2 batting hand {}: {}", i, state.battingHandP2ByPosition[i].has_value() ? std::to_string(state.battingHandP2ByPosition[i].value()) : "not set");
+        INFO_LOG_FMT(COMMON, "P2 fielding hand {}: {}", i, state.fieldingHandP2ByPosition[i].has_value() ? std::to_string(state.fieldingHandP2ByPosition[i].value()) : "not set");
+        INFO_LOG_FMT(COMMON, "P2 superstar {}: {}", i, state.superstarP2ByPosition[i].has_value() ? std::to_string(state.superstarP2ByPosition[i].value()) : "not set");
+    }
     INFO_LOG_FMT(COMMON, "Captain P1: {}", state.captainCharacterP1.has_value() ? std::to_string(state.captainCharacterP1.value()) : "not set");
     INFO_LOG_FMT(COMMON, "Captain P2: {}", state.captainCharacterP2.has_value() ? std::to_string(state.captainCharacterP2.value()) : "not set");
 

@@ -16,9 +16,20 @@ struct MSBGameState
     // rosters need to be given in position order (P, C, 1B, 2B, 3B, SS, LF, CF, RF)
     std::optional<uint8_t> charactersP1ByPosition[9]; 
     std::optional<uint8_t> charactersP2ByPosition[9];  
+    
+    // Handedness stored in position order, matching charactersP1/P2ByPosition
+    // 0 = right, 1 = left
+    // currently just used for the message output - more decomp is needed to automate the batting order.
+    std::optional<uint8_t> battingHandP1ByPosition[9];
+    std::optional<uint8_t> battingHandP2ByPosition[9];
+    std::optional<uint8_t> fieldingHandP1ByPosition[9];
+    std::optional<uint8_t> fieldingHandP2ByPosition[9];
 
-    // TODO: add handedness
-    // TODO: add superstars
+    // Superstar stored in position order
+    // 0 = off, 1 = on
+    // currently just used for the message output - more decomp is needed to automate the batting order.
+    std::optional<uint8_t> superstarP1ByPosition[9];
+    std::optional<uint8_t> superstarP2ByPosition[9];
 
     std::optional<uint8_t> logoP1; // 0-47
     std::optional<uint8_t> logoP2; // 0-47
@@ -101,6 +112,8 @@ public:
     static constexpr uint32_t CHARACTER_SELECT_P1_CURSOR_ADDR = 0x80750c48;
     static constexpr uint32_t CHARACTER_SELECT_P2_CURSOR_ADDR = 0x80750c4C;
     static constexpr uint32_t CHARACTER_SELECT_PREVENT_CURSOR_MOVEMENT_ADDR = 0x8064df60;
+
+    // TODO once decomp is at more advanced state - add addresses to automate handedness and superstars in batting order screen.
 
     static constexpr uint32_t STADIUM_ADDR = 0x80750c37;
     static constexpr uint32_t STADIUM_CURSOR_RIGHT_INSTR_ADDR = 0x80650586;

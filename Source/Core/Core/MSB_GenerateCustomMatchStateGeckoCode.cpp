@@ -590,15 +590,22 @@ std::string MSB_QuickMatchBattingOrderStr(const MSBGameState& state, bool isP1, 
 
     if (inputsValidated)
     {
-
-        // TODO add handedness, and superstar
         for (int i = 0; i < 9; i++)
         {
             uint32_t position = (isAway) ? state.awayPositionByBattingOrder[i].value() : state.homePositionByBattingOrder[i].value();
+
             uint8_t characterID = (isP1) ? state.charactersP1ByPosition[position].value() : state.charactersP2ByPosition[position].value();
+            uint8_t battingHand = (isP1) ? state.battingHandP1ByPosition[position].value() : state.battingHandP2ByPosition[position].value();
+            uint8_t fieldingHand = (isP1) ? state.fieldingHandP1ByPosition[position].value() : state.fieldingHandP2ByPosition[position].value();
+            uint8_t superstar = (isP1) ? state.superstarP1ByPosition[position].value() : state.superstarP2ByPosition[position].value();
+
             std::string characterName = (cCharIdToCharName.count(characterID)) ? cCharIdToCharName.at(characterID) : "Invalid CharID";
 
-            battingOrderStr += characterName + " B F" + "\n";
+            std::string battingHandStr = (battingHand == 1) ? "L" : "R";
+            std::string fieldingHandStr = (fieldingHand == 1) ? "L" : "R";
+            std::string superstarStr = (superstar == 1) ? " ★" : "";
+
+            battingOrderStr += characterName + " " + superstarStr + " " + battingHandStr + " " + fieldingHandStr + "\n";
         }
     }
 
