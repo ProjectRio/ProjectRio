@@ -206,8 +206,8 @@ void GenerateOrderAndPositionGeckoCodes(
             // i + 1 since first index is a copy of the pitchers spot in the order + position.
             uint32_t address = 
                 structBase + 
-                MSBMatchCodeBuilder::ORDER_AND_POSITION_STRUCT_CHARACTER_STRIDE * (i + 1) + 
-                MSBMatchCodeBuilder::ORDER_AND_POSITION_STRUCT_POSITION_STRIDE;
+                MSBQuickMatchCodeBuilder::ORDER_AND_POSITION_STRUCT_CHARACTER_STRIDE * (i + 1) + 
+                MSBQuickMatchCodeBuilder::ORDER_AND_POSITION_STRUCT_POSITION_STRIDE;
 
             if (positionByBattingOrder[i].has_value())
             {
@@ -221,7 +221,7 @@ void GenerateOrderAndPositionGeckoCodes(
                 if (val == 0)
                 {
                     outCodes.push_back(ToGeckoCode(0x04, structBase, static_cast<uint32_t>(i)));
-                    outCodes.push_back(ToGeckoCode(0x04, structBase + MSBMatchCodeBuilder::ORDER_AND_POSITION_STRUCT_POSITION_STRIDE, 0x00000000));
+                    outCodes.push_back(ToGeckoCode(0x04, structBase + MSBQuickMatchCodeBuilder::ORDER_AND_POSITION_STRUCT_POSITION_STRIDE, 0x00000000));
                 }
             }
         }
@@ -558,7 +558,7 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
     return { geckoCode };
 }
 
-std::string MSB_QuickMatchBattingOrderStr(const MSBGameState& state, bool isP1, bool isAway)
+std::string MSB_QuickMatchBattingOrderStr(const MSBQuickMatchGameState& state, bool isP1, bool isAway)
 {
     bool inputsValidated = true;
     for (int i = 0; i < 9; i++)
