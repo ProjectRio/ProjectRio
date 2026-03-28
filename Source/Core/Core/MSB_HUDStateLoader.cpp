@@ -114,7 +114,6 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
         INFO_LOG_FMT(COMMON, "Solo game detected, skipping opponent validation.");
     }
 
-    bool localPlayerIsAway = localIsAway;    
     INFO_LOG_FMT(COMMON, "Starting parsing HUD to fill out state");
 
 
@@ -131,9 +130,9 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
 
     for (int i = 0; i < 9; i++)
     {
-        std::string p1Key = localPlayerIsAway ? "Away Roster " + std::to_string(i)
+        std::string p1Key = localIsAway ? "Away Roster " + std::to_string(i)
                                             : "Home Roster " + std::to_string(i);
-        std::string p2Key = localPlayerIsAway ? "Home Roster " + std::to_string(i)
+        std::string p2Key = localIsAway ? "Home Roster " + std::to_string(i)
                                             : "Away Roster " + std::to_string(i);
 
         if (j.count(p1Key))
@@ -203,19 +202,16 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
         state.stadium = static_cast<uint8_t>(j.at("StadiumID").get<double>());
     INFO_LOG_FMT(COMMON, "Stadium: {}", state.stadium.has_value() ? std::to_string(state.stadium.value()) : "not set");
 
-    // firstBatter: 0 = away bats first, 1 = home bats first.
-    // We need to translate this to P1/P2 perspective.
-    // If local player is away, firstBatter maps directly.
-    // If local player is home, we invert it.
-    if (j.count("First Batting Team"))
-    {
-        uint8_t firstBattingTeam = static_cast<uint8_t>(j.at("First Batting Team").get<double>()); // 0=Original P1, 1=Original P2
-        if (localPlayerIsAway)
-            state.firstBatter = firstBattingTeam;
-        else
-            state.firstBatter = (firstBattingTeam == 0) ? 1 : 0;
-    }
-    INFO_LOG_FMT(COMMON, "First Batter: {}", state.firstBatter.has_value() ? std::to_string(state.firstBatter.value()) : "not set");
+    // handled with half inning value since the game uses this to load offence/defence, not home or away.
+    // if (j.count("First Batting Team"))
+    // {
+    //     uint8_t firstBattingTeam = static_cast<uint8_t>(j.at("First Batting Team").get<double>()); // 0=Original P1, 1=Original P2
+    //     if (localIsAway)
+    //         state.firstBatter = firstBattingTeam;
+    //     else
+    //         state.firstBatter = (firstBattingTeam == 0) ? 1 : 0;
+    // }
+    // INFO_LOG_FMT(COMMON, "First Batter: {}", state.firstBatter.has_value() ? std::to_string(state.firstBatter.value()) : "not set");
 
     if (j.count("Star Skills On"))
         state.starSkills = static_cast<uint8_t>(j.at("Star Skills On").get<double>());
@@ -243,10 +239,14 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
 
         state.battingTeam = static_cast<uint32_t>(halfInning);
         state.fieldingTeam = static_cast<uint32_t>(1 - halfInning);
+
+        if (localIsAway) state.firstBatter = halfInning;
+        else state.firstBatter = 1 - halfInning;
     }    
     INFO_LOG_FMT(COMMON, "Half Inning: {}", state.halfInning.has_value() ? std::to_string(state.halfInning.value()) : "not set");
     INFO_LOG_FMT(COMMON, "Batting Team: {}", state.battingTeam.has_value() ? std::to_string(state.battingTeam.value()) : "not set");
     INFO_LOG_FMT(COMMON, "Fielding Team: {}", state.fieldingTeam.has_value() ? std::to_string(state.fieldingTeam.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "First Batter: {}", state.firstBatter.has_value() ? std::to_string(state.firstBatter.value()) : "not set");
 
     if (j.count("Away Score"))
         state.awayScore = static_cast<uint16_t>(j.at("Away Score").get<double>());
@@ -383,9 +383,9 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
             int awayAdjustedIndex = (i + awayStartingBatter) % 9;
             int homeAdjustedIndex = (i + homeStartingBatter) % 9;
             
-            std::string p1Key = localPlayerIsAway ? "Away Roster " + std::to_string(awayAdjustedIndex)
+            std::string p1Key = localIsAway ? "Away Roster " + std::to_string(awayAdjustedIndex)
                                                 : "Home Roster " + std::to_string(homeAdjustedIndex);
-            std::string p2Key = localPlayerIsAway ? "Home Roster " + std::to_string(homeAdjustedIndex)
+            std::string p2Key = localIsAway ? "Home Roster " + std::to_string(homeAdjustedIndex)
                                                 : "Away Roster " + std::to_string(awayAdjustedIndex);
 
             if (j.count(p1Key))
