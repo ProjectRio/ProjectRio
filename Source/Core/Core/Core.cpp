@@ -726,7 +726,7 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
 
   // make batting order message if not in-game
   RelNumber rel = static_cast<RelNumber>(PowerPC::MMU::HostRead_U16(guard, aRelNumber));
-  INFO_LOG_FMT(COMMON, "Rel number {}", rel);
+  INFO_LOG_FMT(COMMON, "Rel number {}", static_cast<uint16_t>(rel));
   if (rel == RelNumber::MainMenu)
   {
     // get player names
