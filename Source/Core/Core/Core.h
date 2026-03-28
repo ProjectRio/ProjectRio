@@ -268,6 +268,8 @@ bool GameSupportsTagSets();
 std::optional<std::pair<u32,u32>> getGameFreeMemory();
 
 static bool quickMatchBattingOrderMsgFetched = false;
+static std::string p1BattingOrderStr = "";
+static std::string p2BattingOrderStr = "";
 
 static const u32 aOpponentPort = 0x802EBF92;
 static const u32 aFielderPort = 0x802EBF94;

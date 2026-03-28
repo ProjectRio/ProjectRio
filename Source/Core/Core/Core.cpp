@@ -749,9 +749,9 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
     bool p1IsAway = !state.firstBatter.value();
 
     INFO_LOG_FMT(COMMON, "Getting P1 batting order string");
-    std::string p1BattingOrderStr = MSB_QuickMatchBattingOrderStr(state, true, p1IsAway);
+    p1BattingOrderStr = MSB_QuickMatchBattingOrderStr(state, true, p1IsAway);
     INFO_LOG_FMT(COMMON, "Getting P2 batting order string");
-    std::string p2BattingOrderStr = MSB_QuickMatchBattingOrderStr(state, false, !p1IsAway);
+    p2BattingOrderStr = MSB_QuickMatchBattingOrderStr(state, false, !p1IsAway);
 
     quickMatchBattingOrderMsgFetched = true;
     }
@@ -776,7 +776,8 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
         "{}\n", 
         localUsername, p1BattingOrderStr, opponentUsername, p2BattingOrderStr
       ), 
-      2000U
+      OSD::Duration::NORMAL,
+      OSD::Color::BLUE
     );
   }
   INFO_LOG_FMT(COMMON, "Batting order message complete");
