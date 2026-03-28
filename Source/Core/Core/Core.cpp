@@ -712,10 +712,6 @@ void RunDraftTimer(const Core::CPUThreadGuard& guard)
 
 void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMatchGameState& state)
 {
-  INFO_LOG_FMT(COMMON, "Start of quick match message");
-
-  static bool quickMatchBattingOrderMsgFetched = false;
-
   // Validate state has been initialized
   if (!state.firstBatter.has_value())
   {
@@ -726,7 +722,6 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
 
   // make batting order message if not in-game
   RelNumber rel = static_cast<RelNumber>(PowerPC::MMU::HostRead_U16(guard, aRelNumber));
-  INFO_LOG_FMT(COMMON, "Rel number {}", static_cast<uint16_t>(rel));
   if (rel == RelNumber::MainMenu)
   {
     // get player names
@@ -736,8 +731,6 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
     std::string localUsername = "";
     if (portPlayers.count(0))
       localUsername = std::string(StripWhitespace(portPlayers.at(0).username));
-    
-    INFO_LOG_FMT(COMMON, "Local username {}", localUsername);
 
     std::string opponentUsername = "";
     for (const auto& [port, player] : portPlayers)
@@ -749,9 +742,10 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
             break;
         }
     }
-    INFO_LOG_FMT(COMMON, "Opponent username {}", opponentUsername);
 
     // get batting order strings
+    if (!quickMatchBattingOrderMsgFetched)
+    {
     bool p1IsAway = !state.firstBatter.value();
 
     INFO_LOG_FMT(COMMON, "Getting P1 batting order string");
@@ -760,6 +754,7 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
     std::string p2BattingOrderStr = MSB_QuickMatchBattingOrderStr(state, false, !p1IsAway);
 
     quickMatchBattingOrderMsgFetched = true;
+    }
 
     // create message
     OSD::AddTypedMessage
@@ -778,7 +773,7 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
         "{}\n"
         "\n"
         "P2 {} batting order\n"
-        "{}", 
+        "{}\n", 
         localUsername, p1BattingOrderStr, opponentUsername, p2BattingOrderStr
       ), 
       2000U

@@ -566,23 +566,34 @@ std::string MSB_QuickMatchBattingOrderStr(const MSBQuickMatchGameState& state, b
         if (isP1) 
         {
             if (!state.charactersP1ByPosition[i].has_value())
+            {
                 inputsValidated = false;
-        
+                WARN_LOG_FMT(COMMON, "P1 position {} doesn't have a value", i);
+            }
         }
         else
         {
             if (!state.charactersP2ByPosition[i].has_value())
+            {
                 inputsValidated = false;
+                WARN_LOG_FMT(COMMON, "P2 position {} doesn't have a value", i);
+            }
         }
         if (isAway)
         {
             if (!state.awayPositionByBattingOrder[i].has_value())
+            {
                 inputsValidated = false;
+                WARN_LOG_FMT(COMMON, "Away batting order {} doesn't have a value", i);
+            }
         }
         else
         {
-            if (state.homePositionByBattingOrder[i].has_value())
+            if (!state.homePositionByBattingOrder[i].has_value())
+            {
                 inputsValidated = false;
+                WARN_LOG_FMT(COMMON, "Home batting order {} doesn't have a value", i);
+            }
         }
     }
 
@@ -608,6 +619,8 @@ std::string MSB_QuickMatchBattingOrderStr(const MSBQuickMatchGameState& state, b
             battingOrderStr += characterName + " " + superstarStr + " " + battingHandStr + " " + fieldingHandStr + "\n";
         }
     }
+    
+    INFO_LOG_FMT(COMMON, "Batting order string returned: {}", battingOrderStr);
 
     return battingOrderStr;
 }
