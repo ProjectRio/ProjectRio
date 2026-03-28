@@ -603,7 +603,7 @@ std::string MSB_QuickMatchBattingOrderStr(const MSBGameState& state, bool isP1, 
 
             std::string battingHandStr = (battingHand == 1) ? "L" : "R";
             std::string fieldingHandStr = (fieldingHand == 1) ? "L" : "R";
-            std::string superstarStr = (superstar == 1) ? " ★" : "";
+            std::string superstarStr = (superstar == 1) ? "*" : "";
 
             battingOrderStr += characterName + " " + superstarStr + " " + battingHandStr + " " + fieldingHandStr + "\n";
         }

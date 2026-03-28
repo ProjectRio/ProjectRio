@@ -714,15 +714,23 @@ void RunDraftTimer(const Core::CPUThreadGuard& guard)
 
 void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBGameState& state)
 {
+  INFO_LOG_FMT(COMMON, "Start of quick match message");
+
+  static bool quickMatchBattingOrderMsgFetched = false;
+
   // Validate state has been initialized
   if (!state.firstBatter.has_value())
+  {
+    INFO_LOG_FMT(COMMON, "State.firstBatter doesn't have value - no message");
+    quickMatchBattingOrderMsgFetched = false;
     return;
+  }
 
   // make batting order message if not in-game
-  RelNumber rel = static_cast<RelNumber>(PowerPC::MMU::HostRead_U8(guard, aRelNumber));
+  RelNumber rel = static_cast<RelNumber>(PowerPC::MMU::HostRead_U16(guard, aRelNumber));
+  INFO_LOG_FMT(COMMON, "Rel number {}", rel);
   if (rel == RelNumber::MainMenu)
   {
-
     // get player names
     LocalPlayers::LocalPlayers localPlayersObj;
 
@@ -730,6 +738,8 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBGameStat
     std::string localUsername = "";
     if (portPlayers.count(0))
       localUsername = std::string(StripWhitespace(portPlayers.at(0).username));
+    
+    INFO_LOG_FMT(COMMON, "Local username {}", localUsername);
 
     std::string opponentUsername = "";
     for (const auto& [port, player] : portPlayers)
@@ -741,13 +751,17 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBGameStat
             break;
         }
     }
+    INFO_LOG_FMT(COMMON, "Opponent username {}", opponentUsername);
 
     // get batting order strings
     bool p1IsAway = !state.firstBatter.value();
 
+    INFO_LOG_FMT(COMMON, "Getting P1 batting order string");
     std::string p1BattingOrderStr = MSB_QuickMatchBattingOrderStr(state, true, p1IsAway);
+    INFO_LOG_FMT(COMMON, "Getting P2 batting order string");
     std::string p2BattingOrderStr = MSB_QuickMatchBattingOrderStr(state, false, !p1IsAway);
 
+    quickMatchBattingOrderMsgFetched = true;
 
     // create message
     OSD::AddTypedMessage
@@ -768,9 +782,11 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBGameStat
         "P2 {} batting order\n"
         "{}", 
         localUsername, p1BattingOrderStr, opponentUsername, p2BattingOrderStr
-      )
+      ), 
+      2000U
     );
   }
+  INFO_LOG_FMT(COMMON, "Batting order message complete");
 }
 
 // rounds to 2 decimal places
