@@ -354,11 +354,13 @@ void ReadLines(std::vector<GeckoCode>& gcodes, std::vector<std::string>& lines, 
   }
 }
 
+bool isNightStadium = false;
 void setNightStadium(bool is_night)
 {
   isNightStadium = is_night;
 }
 
+bool isDisableReplays = false;
 void setDisableReplays(bool disable)
 {
   isDisableReplays = disable;
