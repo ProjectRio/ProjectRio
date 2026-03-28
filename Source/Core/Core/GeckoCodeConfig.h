@@ -25,9 +25,9 @@ void SaveCodes(Common::IniFile& inifile, const std::vector<GeckoCode>& gcodes);
 std::optional<GeckoCode::Code> DeserializeLine(const std::string& line);
 void ReadLines(std::vector<GeckoCode>& gcodes, std::vector<std::string>& lines, bool user_defined);
 
-extern bool isNightStadium = false;
+extern bool isNightStadium;
 void setNightStadium(bool is_night);
-extern bool isDisableReplays = false;
+extern bool isDisableReplays;
 void setDisableReplays(bool disable);
 extern bool isLoadingFromHUD;
 extern MSBQuickMatchGameState HUDState;
