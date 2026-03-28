@@ -118,7 +118,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     INFO_LOG_FMT(COMMON, "Starting parsing HUD to fill out state");
 
 
-    MSBGameState state;
+    MSBQuickMatchGameState state;
 
     // === PRE-GAME SETTINGS ===
     // === ROSTERS ===
