@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "Core/GeckoCode.h"
-#include "Core/MSB_GenerateCustomMatchStateGeckoCode.h"
+#include "Core/MSB_GenerateQuickMatchSetupGeckoCode.h"
 
 namespace Common
 {
@@ -30,7 +30,7 @@ void setNightStadium(bool is_night);
 static bool isDisableReplays = false;
 void setDisableReplays(bool disable);
 extern bool isLoadingFromHUD;
-extern MSBGameState HUDState;
+extern MSBQuickMatchGameState HUDState;
 void setFastResetFromHUD(bool load_from_hud);
 //static bool isTrainingMode = false;
 

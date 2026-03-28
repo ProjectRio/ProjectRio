@@ -7,7 +7,7 @@
 #include <optional>
 
 // Optional game state struct
-struct MSBGameState
+struct MSBQuickMatchGameState
 {
     // Pre-game constants
     std::optional<uint32_t> captainCharacterP1; 
@@ -82,10 +82,10 @@ struct MSBGameState
     std::optional<uint16_t> pitcherStaminaP2[9];
 };
 
-class MSBMatchCodeBuilder
+class MSBQuickMatchCodeBuilder
 {
 public:
-    static std::vector<Gecko::GeckoCode> MSB_GenerateCustomMatchStateGeckoCode(const MSBGameState& state);
+    static std::vector<Gecko::GeckoCode> MSB_GenerateQuickMatchSetupGeckoCode(const MSBQuickMatchGameState& state);
 
     // Logical Constants
     static constexpr uint32_t REL_ADDR = 0x800e877c;
@@ -170,4 +170,4 @@ public:
     static constexpr uint32_t PITCHER_STAMINA_STRIDE = 0x1E;
 };
 
-std::string MSB_QuickMatchBattingOrderStr(const MSBGameState& state, bool isP1, bool isAway);
+std::string MSB_QuickMatchBattingOrderStr(const MSBQuickMatchGameState& state, bool isP1, bool isAway);

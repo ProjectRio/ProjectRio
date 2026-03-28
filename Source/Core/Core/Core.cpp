@@ -81,8 +81,6 @@
 //#include "Core/LocalPlayers.h"
 #include "Core/LocalPlayersConfig.h"
 
-#include "Core/MSB_GenerateCustomMatchStateGeckoCode.h"
-
 
 #ifdef USE_MEMORYWATCHER
 #include "Core/MemoryWatcher.h"
@@ -90,7 +88,7 @@
 
 #include "DiscIO/RiivolutionPatcher.h"
 #include "Core/MSB_StatTracker.h"
-#include "Core/MSB_GenerateCustomMatchStateGeckoCode.h"
+#include "Core/MSB_GenerateQuickMatchSetupGeckoCode.h"
 
 #include "InputCommon/ControlReference/ControlReference.h"
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
@@ -712,7 +710,7 @@ void RunDraftTimer(const Core::CPUThreadGuard& guard)
   }
 }
 
-void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBGameState& state)
+void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMatchGameState& state)
 {
   INFO_LOG_FMT(COMMON, "Start of quick match message");
 
@@ -766,7 +764,7 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBGameStat
     // create message
     OSD::AddTypedMessage
     (
-      OSD::MessageType::CustomMatchBattingOrder,
+      OSD::MessageType::QuickMatchBattingOrder,
       fmt::format
       (
         "Quick Match Setup V1 \n"

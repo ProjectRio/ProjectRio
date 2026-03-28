@@ -7,7 +7,7 @@
 #include <picojson.h>
 
 
-bool LoadStateFromHud(const std::string& path, MSBGameState& outState)
+bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
 {
     std::ifstream file(path);
     if (!file.is_open())

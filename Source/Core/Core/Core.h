@@ -20,7 +20,7 @@
 
 #include "Core/HW/Memmap.h"
 #include "Core/GeckoCodeConfig.h"
-#include "Core/MSB_GenerateCustomMatchStateGeckoCode.h"
+#include "Core/MSB_GenerateQuickMatchSetupGeckoCode.h"
 
 struct BootParameters;
 struct WindowSystemInfo;
@@ -238,7 +238,7 @@ void MGTTCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer)
 
 void AutoGolfMode(const Core::CPUThreadGuard& guard);
 void TrainingMode(const Core::CPUThreadGuard& guard);
-void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBGameState& state);
+void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMatchGameState& state);
 void DisplayPlayerNames(const Core::CPUThreadGuard& guard);
 void SetAvgPing(const Core::CPUThreadGuard& guard);
 void SetNetplayerUserInfo();

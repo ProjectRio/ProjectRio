@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Core/MSB_GenerateCustomMatchStateGeckoCode.h"
+#include "Core/MSB_GenerateQuickMatchSetupGeckoCode.h"
 #include <string>
 
-bool LoadStateFromHud(const std::string& path, MSBGameState& outState);
+bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState);

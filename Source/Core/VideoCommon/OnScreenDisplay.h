@@ -27,7 +27,7 @@ enum class MessageType
   GameStatePreviousPlayResult,
   DraftTimer,
   TrainingModeGolfing,
-  CustomMatchBattingOrder,
+  QuickMatchBattingOrder,
 
   // This entry must be kept last so that persistent typed messages are
   // displayed before other messages

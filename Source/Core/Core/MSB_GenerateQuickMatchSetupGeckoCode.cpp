@@ -1,4 +1,4 @@
-#include "MSB_GenerateCustomMatchStateGeckoCode.h" 
+#include "MSB_GenerateQuickMatchSetupGeckoCode.h" 
 #include <vector>
 #include <string>
 #include <sstream>
@@ -240,15 +240,15 @@ void GeneratePitcherStaminaGeckoCodes(
     {
         if (staminaList[i].has_value())
         {
-            uint32_t address = baseAddr + MSBMatchCodeBuilder::PITCHER_STAMINA_STRIDE * i;
+            uint32_t address = baseAddr + MSBQuickMatchCodeBuilder::PITCHER_STAMINA_STRIDE * i;
             outCodes.push_back(ToGeckoCode(0x02, address, staminaList[i].value()));
 
         }
     }
 }
 
-std::vector<Gecko::GeckoCode> MSBMatchCodeBuilder::MSB_GenerateCustomMatchStateGeckoCode(
-    const MSBGameState& state)
+std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSetupGeckoCode(
+    const MSBQuickMatchGameState& state)
 {
     std::vector<Gecko::GeckoCode::Code> codes;
 

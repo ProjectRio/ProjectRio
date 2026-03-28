@@ -1,13 +1,13 @@
-#include "MSB_GenerateCustomMatchStateGeckoCode.h"
-#include "MSB_CustomMatchStateDebugLoader.h"
+#include "MSB_GenerateQuickMatchSetupGeckoCode.h"
+#include "MSB_QuickMatchStateDebugLoader.h"
 #include <fstream>
 #include <sstream>
 #include <string>
 #include "Common/Logging/Log.h"
 
-bool LoadDebugState(const std::string& path, MSBGameState& outState)
+bool LoadDebugState(const std::string& path, MSBQuickMatchGameState& outState)
 {
-    MSBGameState state;
+    MSBQuickMatchGameState state;
 
     std::ifstream file(path);
     std::string line;
