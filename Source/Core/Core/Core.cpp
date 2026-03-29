@@ -781,7 +781,6 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
       OSD::Color::BLUE
     );
   }
-  INFO_LOG_FMT(COMMON, "Batting order message complete");
 }
 
 // rounds to 2 decimal places
