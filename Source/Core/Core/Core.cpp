@@ -1022,6 +1022,8 @@ void Stop()  // - Hammertime!
     s_stat_tracker->dumpGame(guard);
     std::cout << "Emulation stopped. Dumping game." << std::endl;
     s_stat_tracker->init();
+
+    quickMatchBattingOrderMsgFetched = false;
   }
 }
 
