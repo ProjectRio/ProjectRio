@@ -34,7 +34,7 @@ struct MSBQuickMatchGameState
     std::optional<uint8_t> logoP1; // 0-47
     std::optional<uint8_t> logoP2; // 0-47
 
-    std::optional<uint8_t> stadium; // 0=Mario, 1=Bowser, 2=Wario, 3=Yoshi, 4=Peach, 5=DK, 6=TF
+    std::optional<uint8_t> stadium; // this is the cursor position. Diff from in-game enums, which are: 0=Mario, 1=Bowser, 2=Wario, 3=Yoshi, 4=Peach, 5=DK
 
     std::optional<uint8_t> firstBatter; // 0=P1, 1=P2
     std::optional<uint8_t> starSkills; // 0=off, 1=on

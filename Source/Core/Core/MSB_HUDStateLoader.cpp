@@ -203,7 +203,17 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     INFO_LOG_FMT(COMMON, "Logo P2: {}", state.logoP2.has_value() ? std::to_string(state.logoP2.value()) : "not set");
     
     if (j.count("StadiumID"))
-        state.stadium = static_cast<uint8_t>(j.at("StadiumID").get<double>());
+    {
+        // need to convert stadium ID in HUD to menu index.
+        uint8_t stadiumID = static_cast<uint8_t>(j.at("StadiumID").get<double>());
+        uint8_t stadiumIndex;
+        if (stadiumID == 1) stadiumIndex = 5; // Bowser Stadium
+        else if (stadiumID == 4) stadiumIndex = 1; // Peach Garden
+        else if (stadiumID == 5) stadiumIndex = 4; // DK Jungle
+        else stadiumIndex = stadiumID; // Rest match directly.
+
+        state.stadium = stadiumIndex;
+    }
     INFO_LOG_FMT(COMMON, "Stadium: {}", state.stadium.has_value() ? std::to_string(state.stadium.value()) : "not set");
 
     // handled with half inning value since the game uses this to load offence/defence, not home or away.
