@@ -763,8 +763,9 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
       fmt::format
       (
         "Quick Match Setup V1 \n"
-        "Press A to skip through all menus except for the batting order.\n"
-        "The rosters and game settings will be set automatically.\n"
+        "Only the batting order needs to be set.\n"
+        "Everything else will be set automatically.\n"
+        "Press A to skip through the rest of the menus.\n"
         "It's normal for the graphics to look buggy.\n"
         "\n"
         "Set the batting order EXACTLY as shown.\n"
