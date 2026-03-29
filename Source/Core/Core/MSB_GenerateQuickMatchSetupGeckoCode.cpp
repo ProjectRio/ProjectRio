@@ -317,7 +317,7 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
         if (state.stadium.has_value())
         {
             uint8_t val = state.stadium.value();
-            if (val > 0x6)
+            if (val > 0x5) // not accepting 6 for Toy Field. Support could be added in future.
                 WARN_LOG_FMT(COMMON, "Stadium ID not valid: {}. No gecko code produced.", val);
             else
             {
