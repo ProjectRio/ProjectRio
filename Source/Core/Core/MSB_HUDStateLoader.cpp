@@ -171,10 +171,14 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     }
     for (int i = 0; i < 9; i++)
     {
-        INFO_LOG_FMT(COMMON, "P1 Position {}: {}", i, state.charactersP1ByPosition[i].has_value() ? std::to_string(state.charactersP1ByPosition[i].value()) : "not set");
-        INFO_LOG_FMT(COMMON, "P1 batting hand {}: {}", i, state.battingHandP1ByPosition[i].has_value() ? std::to_string(state.battingHandP1ByPosition[i].value()) : "not set");
-        INFO_LOG_FMT(COMMON, "P1 fielding hand {}: {}", i, state.fieldingHandP1ByPosition[i].has_value() ? std::to_string(state.fieldingHandP1ByPosition[i].value()) : "not set");
-        INFO_LOG_FMT(COMMON, "P1 superstar {}: {}", i, state.superstarP1ByPosition[i].has_value() ? std::to_string(state.superstarP1ByPosition[i].value()) : "not set");
+        INFO_LOG_FMT(
+            COMMON, 
+            "P1 Position {}: CharID {}, Batting Hand {}, Fielding Hand {}, Superstar {}", 
+            i, 
+            state.charactersP1ByPosition[i].has_value() ? std::to_string(state.charactersP1ByPosition[i].value()) : "not set", 
+            state.battingHandP1ByPosition[i].has_value() ? std::to_string(state.battingHandP1ByPosition[i].value()) : "not set", 
+            state.fieldingHandP1ByPosition[i].has_value() ? std::to_string(state.fieldingHandP1ByPosition[i].value()) : "not set", 
+            state.superstarP1ByPosition[i].has_value() ? std::to_string(state.superstarP1ByPosition[i].value()) : "not set");
     }
     for (int i = 0; i < 9; i++)
     {
