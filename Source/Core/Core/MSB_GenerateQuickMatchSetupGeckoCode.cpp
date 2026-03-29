@@ -614,9 +614,9 @@ std::string MSB_QuickMatchBattingOrderStr(const MSBQuickMatchGameState& state, b
 
             std::string battingHandStr = (battingHand == 1) ? "L" : "R";
             std::string fieldingHandStr = (fieldingHand == 1) ? "L" : "R";
-            std::string superstarStr = (superstar == 1) ? "*" : "";
+            std::string superstarStr = (superstar == 1) ? " *" : "";
 
-            battingOrderStr += characterName + " " + superstarStr + " " + battingHandStr + " " + fieldingHandStr + "\n";
+            battingOrderStr += characterName + superstarStr + " " + battingHandStr + " " + fieldingHandStr + "\n";
         }
     }
     
