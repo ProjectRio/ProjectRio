@@ -763,13 +763,13 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
       fmt::format
       (
         "Quick Match Setup V1 \n"
+        "Match will load to 1 pitch before the crash.\n"
         "Only the batting order needs to be set.\n"
         "Everything else will be set automatically.\n"
         "Press A to skip through the rest of the menus.\n"
         "It's normal for the graphics to look buggy.\n"
         "\n"
-        "Set the batting order EXACTLY as shown.\n"
-        "\n"
+        "Set the batting order EXACTLY like this.\n"
         "P1 {} batting order\n"
         "{}\n"
         "\n"
