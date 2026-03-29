@@ -1189,6 +1189,11 @@ void NetPlayDialog::OnMsgStartGame()
       if (auto game = FindGameFile(m_current_game_identifier))
       {
         client->StartGame(game->GetFilePath());
+
+        m_night_stadium->setChecked(false); 
+        m_disable_replays->setChecked(false);
+        m_fast_reset_from_HUD->setChecked(false); 
+
         m_night_stadium->setEnabled(false);
         m_disable_replays->setEnabled(false);
         m_fast_reset_from_HUD->setEnabled(false);
