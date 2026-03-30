@@ -368,9 +368,9 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
 
             if (runner.count("Runner Roster Loc"))
             {
-                uint16_t batterRosterLoc = static_cast<uint16_t>(j.at("Batter Roster Loc").get<double>());
-                uint16_t runnerRosterLocRaw = static_cast<uint16_t>(runner.at("Runner Roster Loc").get<double>());
-                state.runnerRosterSpot[i] = (batterRosterLoc + runnerRosterLocRaw) % 9;
+                uint16_t batterRosterLoc = static_cast<uint16_t>(j.at("Batter Roster Loc").get<double>()); // 1
+                uint16_t runnerRosterLocRaw = static_cast<uint16_t>(runner.at("Runner Roster Loc").get<double>()); // 0
+                state.runnerRosterSpot[i] = (runnerRosterLocRaw - batterRosterLoc) % 9;
             }
 
             if (runner.count("Runner Char Id"))
@@ -501,7 +501,7 @@ int allowLoadFromHUD(const std::string& path)
         return 3;
     }
     // If neither has a tagset, that's fine - no game mode in either
-    
+
     // ===== check players match HUD =====
     LocalPlayers::LocalPlayers localPlayersObj;
 
