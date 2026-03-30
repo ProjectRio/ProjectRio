@@ -660,12 +660,20 @@ void NetPlayDialog::OnDisableReplaysResult(bool disable)
     DisplayMessage(tr("Replays Enabled"), "steelblue");
 }
 
-void NetPlayDialog::OnFastResetFromHUDResult(bool load_from_hud)
+void NetPlayDialog::OnFastResetFromHUDResult(int load_from_hud_result_code)
 {
-  if (load_from_hud)
+  if (load_from_hud_result_code == 0)
     DisplayMessage(tr("Fast Reset From Latest Game State Enabled"), "steelblue");
-  else
+  else if (load_from_hud_result_code == 1)
     DisplayMessage(tr("Fast Reset From Latest Game State Disabled"), "coral");
+  else if (load_from_hud_result_code == 2)
+    DisplayMessage(tr("Cannot Enable Fast Reset: HUD File Not Found Or Couldn't Be Parsed"), "coral");
+  else if (load_from_hud_result_code == 3)
+    DisplayMessage(tr("Cannot Enable Fast Reset: Lobby Gamemode Doesn't Match HUD"), "coral");
+  else if (load_from_hud_result_code == 4)
+    DisplayMessage(tr("Cannot Enable Fast Reset: Players Don't Match HUD"), "coral");
+  else
+    DisplayMessage(tr("Cannot Enable Fast Reset: Unknown Error"), "coral");
 }
 
 void NetPlayDialog::OnActiveGeckoCodes(std::string codeStr)

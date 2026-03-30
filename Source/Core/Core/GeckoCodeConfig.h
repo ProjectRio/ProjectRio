@@ -27,12 +27,14 @@ void ReadLines(std::vector<GeckoCode>& gcodes, std::vector<std::string>& lines, 
 
 extern bool isNightStadium;
 void setNightStadium(bool is_night);
+
 extern bool isDisableReplays;
 void setDisableReplays(bool disable);
+
 extern bool isLoadingFromHUD;
 extern MSBQuickMatchGameState HUDState;
 void setFastResetFromHUD(bool load_from_hud);
-//static bool isTrainingMode = false;
+const std::string HUD_FILE_PATH = "User/HudFiles/hud.json";
 
 const std::string MSSB_NightStadium = R"(
 +$Night Mario Stadium [LittleCoaks]

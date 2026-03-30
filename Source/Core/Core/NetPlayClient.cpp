@@ -83,6 +83,7 @@
 #include "Core/LocalPlayersConfig.h"
 #include "Core/Core.h"
 #include "Common/TagSet.h"
+#include "Core/MSB_HUDStateLoader.h"
 
 namespace NetPlay
 {
@@ -1662,8 +1663,29 @@ void NetPlayClient::OnFastResetFromHUDMsg(sf::Packet& packet)
 {
   bool load_from_hud;
   packet >> load_from_hud;
-  m_dialog->OnFastResetFromHUDResult(load_from_hud);
-  Gecko::setFastResetFromHUD(load_from_hud);
+
+  // check if loading from HUD is valid.
+  int resultCode;
+  if (load_from_hud)
+    resultCode = allowLoadFromHUD(Gecko::HUD_FILE_PATH);
+  else // disable loading from HUD
+  {
+    m_dialog->OnFastResetFromHUDResult(1); // play disable message
+    Gecko::setFastResetFromHUD(load_from_hud);
+    return;
+  }
+
+  if (resultCode == 0) // enable
+  {
+    m_dialog->OnFastResetFromHUDResult(resultCode);
+    Gecko::setFastResetFromHUD(load_from_hud);
+  }
+  else // don't enable and show message why it can't be enabled
+  {
+    m_dialog->OnFastResetFromHUDResult(resultCode);
+    Gecko::setFastResetFromHUD(false);
+    // TODO disable checkmark??
+  }
 }
 
 void NetPlayClient::OnChecksumMsg(sf::Packet& packet)

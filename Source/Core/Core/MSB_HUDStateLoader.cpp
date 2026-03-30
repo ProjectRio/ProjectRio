@@ -433,3 +433,99 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     outState = state;
     return true;
 }
+
+int allowLoadFromHUD(const std::string& path) 
+{
+    // ===== check HUD file exists and can be parsed. =====
+    std::ifstream file(path);
+    if (!file.is_open())
+    {
+        ERROR_LOG_FMT(COMMON, "Failed to open HUD file: {}", path);
+        return 2;
+    }
+        
+    std::string json_str((std::istreambuf_iterator<char>(file)),
+                          std::istreambuf_iterator<char>());
+
+    picojson::value v;
+    std::string err = picojson::parse(v, json_str);
+
+    if (!err.empty())
+    {
+        ERROR_LOG_FMT(COMMON, "Failed to parse HUD JSON from file: {} ({})", path, err);
+        return 2;
+    }
+
+    if (!v.is<picojson::object>())
+    {
+        ERROR_LOG_FMT(COMMON, "HUD JSON is not an object: {}", path);
+        return 2;
+    }
+
+    const picojson::object& j = v.get<picojson::object>();
+
+    // ===== check lobby gamemode matches HUD =====
+    
+
+    // ===== check players match HUD =====
+    LocalPlayers::LocalPlayers localPlayersObj;
+
+    // Get the online player (port 0) for local username
+    auto portPlayers = localPlayersObj.GetPortPlayers();
+    std::string localUsername = "";
+    if (portPlayers.count(0))
+    {
+        localUsername = std::string(StripWhitespace(portPlayers.at(0).username));
+        INFO_LOG_FMT(COMMON, "Local player found.: {}", localUsername);
+    }
+
+    if (localUsername.empty())
+    {
+        ERROR_LOG_FMT(COMMON, "Could not find online player in local players config.");
+        return 4;
+    }
+
+    std::string awayPlayer = j.count("Away Player") ? 
+        std::string(StripWhitespace(j.at("Away Player").get<std::string>())) : "";
+    std::string homePlayer = j.count("Home Player") ? 
+        std::string(StripWhitespace(j.at("Home Player").get<std::string>())) : "";
+
+    // Find opponent - port player who isn't the local player
+    std::string opponentUsername = "";
+    for (const auto& [port, player] : portPlayers)
+    {
+        std::string portUsername = std::string(StripWhitespace(player.username));
+        if (portUsername != localUsername && portUsername != "No Player Selected")
+        {
+            opponentUsername = portUsername;
+            break;
+        }
+    }
+
+    // Validate players match the HUD file
+    bool localIsAway = (localUsername == awayPlayer);
+    bool localIsHome = (localUsername == homePlayer);
+
+    if (!localIsAway && !localIsHome)
+    {
+        ERROR_LOG_FMT(COMMON, "Local player '{}' not found in HUD file. Away='{}', Home='{}'",
+                    localUsername, awayPlayer, homePlayer);
+        return 4;
+    }
+
+    // If opponent is known, validate they match the other slot
+    if (!opponentUsername.empty())
+    {
+        bool opponentIsAway = (opponentUsername == awayPlayer);
+        bool opponentIsHome = (opponentUsername == homePlayer);
+
+        if (!((localIsAway && opponentIsHome) || (localIsHome && opponentIsAway)))
+        {
+            ERROR_LOG_FMT(COMMON, "Player mismatch. Local='{}', Opponent='{}', HUD Away='{}', HUD Home='{}'",
+                        localUsername, opponentUsername, awayPlayer, homePlayer);
+            return 4;
+        }
+    }
+    
+    return 0;
+}
