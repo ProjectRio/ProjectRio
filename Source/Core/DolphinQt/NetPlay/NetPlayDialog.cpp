@@ -1190,13 +1190,14 @@ void NetPlayDialog::OnMsgStartGame()
       {
         client->StartGame(game->GetFilePath());
 
-        m_night_stadium->setChecked(false); 
-        m_disable_replays->setChecked(false);
-        m_fast_reset_from_HUD->setChecked(false); 
+        // Commenting out - not desired to reset these stats between matches anymore.
+        // m_night_stadium->setChecked(false); 
+        // m_disable_replays->setChecked(false);
+        // m_fast_reset_from_HUD->setChecked(false); 
 
-        m_night_stadium->setEnabled(false);
-        m_disable_replays->setEnabled(false);
-        m_fast_reset_from_HUD->setEnabled(false);
+        // m_night_stadium->setEnabled(false);
+        // m_disable_replays->setEnabled(false);
+        // m_fast_reset_from_HUD->setEnabled(false);
       }
       else
         PanicAlertFmtT("Selected game doesn't exist in game list!");
