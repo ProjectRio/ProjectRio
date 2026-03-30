@@ -84,7 +84,7 @@ public:
   virtual void OnCoinFlipResult(int coinFlip) = 0;
   virtual void OnNightResult(bool is_night) = 0;
   virtual void OnDisableReplaysResult(bool disable) = 0;
-  virtual void OnFastResetFromHUDResult(bool load_from_hud) = 0;
+  virtual void OnFastResetFromHUDResult(int load_from_hud_result_code) = 0;
   virtual void OnActiveGeckoCodes(std::string codeStr) = 0;
   virtual void OnRandomStadiumResult(int stadium) = 0;
   virtual void OnCourseResult(std::string message) = 0;

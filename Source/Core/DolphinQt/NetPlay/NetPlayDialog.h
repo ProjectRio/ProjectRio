@@ -80,7 +80,7 @@ public:
   void OnRandomStadiumResult(int stadium);
   void OnNightResult(bool is_night);
   void OnDisableReplaysResult(bool disable);
-  void OnFastResetFromHUDResult(int load_from_hud_result_code);
+  void OnFastResetFromHUDResult(int load_from_hud_result_code) override;
   void OnCourseResult(std::string message);
   void OnActiveGeckoCodes(std::string codeStr);
   bool IsSpectating() override;
