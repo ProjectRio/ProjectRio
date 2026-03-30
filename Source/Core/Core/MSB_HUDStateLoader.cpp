@@ -1,4 +1,4 @@
-#include "core/MSB_HUDStateLoader.h"
+#include "Core/MSB_HUDStateLoader.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Core/LocalPlayers.h"
