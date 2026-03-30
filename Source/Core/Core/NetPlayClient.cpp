@@ -84,6 +84,8 @@
 #include "Core/Core.h"
 #include "Common/TagSet.h"
 #include "Core/MSB_HUDStateLoader.h"
+#include "DolphinQt/NetPlay/NetPlayDialog.h"
+#include "DolphinQt/QtUtils/QueueOnObject.h"
 
 namespace NetPlay
 {
@@ -1682,9 +1684,10 @@ void NetPlayClient::OnFastResetFromHUDMsg(sf::Packet& packet)
   }
   else // don't enable and show message why it can't be enabled
   {
-    m_dialog->OnFastResetFromHUDResult(resultCode);
-    Gecko::setFastResetFromHUD(false);
-    // TODO disable checkmark??
+      m_dialog->OnFastResetFromHUDResult(resultCode);
+      QueueOnObject(m_dialog, [this] {
+          m_dialog->SetFastResetFromHUDEnabled(false);
+      });
   }
 }
 
