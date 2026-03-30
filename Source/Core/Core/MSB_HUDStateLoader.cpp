@@ -1,7 +1,9 @@
 #include "Core/MSB_HUDStateLoader.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
+#include "Common/TagSet.h"
 #include "Core/LocalPlayers.h"
+#include "Core/Core.h"
 #include <fstream>
 #include <string>
 #include <picojson.h>
@@ -465,8 +467,41 @@ int allowLoadFromHUD(const std::string& path)
     const picojson::object& j = v.get<picojson::object>();
 
     // ===== check lobby gamemode matches HUD =====
-    
+    // Get the active tagset from the current netplay session
+    std::optional<Tag::TagSet> activeTagSet = Core::GetActiveTagSet(true);
 
+    // Check if HUD file has a TagSetID
+    if (j.count("TagSetID"))
+    {
+        int hudTagSetId = static_cast<int>(j.at("TagSetID").get<double>());
+
+        if (activeTagSet.has_value())
+        {
+            // Both HUD and lobby have a tagset - they must match
+            if (hudTagSetId != activeTagSet.value().id)
+            {
+                ERROR_LOG_FMT(COMMON, "TagSet mismatch. Lobby TagSet ID={}, HUD TagSet ID={}",
+                            activeTagSet.value().id, hudTagSetId);
+                return 3;
+            }
+            INFO_LOG_FMT(COMMON, "TagSet match confirmed: ID={}", hudTagSetId);
+        }
+        else
+        {
+            // HUD has a tagset but lobby does not
+            ERROR_LOG_FMT(COMMON, "HUD has TagSet ID={} but no game mode is active in lobby.", hudTagSetId);
+            return 3;
+        }
+    }
+    else if (activeTagSet.has_value())
+    {
+        // Lobby has a tagset but HUD does not record one
+        ERROR_LOG_FMT(COMMON, "Lobby has TagSet ID={} but HUD file has no TagSetID field.",
+                    activeTagSet.value().id);
+        return 3;
+    }
+    // If neither has a tagset, that's fine - no game mode in either
+    
     // ===== check players match HUD =====
     LocalPlayers::LocalPlayers localPlayersObj;
 
