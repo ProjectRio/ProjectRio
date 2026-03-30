@@ -438,6 +438,8 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
 
 int allowLoadFromHUD(const std::string& path) 
 {
+    INFO_LOG_FMT(COMMON, "Starting to check if HUD state load is allowed");
+
     // ===== check HUD file exists and can be parsed. =====
     std::ifstream file(path);
     if (!file.is_open())
@@ -465,6 +467,8 @@ int allowLoadFromHUD(const std::string& path)
     }
 
     const picojson::object& j = v.get<picojson::object>();
+
+    INFO_LOG_FMT(COMMON, "File check passed, checking gamemode.");
 
     // ===== check lobby gamemode matches HUD =====
     // Get the active tagset from the current netplay session
@@ -501,6 +505,8 @@ int allowLoadFromHUD(const std::string& path)
         return 3;
     }
     // If neither has a tagset, that's fine - no game mode in either
+    
+    INFO_LOG_FMT(COMMON, "Gamemode check passed, checking players.");
 
     // ===== check players match HUD =====
     LocalPlayers::LocalPlayers localPlayersObj;
@@ -561,6 +567,8 @@ int allowLoadFromHUD(const std::string& path)
             return 4;
         }
     }
+    
+    INFO_LOG_FMT(COMMON, "All checks passed. HUD can load.");
     
     return 0;
 }
