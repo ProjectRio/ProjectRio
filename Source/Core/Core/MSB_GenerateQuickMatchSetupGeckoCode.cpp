@@ -321,7 +321,7 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
                 WARN_LOG_FMT(COMMON, "Stadium ID not valid: {}. No gecko code produced.", val);
             else
             {
-                // 0=Mario, 1=Bowser, 2=Wario, 3=Yoshi, 4=Peach, 5=DK, 6=TF
+                // 0=Mario, 1=Bowser, 2=Wario, 3=Yoshi, 4=Peach, 5=DK
                 codes.push_back(ToGeckoCode(0x00, STADIUM_ADDR, val));
 
                 // prevent cursor movement on stadium select screen
