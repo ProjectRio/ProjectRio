@@ -370,7 +370,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
             {
                 uint16_t batterRosterLoc = static_cast<uint16_t>(j.at("Batter Roster Loc").get<double>()); // 1
                 uint16_t runnerRosterLocRaw = static_cast<uint16_t>(runner.at("Runner Roster Loc").get<double>()); // 0
-                state.runnerRosterSpot[i] = (runnerRosterLocRaw - batterRosterLoc) % 9;
+                state.runnerRosterSpot[i] = (runnerRosterLocRaw - batterRosterLoc + 9) % 9;
             }
 
             if (runner.count("Runner Char Id"))
