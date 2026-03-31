@@ -69,6 +69,9 @@ struct MSBQuickMatchGameState
 
     std::optional<uint8_t> isStarChance; // 0=off, 1=on
 
+    std::optional<uint32_t> captainP1RosterLocation; // use their index in the characterByPosition struct.
+    std::optional<uint32_t> captainP2RosterLocation; // use their index in the characterByPosition struct.
+
     // for each spot in the batting order, enter the batters position
     std::optional<uint32_t> awayPositionByBattingOrder[9];
     std::optional<uint32_t> homePositionByBattingOrder[9];
@@ -152,6 +155,9 @@ public:
     static constexpr uint32_t TEAM_STARS_HOME_ADDR = 0x80892ad7;
 
     static constexpr uint32_t IS_STAR_CHANCE_ADDR = 0x80892ad8;
+    
+    static constexpr uint32_t CAPTAIN_ROSTER_LOCATION_P1_ADDR = 0x80892a80;
+    static constexpr uint32_t CAPTAIN_ROSTER_LOCATION_P2_ADDR = 0x80892a84;
 
     static constexpr uint32_t ORDER_AND_POSITION_STRUCT_AWAY_BASE = 0x808929c8;
     static constexpr uint32_t ORDER_AND_POSITION_STRUCT_HOME_BASE = 0x80892a18;
