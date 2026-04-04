@@ -42,6 +42,28 @@ static Gecko::GeckoCode::Code EndConditional()
     return code;
 }
 
+static Gecko::GeckoCode::Code CustomGeckoCode(
+    uint32_t firstWord,
+    uint32_t secondWord
+)
+{
+    std::ostringstream oss;
+    oss.imbue(std::locale::classic());
+
+    oss << std::uppercase << std::hex << std::setfill('0')
+    << std::setw(8) << firstWord
+    << " "
+    << std::setw(8) << secondWord;
+
+    Gecko::GeckoCode::Code code;
+    code.address = firstWord;
+    code.data    = secondWord;
+    code.original_line = oss.str();
+
+    INFO_LOG_FMT(COMMON, "Gecko code produced: {}", oss.str());
+    return code;
+}
+
 void GenerateRosterGeckoCodes(
     const std::optional<uint8_t> charactersByPosition[9],
     uint32_t rosterBaseAddress,
@@ -247,6 +269,96 @@ void GeneratePitcherStaminaGeckoCodes(
     }
 }
 
+void GenerateBattingOrderGeckoCodes(
+    const MSBQuickMatchGameState state,
+    std::vector<Gecko::GeckoCode::Code>& outCodes
+)
+{
+    // validate inputs
+    bool inputsValidated = true;
+
+    if (!state.firstBatter.has_value() || !state.halfInning.has_value())
+        inputsValidated = false;
+    
+    for (int i = 0; i < 9; i++)
+    {
+        if (!state.charactersP1ByPosition[i].has_value() || !state.charactersP2ByPosition[i].has_value() || 
+            !state.awayPositionByBattingOrder[i].has_value() || !state.homePositionByBattingOrder[i].has_value())
+        {
+            inputsValidated = false;
+            break;
+        }
+    }
+
+    if (!inputsValidated)
+    {
+        ERROR_LOG_FMT(COMMON, "Not all inputs provided for batting order gecko codes. No codes produced.");
+        return;
+    }
+    INFO_LOG_FMT(COMMON, "All inputs provided for batting order gecko codes. Generating codes.");
+
+    // if all inputs are validated, can generate gecko codes for batting order and position.
+    // convert positions to P1/P2
+    bool localIsAway;
+    uint32_t positionP1ByBattingOrder[9];
+    uint32_t positionP2ByBattingOrder[9];
+
+    if (state.halfInning.value() == 0)
+        localIsAway = state.firstBatter.value() == 0;
+    else
+        localIsAway = state.firstBatter.value() == 1;
+    INFO_LOG_FMT(COMMON, "Local is away: {}", localIsAway);
+
+    for (int i = 0; i < 9; i++)
+    {
+        positionP1ByBattingOrder[i] = localIsAway ? state.awayPositionByBattingOrder[i].value() : state.homePositionByBattingOrder[i].value();
+        positionP2ByBattingOrder[i] = localIsAway ? state.homePositionByBattingOrder[i].value() : state.awayPositionByBattingOrder[i].value();
+    }
+
+    // add first two lines related to checking the team number
+    outCodes.push_back(CustomGeckoCode(0xC2066A48, 0x00000015));
+    outCodes.push_back(CustomGeckoCode(0x3AE10038, 0x2C030001));
+
+    // P1 batting order
+    for (int i = 0; i < 9; i++)
+    {
+        uint32_t position = positionP1ByBattingOrder[i];
+        uint8_t charID = state.charactersP1ByPosition[position].value();
+        uint32_t firstWord, secondWord;
+
+        // char ID and batting order are on separate lines at this point, so need to handle first iteration differently.
+        if (i == 0)
+        {
+            firstWord = 0x41820050; // conditional branch
+            secondWord = 0x39800000 | (charID & 0x000000FF);
+        }
+        else
+        {
+            firstWord = 0x99970000 | ((i - 1) & 0xFF); // batting order of character before.
+            secondWord = 0x39800000 | (charID & 0xFF);
+        }
+        outCodes.push_back(CustomGeckoCode(firstWord, secondWord));
+    }
+    // add last batting order store, then pur branch instruction to end.
+    outCodes.push_back(CustomGeckoCode(0x99970008, 0x4800004C));
+
+    // P2 batting order. 
+    // CharID and batting order are now on separate lines since there is an intermediate branch instruction.
+    for (int i = 0; i < 9; i++)
+    {
+        uint32_t position = positionP2ByBattingOrder[i];
+        uint8_t charID = state.charactersP2ByPosition[position].value();
+
+        uint32_t firstWord = 0x39800000 | (charID & 0xFF);
+        uint32_t secondWord = 0x99970000 | (i & 0xFF);
+
+        outCodes.push_back(CustomGeckoCode(firstWord, secondWord));
+    }
+
+    // finish the code
+    outCodes.push_back(CustomGeckoCode(0x60000000, 0x00000000));
+}
+
 std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSetupGeckoCode(
     const MSBQuickMatchGameState& state)
 {
@@ -313,6 +425,9 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
             else
                 codes.push_back(ToGeckoCode(0x00, LOGO_P2_ADDR, val));
         }
+
+        // generate batting order codes.
+        GenerateBattingOrderGeckoCodes(state, codes);
 
         if (state.stadium.has_value())
         {
