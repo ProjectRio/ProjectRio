@@ -271,44 +271,14 @@ void GeneratePitcherStaminaGeckoCodes(
 
 void GenerateBattingOrderGeckoCodes(
     const MSBQuickMatchGameState state,
+    const bool localIsAway,
     std::vector<Gecko::GeckoCode::Code>& outCodes
 )
 {
-    // validate inputs
-    bool inputsValidated = true;
+    INFO_LOG_FMT(COMMON, "Running GenerateBattingOrderGeckoCodes function");
 
-    if (!state.firstBatter.has_value() || !state.halfInning.has_value())
-        inputsValidated = false;
-    
-    for (int i = 0; i < 9; i++)
-    {
-        if (!state.charactersP1ByPosition[i].has_value() || !state.charactersP2ByPosition[i].has_value() || 
-            !state.awayPositionByBattingOrder[i].has_value() || !state.homePositionByBattingOrder[i].has_value())
-        {
-            inputsValidated = false;
-            break;
-        }
-    }
-
-    if (!inputsValidated)
-    {
-        ERROR_LOG_FMT(COMMON, "Not all inputs provided for batting order gecko codes. No codes produced.");
-        return;
-    }
-    INFO_LOG_FMT(COMMON, "All inputs provided for batting order gecko codes. Generating codes.");
-
-    // if all inputs are validated, can generate gecko codes for batting order and position.
-    // convert positions to P1/P2
-    bool localIsAway;
     uint32_t positionP1ByBattingOrder[9];
     uint32_t positionP2ByBattingOrder[9];
-
-    if (state.halfInning.value() == 0)
-        localIsAway = state.firstBatter.value() == 0;
-    else
-        localIsAway = state.firstBatter.value() == 1;
-    INFO_LOG_FMT(COMMON, "Local is away: {}", localIsAway);
-
     for (int i = 0; i < 9; i++)
     {
         positionP1ByBattingOrder[i] = localIsAway ? state.awayPositionByBattingOrder[i].value() : state.homePositionByBattingOrder[i].value();
@@ -357,6 +327,48 @@ void GenerateBattingOrderGeckoCodes(
 
     // finish the code
     outCodes.push_back(CustomGeckoCode(0x60000000, 0x00000000));
+}
+
+void GenerateBattingOrderScreenGeckoCodes(
+    const MSBQuickMatchGameState state,
+    std::vector<Gecko::GeckoCode::Code>& outCodes
+)
+{
+    // validate inputs
+    bool inputsValidated = true;
+
+    if (!state.firstBatter.has_value() || !state.halfInning.has_value())
+        inputsValidated = false;
+    
+    for (int i = 0; i < 9; i++)
+    {
+        if (!state.charactersP1ByPosition[i].has_value() || !state.charactersP2ByPosition[i].has_value() || 
+            !state.awayPositionByBattingOrder[i].has_value() || !state.homePositionByBattingOrder[i].has_value())
+        {
+            inputsValidated = false;
+            break;
+        }
+    }
+
+    if (!inputsValidated)
+    {
+        ERROR_LOG_FMT(COMMON, "Not all inputs provided for batting order gecko codes. No codes produced.");
+        return;
+    }
+    INFO_LOG_FMT(COMMON, "All inputs provided for batting order gecko codes. Generating codes.");
+
+    // if all inputs are validated, can generate gecko codes.
+    // convert positions to P1/P2
+    bool localIsAway;
+    if (state.halfInning.value() == 0)
+        localIsAway = state.firstBatter.value() == 0;
+    else
+        localIsAway = state.firstBatter.value() == 1;
+    INFO_LOG_FMT(COMMON, "Local is away: {}", localIsAway);
+
+    GenerateBattingOrderGeckoCodes(state, localIsAway, outCodes);
+    // Handedness helper call
+    // Superstar helper call
 }
 
 std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSetupGeckoCode(
