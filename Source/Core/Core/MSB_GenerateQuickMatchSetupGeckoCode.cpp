@@ -270,7 +270,7 @@ void GeneratePitcherStaminaGeckoCodes(
 }
 
 void GenerateBattingOrderGeckoCodes(
-    const MSBQuickMatchGameState state,
+    const MSBQuickMatchGameState& state,
     const bool localIsAway,
     std::vector<Gecko::GeckoCode::Code>& outCodes
 )
@@ -329,6 +329,79 @@ void GenerateBattingOrderGeckoCodes(
     outCodes.push_back(CustomGeckoCode(0x60000000, 0x00000000));
 }
 
+void GenerateHandednessGeckoCodes(
+    const MSBQuickMatchGameState& state,
+    const bool localIsAway,
+    std::vector<Gecko::GeckoCode::Code>& outCodes
+)
+{
+    INFO_LOG_FMT(COMMON, "Running GenerateHandednessGeckoCodes function");
+    
+    for (int i = 0; i < 9; i++)
+    {
+        if (!state.fieldingHandP1ByPosition[i].has_value() || !state.fieldingHandP2ByPosition[i].has_value() ||
+            !state.battingHandP1ByPosition[i].has_value() || !state.battingHandP2ByPosition[i].has_value() ||
+            !state.awayPositionByBattingOrder[i].has_value() || !state.homePositionByBattingOrder[i].has_value())
+        {
+            ERROR_LOG_FMT(COMMON, "Not all handedness inputs provided. No codes produced.");
+            return;
+        }
+    }
+
+   // Add C2 gecko code header
+    outCodes.push_back(CustomGeckoCode(0xC2047E2C, 0x00000039)); //TODO determine correct length for this code.
+
+    // load base address for handedness in r4 - so team 0 roster 0
+    outCodes.push_back(CustomGeckoCode(0x3C808035, 0x38843C06));
+
+    for (int team = 0; team < 2; team++)
+    {
+        // get correct batting order team since that's defined as away/home.
+        uint32_t positionByBattingOrder[9];
+        for (int i = 0; i < 9; i++)
+        {
+            if (localIsAway)
+                positionByBattingOrder[i] = 
+                    (team == 0) ? 
+                        state.awayPositionByBattingOrder[i].value() : 
+                        state.homePositionByBattingOrder[i].value();
+            else
+                positionByBattingOrder[i] = 
+                    (team == 0) ? 
+                        state.homePositionByBattingOrder[i].value() : 
+                        state.awayPositionByBattingOrder[i].value();
+        }
+
+        for (int rosterSpot = 0; rosterSpot < 9; rosterSpot++)
+        {
+            uint32_t position = positionByBattingOrder[rosterSpot];
+
+            uint8_t fieldingHand = 
+                (team == 0) ? 
+                    state.fieldingHandP1ByPosition[position].value() : 
+                    state.fieldingHandP2ByPosition[position].value();
+            uint8_t battingHand = 
+                (team == 0) ? 
+                    state.battingHandP1ByPosition[position].value() : 
+                    state.battingHandP2ByPosition[position].value();
+
+            // load handedness into registers r3 and r6.
+            uint32_t fieldingInt = 0x38600000 | (fieldingHand & 0xFF);
+            uint32_t battingInt = 0x38C00000 | (battingHand & 0xFF);
+            outCodes.push_back(CustomGeckoCode(fieldingInt, battingInt));
+
+            // store handedness into roster addresses
+            outCodes.push_back(CustomGeckoCode(0x98640000, 0x98C40001));
+
+            // go to next roster spot by adding stride to base address in r4. Also add nop for allignment.
+            outCodes.push_back(CustomGeckoCode(0x388400A0, 0x60000000));
+        }
+    }
+
+    // finish the code by replacing last instruction
+    outCodes.push_back(CustomGeckoCode(0x3C808033, 0x00000000));
+}
+
 void GenerateBattingOrderScreenGeckoCodes(
     const MSBQuickMatchGameState state,
     std::vector<Gecko::GeckoCode::Code>& outCodes
@@ -367,7 +440,7 @@ void GenerateBattingOrderScreenGeckoCodes(
     INFO_LOG_FMT(COMMON, "Local is away: {}", localIsAway);
 
     GenerateBattingOrderGeckoCodes(state, localIsAway, outCodes);
-    // Handedness helper call
+    GenerateHandednessGeckoCodes(state, localIsAway, outCodes);
     // Superstar helper call
 }
 
