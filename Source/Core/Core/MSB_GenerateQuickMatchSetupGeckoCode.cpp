@@ -512,7 +512,7 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
         }
 
         // generate batting order codes.
-        GenerateBattingOrderGeckoCodes(state, codes);
+        GenerateBattingOrderScreenGeckoCodes(state, codes);
 
         if (state.stadium.has_value())
         {
