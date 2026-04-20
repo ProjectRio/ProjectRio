@@ -349,7 +349,7 @@ void GenerateHandednessGeckoCodes(
     }
 
    // Add C2 gecko code header
-    outCodes.push_back(CustomGeckoCode(0xC2047E2C, 0x00000039)); //TODO determine correct length for this code.
+    outCodes.push_back(CustomGeckoCode(0xC2047E2C, 0x00000038)); 
 
     // load base address for handedness in r4 - so team 0 roster 0
     outCodes.push_back(CustomGeckoCode(0x3C808035, 0x38843C06));
