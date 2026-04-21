@@ -716,7 +716,6 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
   if (!state.firstBatter.has_value())
   {
     INFO_LOG_FMT(COMMON, "State.firstBatter doesn't have value - no message");
-    quickMatchBattingOrderMsgFetched = false;
     return;
   }
 
@@ -724,38 +723,6 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
   RelNumber rel = static_cast<RelNumber>(PowerPC::MMU::HostRead_U16(guard, aRelNumber));
   if (rel == RelNumber::MainMenu)
   {
-    // get player names
-    LocalPlayers::LocalPlayers localPlayersObj;
-
-    auto portPlayers = localPlayersObj.GetPortPlayers();
-    std::string localUsername = "";
-    if (portPlayers.count(0))
-      localUsername = std::string(StripWhitespace(portPlayers.at(0).username));
-
-    std::string opponentUsername = "";
-    for (const auto& [port, player] : portPlayers)
-    {
-        std::string portUsername = std::string(StripWhitespace(player.username));
-        if (portUsername != localUsername)
-        {
-            opponentUsername = portUsername;
-            break;
-        }
-    }
-
-    // get batting order strings
-    if (!quickMatchBattingOrderMsgFetched)
-    {
-    bool p1IsAway = !state.firstBatter.value();
-
-    INFO_LOG_FMT(COMMON, "Getting P1 batting order string");
-    p1BattingOrderStr = MSB_QuickMatchBattingOrderStr(state, true, p1IsAway);
-    INFO_LOG_FMT(COMMON, "Getting P2 batting order string");
-    p2BattingOrderStr = MSB_QuickMatchBattingOrderStr(state, false, !p1IsAway);
-
-    quickMatchBattingOrderMsgFetched = true;
-    }
-
     // create message
     OSD::AddTypedMessage
     (
@@ -763,19 +730,9 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
       fmt::format
       (
         "Quick Match Setup V1 \n"
-        "Match will load to 1 pitch before the crash.\n"
-        "Only the batting order needs to be set.\n"
-        "Everything else will be set automatically.\n"
-        "Press A to skip through the rest of the menus.\n"
-        "It's normal for the graphics to look buggy.\n"
-        "\n"
-        "Set the batting order EXACTLY like this.\n"
-        "P1 {} batting order\n"
-        "{}\n"
-        "\n"
-        "P2 {} batting order\n"
-        "{}\n", 
-        localUsername, p1BattingOrderStr, opponentUsername, p2BattingOrderStr
+        "The match will load to 1 pitch before the crash.\n"
+        "Everything will be set automatically, despite.\n"
+        "the graphics not showing the correct values.\n"
       ), 
       OSD::Duration::NORMAL,
       OSD::Color::BLUE
@@ -1022,8 +979,6 @@ void Stop()  // - Hammertime!
     s_stat_tracker->dumpGame(guard);
     std::cout << "Emulation stopped. Dumping game." << std::endl;
     s_stat_tracker->init();
-
-    quickMatchBattingOrderMsgFetched = false;
   }
 }
 

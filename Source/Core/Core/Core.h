@@ -267,10 +267,6 @@ bool GameSupportsTagSets();
 // Helper function for the Gecko loader expansion
 std::optional<std::pair<u32,u32>> getGameFreeMemory();
 
-static bool quickMatchBattingOrderMsgFetched = false;
-static std::string p1BattingOrderStr = "";
-static std::string p2BattingOrderStr = "";
-
 static const u32 aOpponentPort = 0x802EBF92;
 static const u32 aFielderPort = 0x802EBF94;
 static const u32 aBatterPort = 0x802EBF95;
