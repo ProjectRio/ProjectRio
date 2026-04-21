@@ -286,31 +286,24 @@ void GenerateBattingOrderGeckoCodes(
     }
 
     // add first two lines related to checking the team number
-    outCodes.push_back(CustomGeckoCode(0xC2066A48, 0x00000015));
+    outCodes.push_back(CustomGeckoCode(0xC2066A48, 0x00000016));
     outCodes.push_back(CustomGeckoCode(0x3AE10038, 0x2C030001));
+    outCodes.push_back(CustomGeckoCode(0x41820050, 0x60000000)); // nop for alignment.
 
     // P1 batting order
     for (int i = 0; i < 9; i++)
     {
         uint32_t position = positionP1ByBattingOrder[i];
         uint8_t charID = state.charactersP1ByPosition[position].value();
-        uint32_t firstWord, secondWord;
 
-        // char ID and batting order are on separate lines at this point, so need to handle first iteration differently.
-        if (i == 0)
-        {
-            firstWord = 0x41820050; // conditional branch
-            secondWord = 0x39800000 | (charID & 0x000000FF);
-        }
-        else
-        {
-            firstWord = 0x99970000 | ((i - 1) & 0xFF); // batting order of character before.
-            secondWord = 0x39800000 | (charID & 0xFF);
-        }
+        uint32_t firstWord = 0x39800000 | (charID & 0xFF);
+        uint32_t secondWord = 0x99970000 | (i & 0xFF);
+
         outCodes.push_back(CustomGeckoCode(firstWord, secondWord));
     }
-    // add last batting order store, then pur branch instruction to end.
-    outCodes.push_back(CustomGeckoCode(0x99970008, 0x4800004C));
+
+    // Put branch instruction to end. Nop for alignment.
+    outCodes.push_back(CustomGeckoCode(0x4800004C, 0x60000000));
 
     // P2 batting order. 
     // CharID and batting order are now on separate lines since there is an intermediate branch instruction.
