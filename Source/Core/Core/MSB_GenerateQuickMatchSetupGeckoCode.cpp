@@ -426,12 +426,11 @@ void GenerateSuperstarGeckoCodes(
     {
         int nSuperstars = (team == 0) ? nSuperstarsP1 : nSuperstarsP2;
         uint32_t baseAddress = (team == 0) ? MSBQuickMatchCodeBuilder::SUPERSTAR_BOOLS_P1_BASE : MSBQuickMatchCodeBuilder::SUPERSTAR_BOOLS_P2_BASE;
-        int firstWord = 0x00000000 | (baseAddress & 0x00FFFFFF);
 
         if (nSuperstars == 9)
         {
             // if a team has all 9 players superstarred, use the shorthand version of the code.
-            outCodes.push_back(CustomGeckoCode(firstWord, 0x00080001));
+            outCodes.push_back(CustomGeckoCode((0x00000000 | (baseAddress & 0x00FFFFFF)), 0x00080001));
         }
         else
         {
@@ -462,7 +461,8 @@ void GenerateSuperstarGeckoCodes(
 
                 if (superstarVal == 1)
                 {
-                    outCodes.push_back(CustomGeckoCode(firstWord, 0x00000001));
+                    int address = baseAddress + rosterSpot;
+                    outCodes.push_back(CustomGeckoCode((0x00000000 | (address & 0x00FFFFFF)), 0x00000001));
                 }
             }
         }
