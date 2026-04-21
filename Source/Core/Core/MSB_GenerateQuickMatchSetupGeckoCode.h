@@ -19,7 +19,6 @@ struct MSBQuickMatchGameState
     
     // Handedness stored in position order, matching charactersP1/P2ByPosition
     // 0 = right, 1 = left
-    // currently just used for the message output - more decomp is needed to automate the batting order.
     std::optional<uint8_t> battingHandP1ByPosition[9];
     std::optional<uint8_t> battingHandP2ByPosition[9];
     std::optional<uint8_t> fieldingHandP1ByPosition[9];
@@ -27,7 +26,6 @@ struct MSBQuickMatchGameState
 
     // Superstar stored in position order
     // 0 = off, 1 = on
-    // currently just used for the message output - more decomp is needed to automate the batting order.
     std::optional<uint8_t> superstarP1ByPosition[9];
     std::optional<uint8_t> superstarP2ByPosition[9];
 
@@ -119,8 +117,6 @@ public:
     static constexpr uint32_t SUPERSTAR_BOOLS_P1_BASE = 0x8034e9a6;
     static constexpr uint32_t SUPERSTAR_BOOLS_P2_BASE = 0x8034e9b0;
 
-    // TODO once decomp is at more advanced state - add addresses to automate handedness and superstars in batting order screen.
-
     static constexpr uint32_t STADIUM_ADDR = 0x80750c37;
     static constexpr uint32_t STADIUM_CURSOR_RIGHT_INSTR_ADDR = 0x80650586;
     static constexpr uint32_t STADIUM_CURSOR_LEFT_INSTR_ADDR = 0x80650536;
@@ -178,5 +174,3 @@ public:
     static constexpr uint32_t PITCHER_STAMINA_P2_BASE = 0x803536e6;
     static constexpr uint32_t PITCHER_STAMINA_STRIDE = 0x1E;
 };
-
-std::string MSB_QuickMatchBattingOrderStr(const MSBQuickMatchGameState& state, bool isP1, bool isAway);
