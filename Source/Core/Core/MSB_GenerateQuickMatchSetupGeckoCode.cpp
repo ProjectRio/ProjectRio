@@ -402,6 +402,113 @@ void GenerateHandednessGeckoCodes(
     outCodes.push_back(CustomGeckoCode(0x3C808033, 0x00000000));
 }
 
+void GenerateSuperstarGeckoCodes(
+    const MSBQuickMatchGameState& state,
+    const bool localIsAway,
+    std::vector<Gecko::GeckoCode::Code>& outCodes
+)
+{
+    INFO_LOG_FMT(COMMON, "Running GenerateSuperstarGeckoCodes function");
+    
+    // input validation
+    int nSuperstarsP1 = 0;
+    int nSuperstarsP2 = 0;
+    for (int i = 0; i < 9; i++)
+    {
+        if (!state.superstarP1ByPosition[i].has_value() || !state.superstarP2ByPosition[i].has_value() ||
+            !state.awayPositionByBattingOrder[i].has_value() || !state.homePositionByBattingOrder[i].has_value())
+        {
+            ERROR_LOG_FMT(COMMON, "Not all superstar inputs provided. No codes produced.");
+            return;
+        }
+
+        nSuperstarsP1 += state.superstarP1ByPosition[i].value();
+        nSuperstarsP2 += state.superstarP2ByPosition[i].value();
+    }
+
+    // put the superstar indicators into a free spot in memory.
+    for (int team = 0; team < 2; team++)
+    {
+        int nSuperstars = (team == 0) ? nSuperstarsP1 : nSuperstarsP2;
+        uint32_t baseAddress = (team == 0) ? MSBQuickMatchCodeBuilder::SUPERSTAR_BOOLS_P1_BASE : MSBQuickMatchCodeBuilder::SUPERSTAR_BOOLS_P2_BASE;
+        int firstWord = 0x00000000 | (baseAddress & 0x00FFFFFF);
+
+        if (nSuperstars == 9)
+        {
+            // if a team has all 9 players superstarred, use the shorthand version of the code.
+            outCodes.push_back(CustomGeckoCode(firstWord, 0x00080001));
+        }
+        else
+        {
+            // get correct batting order team since that's defined as away/home.
+            uint32_t positionByBattingOrder[9];
+            for (int i = 0; i < 9; i++)
+            {
+                if (localIsAway)
+                    positionByBattingOrder[i] = 
+                        (team == 0) ? 
+                            state.awayPositionByBattingOrder[i].value() : 
+                            state.homePositionByBattingOrder[i].value();
+                else
+                    positionByBattingOrder[i] = 
+                        (team == 0) ? 
+                            state.homePositionByBattingOrder[i].value() : 
+                            state.awayPositionByBattingOrder[i].value();
+            }
+
+            for (int rosterSpot = 0; rosterSpot < 9; rosterSpot++)
+            {
+                uint32_t position = positionByBattingOrder[rosterSpot];
+
+                uint8_t superstarVal = 
+                    (team == 0) ? 
+                        state.superstarP1ByPosition[position].value() : 
+                        state.superstarP2ByPosition[position].value();
+
+                if (superstarVal == 1)
+                {
+                    uint32_t address = baseAddress + rosterSpot;
+                    outCodes.push_back(CustomGeckoCode(firstWord, 0x00000001));
+                }
+            }
+        }
+    }
+
+    // build the c2 code
+    // header
+    outCodes.push_back(CustomGeckoCode(0xC205A4F4, 0x0000000F)); 
+    // check register that usually holds the team number has a value of 0 or 1. Else exit.
+    outCodes.push_back(CustomGeckoCode(0x2C1B0002, 0x4181006C)); 
+    // load index address from free memory near the stored superstarred values.
+    outCodes.push_back(CustomGeckoCode(0x3C608035, 0x3863E9A5));
+    // offset index address if P2 team.
+    outCodes.push_back(CustomGeckoCode(0x2C1B0001, 0x40820008));
+    // load index value into register
+    outCodes.push_back(CustomGeckoCode(0x3863000A, 0x8B230000));
+    // if index = 0, just increment index number. This loop will be used to ensure 
+    // superstar values from earlier gecko codes are saved to memory.
+    outCodes.push_back(CustomGeckoCode(0x2C190000, 0x41820040));
+    // load cursor address into register.
+    outCodes.push_back(CustomGeckoCode(0x3FC08033, 0x3BDE6726));
+    // offset cursor address if P2. 
+    outCodes.push_back(CustomGeckoCode(0x7FDEDA14, 0x2C19000A));
+    //If index is 10, then superstarring done, set cursor to sport 0 - the OK button.
+    outCodes.push_back(CustomGeckoCode(0x40820010, 0x3B200000));
+    outCodes.push_back(CustomGeckoCode(0x9B3E0000, 0x4800002C));
+    // set cursor to index number. Load address that has bool that
+    // starts the superstarring process.
+    outCodes.push_back(CustomGeckoCode(0x9B3E0000, 0x3FC08033));
+    // offset for P2 if needed. Load superstar address from free spor in memory.
+    outCodes.push_back(CustomGeckoCode(0x3BDE677E, 0x7FDEDA14));
+    // store superstar value to bool that will start the superstarring process.
+    outCodes.push_back(CustomGeckoCode(0x7F591A14, 0x8B9A0000));
+    // increment index and branch to end.
+    outCodes.push_back(CustomGeckoCode(0x9B9E0000, 0x3B390001));
+    outCodes.push_back(CustomGeckoCode(0x9B230000, 0x48000004));
+    // replace original instruction.
+    outCodes.push_back(CustomGeckoCode(0x3C608033, 0x00000000));
+}
+
 void GenerateBattingOrderScreenGeckoCodes(
     const MSBQuickMatchGameState state,
     std::vector<Gecko::GeckoCode::Code>& outCodes
@@ -441,7 +548,7 @@ void GenerateBattingOrderScreenGeckoCodes(
 
     GenerateBattingOrderGeckoCodes(state, localIsAway, outCodes);
     GenerateHandednessGeckoCodes(state, localIsAway, outCodes);
-    // Superstar helper call
+    GenerateSuperstarGeckoCodes(state, localIsAway, outCodes);
 }
 
 std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSetupGeckoCode(

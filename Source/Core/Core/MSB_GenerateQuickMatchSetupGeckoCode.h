@@ -116,6 +116,9 @@ public:
     static constexpr uint32_t CHARACTER_SELECT_P2_CURSOR_ADDR = 0x80750c4C;
     static constexpr uint32_t CHARACTER_SELECT_PREVENT_CURSOR_MOVEMENT_ADDR = 0x8064df60;
 
+    static constexpr uint32_t SUPERSTAR_BOOLS_P1_BASE = 0x8034e9a6;
+    static constexpr uint32_t SUPERSTAR_BOOLS_P2_BASE = 0x8034e9b0;
+
     // TODO once decomp is at more advanced state - add addresses to automate handedness and superstars in batting order screen.
 
     static constexpr uint32_t STADIUM_ADDR = 0x80750c37;
