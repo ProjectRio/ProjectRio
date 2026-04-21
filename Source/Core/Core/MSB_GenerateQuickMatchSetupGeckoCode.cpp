@@ -285,10 +285,12 @@ void GenerateBattingOrderGeckoCodes(
         positionP2ByBattingOrder[i] = localIsAway ? state.homePositionByBattingOrder[i].value() : state.awayPositionByBattingOrder[i].value();
     }
 
-    // add first two lines related to checking the team number
+    // add header
     outCodes.push_back(CustomGeckoCode(0xC2066A48, 0x00000016));
+    // check if team equals P2 (1)
     outCodes.push_back(CustomGeckoCode(0x3AE10038, 0x2C030001));
-    outCodes.push_back(CustomGeckoCode(0x41820050, 0x60000000)); // nop for alignment.
+    // brach to P2 code. Nop for alignment.
+    outCodes.push_back(CustomGeckoCode(0x41820098, 0x60000000));
 
     // P1 batting order
     for (int i = 0; i < 9; i++)
