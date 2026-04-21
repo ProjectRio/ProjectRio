@@ -470,7 +470,7 @@ void GenerateSuperstarGeckoCodes(
 
     // build the c2 code
     // header
-    outCodes.push_back(CustomGeckoCode(0xC205A4F4, 0x0000000F)); 
+    outCodes.push_back(CustomGeckoCode(0xC2000000 | (MSBQuickMatchCodeBuilder::SUPERSTAR_INJECTION_ADDR & 0x00FFFFFF), 0x0000000F)); 
     // check register that usually holds the team number has a value of 0 or 1. Else exit.
     outCodes.push_back(CustomGeckoCode(0x2C1B0002, 0x4181006C)); 
     // load index address from free memory near the stored superstarred values.
@@ -862,6 +862,9 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
                     codes.push_back(ToGeckoCode(0x04, RUNNER_NOP_BASE + RUNNER_NOP_STRIDE * i, RUNNER_REPLACEMENT_INSTRUCTIONS[i]));
                 }
             }
+
+            // for superstarred players, need to replace the c2 injection instruction. No condition needed since just replacing vanilla instruction
+            codes.push_back(ToGeckoCode(0x04, SUPERSTAR_INJECTION_ADDR, 0x3C608033));
 
         codes.push_back(EndConditional()); // end game-has-started conditional
     codes.push_back(EndConditional()); // end in-game conditional
