@@ -288,9 +288,9 @@ void GenerateBattingOrderGeckoCodes(
     // add header
     outCodes.push_back(CustomGeckoCode(0xC2066A48, 0x00000016));
     // check if team equals P2 (1)
-    outCodes.push_back(CustomGeckoCode(0x3AE10038, 0x2C030001));
+    outCodes.push_back(CustomGeckoCode(0x3AE10038, 0x2C080001));
     // brach to P2 code. Nop for alignment.
-    outCodes.push_back(CustomGeckoCode(0x41820098, 0x60000000));
+    outCodes.push_back(CustomGeckoCode(0x41820058, 0x60000000));
 
     // P1 batting order
     for (int i = 0; i < 9; i++)
@@ -305,7 +305,7 @@ void GenerateBattingOrderGeckoCodes(
     }
 
     // Put branch instruction to end. Nop for alignment.
-    outCodes.push_back(CustomGeckoCode(0x4800004C, 0x60000000));
+    outCodes.push_back(CustomGeckoCode(0x48000050, 0x60000000));
 
     // P2 batting order. 
     // CharID and batting order are now on separate lines since there is an intermediate branch instruction.
