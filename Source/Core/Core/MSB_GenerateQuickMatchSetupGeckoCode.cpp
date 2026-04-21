@@ -462,7 +462,6 @@ void GenerateSuperstarGeckoCodes(
 
                 if (superstarVal == 1)
                 {
-                    uint32_t address = baseAddress + rosterSpot;
                     outCodes.push_back(CustomGeckoCode(firstWord, 0x00000001));
                 }
             }
