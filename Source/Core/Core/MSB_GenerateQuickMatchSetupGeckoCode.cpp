@@ -430,7 +430,8 @@ void GenerateSuperstarGeckoCodes(
         if (nSuperstars == 9)
         {
             // if a team has all 9 players superstarred, use the shorthand version of the code.
-            outCodes.push_back(CustomGeckoCode((0x00000000 | (baseAddress & 0x00FFFFFF)), 0x00080001));
+            outCodes.push_back(CustomGeckoCode((0x08000000 | (baseAddress & 0x00FFFFFF)), 0x00000001));
+            outCodes.push_back(CustomGeckoCode( (0x00080000 | (MSBQuickMatchCodeBuilder::SUPERSTAR_BOOLS_STRIDE & 0x0000FFFF)), 0x00000000));
         }
         else
         {
@@ -461,46 +462,35 @@ void GenerateSuperstarGeckoCodes(
 
                 if (superstarVal == 1)
                 {
-                    int address = baseAddress + rosterSpot;
+                    int address = baseAddress + rosterSpot * MSBQuickMatchCodeBuilder::SUPERSTAR_BOOLS_STRIDE;
                     outCodes.push_back(CustomGeckoCode((0x00000000 | (address & 0x00FFFFFF)), 0x00000001));
                 }
             }
         }
     }
 
-    // build the c2 code
-    // header
-    outCodes.push_back(CustomGeckoCode(0xC2000000 | (MSBQuickMatchCodeBuilder::SUPERSTAR_INJECTION_ADDR & 0x00FFFFFF), 0x0000000F)); 
-    // check register that usually holds the team number has a value of 0 or 1. Else exit.
-    outCodes.push_back(CustomGeckoCode(0x2C1B0002, 0x4181006C)); 
-    // load index address from free memory near the stored superstarred values.
-    outCodes.push_back(CustomGeckoCode(0x3C608035, 0x3863E9A5));
-    // offset index address if P2 team.
-    outCodes.push_back(CustomGeckoCode(0x2C1B0001, 0x40820008));
-    // load index value into register
-    outCodes.push_back(CustomGeckoCode(0x3863000A, 0x8B230000));
-    // if index = 0, just increment index number. This loop will be used to ensure 
-    // superstar values from earlier gecko codes are saved to memory.
-    outCodes.push_back(CustomGeckoCode(0x2C190000, 0x41820040));
-    // load cursor address into register.
+    // build the c2 code - see the RIO-ASM ripo for the source ASM.
+    outCodes.push_back(CustomGeckoCode(0xC205A4F4, 0x00000014)); 
+    outCodes.push_back(CustomGeckoCode(0x2C1B0002, 0x41810090));
+    outCodes.push_back(CustomGeckoCode(0x3C60802F, 0x3863BF99));
+    outCodes.push_back(CustomGeckoCode(0x7C63DA14, 0x8B030000));
+    outCodes.push_back(CustomGeckoCode(0x2C180000, 0x41820060));
     outCodes.push_back(CustomGeckoCode(0x3FC08033, 0x3BDE6726));
-    // offset cursor address if P2. 
-    outCodes.push_back(CustomGeckoCode(0x7FDEDA14, 0x2C19000A));
-    //If index is 10, then superstarring done, set cursor to sport 0 - the OK button.
-    outCodes.push_back(CustomGeckoCode(0x40820010, 0x3B200000));
-    outCodes.push_back(CustomGeckoCode(0x9B3E0000, 0x4800002C));
-    // set cursor to index number. Load address that has bool that
-    // starts the superstarring process.
-    outCodes.push_back(CustomGeckoCode(0x9B3E0000, 0x3FC08033));
-    // offset for P2 if needed. Load superstar address from free spor in memory.
-    outCodes.push_back(CustomGeckoCode(0x3BDE677E, 0x7FDEDA14));
-    // store superstar value to bool that will start the superstarring process.
-    outCodes.push_back(CustomGeckoCode(0x7F591A14, 0x8B9A0000));
-    // increment index and branch to end.
-    outCodes.push_back(CustomGeckoCode(0x9B9E0000, 0x3B390001));
-    outCodes.push_back(CustomGeckoCode(0x9B230000, 0x48000004));
-    // replace original instruction.
-    outCodes.push_back(CustomGeckoCode(0x3C608033, 0x00000000));
+    outCodes.push_back(CustomGeckoCode(0x7FDEDA14, 0x2C18000A));
+    outCodes.push_back(CustomGeckoCode(0x41800018, 0x41820008));
+    outCodes.push_back(CustomGeckoCode(0x4800005C, 0x3B400000));
+    outCodes.push_back(CustomGeckoCode(0x9B5E0000, 0x48000038));
+    outCodes.push_back(CustomGeckoCode(0x9B1E0000, 0x3C608035));
+    outCodes.push_back(CustomGeckoCode(0x38633BE5, 0x1FDB0009));
+    outCodes.push_back(CustomGeckoCode(0x7FDEC214, 0x3BDEFFFF));
+    outCodes.push_back(CustomGeckoCode(0x1FDE00A0, 0x7C63F214));
+    outCodes.push_back(CustomGeckoCode(0x3FC08033, 0x3BDE677E));
+    outCodes.push_back(CustomGeckoCode(0x7FDEDA14, 0x8B830000));
+    outCodes.push_back(CustomGeckoCode(0x9B9E0000, 0x3C60802F));
+    outCodes.push_back(CustomGeckoCode(0x3863BF99, 0x7C63DA14));
+    outCodes.push_back(CustomGeckoCode(0x3B180001, 0x9B030000));
+    outCodes.push_back(CustomGeckoCode(0x48000004, 0x3C608033));
+    outCodes.push_back(CustomGeckoCode(0x60000000, 0x00000000));
 }
 
 void GenerateBattingOrderScreenGeckoCodes(

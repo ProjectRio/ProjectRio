@@ -115,8 +115,11 @@ public:
     static constexpr uint32_t CHARACTER_SELECT_PREVENT_CURSOR_MOVEMENT_ADDR = 0x8064df60;
 
     static constexpr uint32_t SUPERSTAR_INJECTION_ADDR = 0x8005a4f4;
-    static constexpr uint32_t SUPERSTAR_BOOLS_P1_BASE = 0x8034e9a6;
-    static constexpr uint32_t SUPERSTAR_BOOLS_P2_BASE = 0x8034e9b0;
+    static constexpr uint32_t SUPERSTAR_BOOLS_P1_BASE = 0x80353be5;
+    static constexpr uint32_t SUPERSTAR_BOOLS_P2_BASE = 0x80354180;
+    static constexpr uint32_t SUPERSTAR_BOOLS_STRIDE = 0xA0;
+    static constexpr uint32_t SUPERSTAR_CODE_P1_INDEX_ADDR = 0x802EBF99;
+    static constexpr uint32_t SUPERSTAR_CODE_P2_INDEX_ADDR = 0x802EBF9A;
 
     static constexpr uint32_t STADIUM_ADDR = 0x80750c37;
     static constexpr uint32_t STADIUM_CURSOR_RIGHT_INSTR_ADDR = 0x80650586;
