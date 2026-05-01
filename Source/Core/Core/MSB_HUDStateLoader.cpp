@@ -49,18 +49,18 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     
     INFO_LOG_FMT(COMMON, "Checking port players.");
 
-    // Get the online player (port 0) for local username
+    // Get the player 1 (port 1) for local username
     auto portPlayers = localPlayersObj.GetPortPlayers();
-    std::string localUsername = "";
-    if (portPlayers.count(0))
+    std::string p1Username = "";
+    if (portPlayers.count(1))
     {
-        localUsername = std::string(StripWhitespace(portPlayers.at(0).username));
-        INFO_LOG_FMT(COMMON, "Local player found.: {}", localUsername);
+        p1Username = std::string(StripWhitespace(portPlayers.at(1).username));
+        INFO_LOG_FMT(COMMON, "P1 player found.: {}", p1Username);
     }
 
-    if (localUsername.empty())
+    if (p1Username.empty())
     {
-        ERROR_LOG_FMT(COMMON, "Could not find online player in local players config.");
+        ERROR_LOG_FMT(COMMON, "Could not find P1 player in local players config.");
         return false;
     }
     
@@ -77,7 +77,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     for (const auto& [port, player] : portPlayers)
     {
         std::string portUsername = std::string(StripWhitespace(player.username));
-        if (portUsername != localUsername && portUsername != "No Player Selected")
+        if (portUsername != p1Username && portUsername != "No Player Selected")
         {
             opponentUsername = portUsername;
             break;
@@ -87,13 +87,13 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
         opponentUsername.empty() ? "none (solo game)" : opponentUsername);
 
     // Validate players match the HUD file
-    bool localIsAway = (localUsername == awayPlayer);
-    bool localIsHome = (localUsername == homePlayer);
+    bool p1IsAway = (p1Username == awayPlayer);
+    bool p1IsHome = (p1Username == homePlayer);
 
-    if (!localIsAway && !localIsHome)
+    if (!p1IsAway && !p1IsHome)
     {
-        ERROR_LOG_FMT(COMMON, "Local player '{}' not found in HUD file. Away='{}', Home='{}'",
-                    localUsername, awayPlayer, homePlayer);
+        ERROR_LOG_FMT(COMMON, "P1 player '{}' not found in HUD file. Away='{}', Home='{}'",
+                    p1Username, awayPlayer, homePlayer);
         return false;
     }
 
@@ -103,14 +103,14 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
         bool opponentIsAway = (opponentUsername == awayPlayer);
         bool opponentIsHome = (opponentUsername == homePlayer);
 
-        if (!((localIsAway && opponentIsHome) || (localIsHome && opponentIsAway)))
+        if (!((p1IsAway && opponentIsHome) || (p1IsHome && opponentIsAway)))
         {
-            ERROR_LOG_FMT(COMMON, "Player mismatch. Local='{}', Opponent='{}', HUD Away='{}', HUD Home='{}'",
-                        localUsername, opponentUsername, awayPlayer, homePlayer);
+            ERROR_LOG_FMT(COMMON, "Player mismatch. P1='{}', Opponent='{}', HUD Away='{}', HUD Home='{}'",
+                        p1Username, opponentUsername, awayPlayer, homePlayer);
             return false;
         }
     }
-    // Solo game - just verify local player is in the file, opponent slot can be "No Player Selected"
+    // Solo game - just verify P1 player is in the file, opponent slot can be "No Player Selected"
     else
     {
         INFO_LOG_FMT(COMMON, "Solo game detected, skipping opponent validation.");
@@ -128,13 +128,13 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     // The "Fielding Position" field tells us what position each roster slot plays.
     // Position mapping: 0=P, 1=C, 2=1B, 3=2B, 4=3B, 5=SS, 6=LF, 7=CF, 8=RF
 
-    // If local player is away, away=P1 and home=P2. Otherwise invert.
+    // If host player is away, away=P1 and home=P2. Otherwise invert.
 
     for (int i = 0; i < 9; i++)
     {
-        std::string p1Key = localIsAway ? "Away Roster " + std::to_string(i)
+        std::string p1Key = p1IsAway ? "Away Roster " + std::to_string(i)
                                             : "Home Roster " + std::to_string(i);
-        std::string p2Key = localIsAway ? "Home Roster " + std::to_string(i)
+        std::string p2Key = p1IsAway ? "Home Roster " + std::to_string(i)
                                             : "Away Roster " + std::to_string(i);
 
         if (j.count(p1Key))
@@ -204,8 +204,8 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
         uint8_t awayLogo = static_cast<uint8_t>(j.at("Away Logo").get<double>());
         uint8_t homeLogo = static_cast<uint8_t>(j.at("Home Logo").get<double>());
         
-        state.logoP1 = localIsAway ? awayLogo : homeLogo;
-        state.logoP2 = localIsAway ? homeLogo : awayLogo;
+        state.logoP1 = p1IsAway ? awayLogo : homeLogo;
+        state.logoP2 = p1IsAway ? homeLogo : awayLogo;
     }
     INFO_LOG_FMT(COMMON, "Logo P1: {}", state.logoP1.has_value() ? std::to_string(state.logoP1.value()) : "not set");
     INFO_LOG_FMT(COMMON, "Logo P2: {}", state.logoP2.has_value() ? std::to_string(state.logoP2.value()) : "not set");
@@ -228,7 +228,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     // if (j.count("First Batting Team"))
     // {
     //     uint8_t firstBattingTeam = static_cast<uint8_t>(j.at("First Batting Team").get<double>()); // 0=Original P1, 1=Original P2
-    //     if (localIsAway)
+    //     if (p1IsAway)
     //         state.firstBatter = firstBattingTeam;
     //     else
     //         state.firstBatter = (firstBattingTeam == 0) ? 1 : 0;
@@ -262,7 +262,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
         state.battingTeam = static_cast<uint32_t>(halfInning);
         state.fieldingTeam = static_cast<uint32_t>(1 - halfInning);
 
-        if (localIsAway) state.firstBatter = halfInning;
+        if (p1IsAway) state.firstBatter = halfInning;
         else state.firstBatter = 1 - halfInning;
     }    
     INFO_LOG_FMT(COMMON, "Half Inning: {}", state.halfInning.has_value() ? std::to_string(state.halfInning.value()) : "not set");
@@ -405,9 +405,9 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
             int awayAdjustedIndex = (i + awayStartingBatter) % 9;
             int homeAdjustedIndex = (i + homeStartingBatter) % 9;
             
-            std::string p1Key = localIsAway ? "Away Roster " + std::to_string(awayAdjustedIndex)
+            std::string p1Key = p1IsAway ? "Away Roster " + std::to_string(awayAdjustedIndex)
                                                 : "Home Roster " + std::to_string(homeAdjustedIndex);
-            std::string p2Key = localIsAway ? "Home Roster " + std::to_string(homeAdjustedIndex)
+            std::string p2Key = p1IsAway ? "Home Roster " + std::to_string(homeAdjustedIndex)
                                                 : "Away Roster " + std::to_string(awayAdjustedIndex);
 
             if (j.count(p1Key))
@@ -516,18 +516,18 @@ int allowLoadFromHUD(const std::string& path)
     // ===== check players match HUD =====
     LocalPlayers::LocalPlayers localPlayersObj;
 
-    // Get the online player (port 0) for local username
+    // Get the player 1 (port 0) username
     auto portPlayers = localPlayersObj.GetPortPlayers();
-    std::string localUsername = "";
-    if (portPlayers.count(0))
+    std::string p1Username = "";
+    if (portPlayers.count(1))
     {
-        localUsername = std::string(StripWhitespace(portPlayers.at(0).username));
-        INFO_LOG_FMT(COMMON, "Local player found.: {}", localUsername);
+        p1Username = std::string(StripWhitespace(portPlayers.at(1).username));
+        INFO_LOG_FMT(COMMON, "P1 player found.: {}", p1Username);
     }
 
-    if (localUsername.empty())
+    if (p1Username.empty())
     {
-        ERROR_LOG_FMT(COMMON, "Could not find online player in local players config.");
+        ERROR_LOG_FMT(COMMON, "Could not find player 1 in local players config.");
         return 4;
     }
 
@@ -536,12 +536,13 @@ int allowLoadFromHUD(const std::string& path)
     std::string homePlayer = j.count("Home Player") ? 
         std::string(StripWhitespace(j.at("Home Player").get<std::string>())) : "";
 
-    // Find opponent - port player who isn't the local player
+    // Find opponent - port player who isn't the host/P1 player
     std::string opponentUsername = "";
     for (const auto& [port, player] : portPlayers)
     {
+        if (port < 2) continue; // skip 0 = online player and 1=P1 since were interested in the 3 other ports only.
         std::string portUsername = std::string(StripWhitespace(player.username));
-        if (portUsername != localUsername && portUsername != "No Player Selected")
+        if (portUsername != p1Username && portUsername != "No Player Selected")
         {
             opponentUsername = portUsername;
             break;
@@ -549,13 +550,13 @@ int allowLoadFromHUD(const std::string& path)
     }
 
     // Validate players match the HUD file
-    bool localIsAway = (localUsername == awayPlayer);
-    bool localIsHome = (localUsername == homePlayer);
+    bool p1IsAway = (p1Username == awayPlayer);
+    bool p1IsHome = (p1Username == homePlayer);
 
-    if (!localIsAway && !localIsHome)
+    if (!p1IsAway && !p1IsHome)
     {
-        ERROR_LOG_FMT(COMMON, "Local player '{}' not found in HUD file. Away='{}', Home='{}'",
-                    localUsername, awayPlayer, homePlayer);
+        ERROR_LOG_FMT(COMMON, "P1 player '{}' not found in HUD file. Away='{}', Home='{}'",
+                    p1Username, awayPlayer, homePlayer);
         return 4;
     }
 
@@ -565,10 +566,10 @@ int allowLoadFromHUD(const std::string& path)
         bool opponentIsAway = (opponentUsername == awayPlayer);
         bool opponentIsHome = (opponentUsername == homePlayer);
 
-        if (!((localIsAway && opponentIsHome) || (localIsHome && opponentIsAway)))
+        if (!((p1IsAway && opponentIsHome) || (p1IsHome && opponentIsAway)))
         {
-            ERROR_LOG_FMT(COMMON, "Player mismatch. Local='{}', Opponent='{}', HUD Away='{}', HUD Home='{}'",
-                        localUsername, opponentUsername, awayPlayer, homePlayer);
+            ERROR_LOG_FMT(COMMON, "Player mismatch. P1='{}', Opponent='{}', HUD Away='{}', HUD Home='{}'",
+                        p1Username, opponentUsername, awayPlayer, homePlayer);
             return 4;
         }
     }

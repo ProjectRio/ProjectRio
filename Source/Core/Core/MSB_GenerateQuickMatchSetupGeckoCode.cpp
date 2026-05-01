@@ -271,7 +271,7 @@ void GeneratePitcherStaminaGeckoCodes(
 
 void GenerateBattingOrderGeckoCodes(
     const MSBQuickMatchGameState& state,
-    const bool localIsAway,
+    const bool p1IsAway,
     std::vector<Gecko::GeckoCode::Code>& outCodes
 )
 {
@@ -281,8 +281,8 @@ void GenerateBattingOrderGeckoCodes(
     uint32_t positionP2ByBattingOrder[9];
     for (int i = 0; i < 9; i++)
     {
-        positionP1ByBattingOrder[i] = localIsAway ? state.awayPositionByBattingOrder[i].value() : state.homePositionByBattingOrder[i].value();
-        positionP2ByBattingOrder[i] = localIsAway ? state.homePositionByBattingOrder[i].value() : state.awayPositionByBattingOrder[i].value();
+        positionP1ByBattingOrder[i] = p1IsAway ? state.awayPositionByBattingOrder[i].value() : state.homePositionByBattingOrder[i].value();
+        positionP2ByBattingOrder[i] = p1IsAway ? state.homePositionByBattingOrder[i].value() : state.awayPositionByBattingOrder[i].value();
     }
 
     // add header
@@ -326,7 +326,7 @@ void GenerateBattingOrderGeckoCodes(
 
 void GenerateHandednessGeckoCodes(
     const MSBQuickMatchGameState& state,
-    const bool localIsAway,
+    const bool p1IsAway,
     std::vector<Gecko::GeckoCode::Code>& outCodes
 )
 {
@@ -355,7 +355,7 @@ void GenerateHandednessGeckoCodes(
         uint32_t positionByBattingOrder[9];
         for (int i = 0; i < 9; i++)
         {
-            if (localIsAway)
+            if (p1IsAway)
                 positionByBattingOrder[i] = 
                     (team == 0) ? 
                         state.awayPositionByBattingOrder[i].value() : 
@@ -399,7 +399,7 @@ void GenerateHandednessGeckoCodes(
 
 void GenerateSuperstarGeckoCodes(
     const MSBQuickMatchGameState& state,
-    const bool localIsAway,
+    const bool p1IsAway,
     std::vector<Gecko::GeckoCode::Code>& outCodes
 )
 {
@@ -439,7 +439,7 @@ void GenerateSuperstarGeckoCodes(
             uint32_t positionByBattingOrder[9];
             for (int i = 0; i < 9; i++)
             {
-                if (localIsAway)
+                if (p1IsAway)
                     positionByBattingOrder[i] = 
                         (team == 0) ? 
                             state.awayPositionByBattingOrder[i].value() : 
@@ -523,16 +523,16 @@ void GenerateBattingOrderScreenGeckoCodes(
 
     // if all inputs are validated, can generate gecko codes.
     // convert positions to P1/P2
-    bool localIsAway;
+    bool p1IsAway;
     if (state.halfInning.value() == 0)
-        localIsAway = state.firstBatter.value() == 0;
+        p1IsAway = state.firstBatter.value() == 0;
     else
-        localIsAway = state.firstBatter.value() == 1;
-    INFO_LOG_FMT(COMMON, "Local is away: {}", localIsAway);
+        p1IsAway = state.firstBatter.value() == 1;
+    INFO_LOG_FMT(COMMON, "P1 is away: {}", p1IsAway);
 
-    GenerateBattingOrderGeckoCodes(state, localIsAway, outCodes);
-    GenerateHandednessGeckoCodes(state, localIsAway, outCodes);
-    GenerateSuperstarGeckoCodes(state, localIsAway, outCodes);
+    GenerateBattingOrderGeckoCodes(state, p1IsAway, outCodes);
+    GenerateHandednessGeckoCodes(state, p1IsAway, outCodes);
+    GenerateSuperstarGeckoCodes(state, p1IsAway, outCodes);
 }
 
 std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSetupGeckoCode(
