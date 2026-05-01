@@ -4,6 +4,7 @@
 #include "Common/TagSet.h"
 #include "Core/LocalPlayers.h"
 #include "Core/Core.h"
+#include "Core/NetPlayClient.h"
 #include <fstream>
 #include <string>
 #include <picojson.h>
@@ -45,46 +46,40 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     const picojson::object& j = v.get<picojson::object>();
 
     // === P1/P2 to HOME/AWAY MAPPING and VERIFICATION ===
-    LocalPlayers::LocalPlayers localPlayersObj;
-    
-    INFO_LOG_FMT(COMMON, "Checking port players.");
-
-    // Get the player 1 (port 1) for local username
-    auto portPlayers = localPlayersObj.GetPortPlayers();
-    std::string p1Username = "";
-    if (portPlayers.count(1))
+    using namespace NetPlay;
+    std::string p1Username = std::string(StripWhitespace(NetPlayClient::GetNetplayNames(0)));
+    if (p1Username == "")
     {
-        p1Username = std::string(StripWhitespace(portPlayers.at(1).username));
-        INFO_LOG_FMT(COMMON, "P1 player found.: {}", p1Username);
+        ERROR_LOG_FMT(COMMON, "Could not find player 1 in netplay data.");
+        return 4;
     }
+    INFO_LOG_FMT(COMMON, "P1 player found: {}", p1Username);
 
-    if (p1Username.empty())
+    std::string p2Username = "";
+    for (int i = 1; i < 4; i++)
     {
-        ERROR_LOG_FMT(COMMON, "Could not find P1 player in local players config.");
-        return false;
+        using namespace NetPlay;
+        std::string username = std::string(StripWhitespace(NetPlayClient::GetNetplayNames(i)));
+
+        if (username == "")
+        {
+            INFO_LOG_FMT(COMMON, "No player found in port {} of netplay data.", i);
+        }
+        else
+        {
+            INFO_LOG_FMT(COMMON, "Player 2 found in port {} of netplay data: {}", i, username);
+            p2Username = username;
+            break;
+        }
+
+        if (i == 3) INFO_LOG_FMT(COMMON, "No opponent player found in netplay data, assuming solo game.");
     }
     
-    INFO_LOG_FMT(COMMON, "Setting home and away players.");
-
     std::string awayPlayer = j.count("Away Player") ? 
         std::string(StripWhitespace(j.at("Away Player").get<std::string>())) : "";
     std::string homePlayer = j.count("Home Player") ? 
         std::string(StripWhitespace(j.at("Home Player").get<std::string>())) : "";
     INFO_LOG_FMT(COMMON, "Home and away players set: Home {}, Away {}.", homePlayer, awayPlayer);
-
-    // Find opponent - port player who isn't the local player
-    std::string opponentUsername = "";
-    for (const auto& [port, player] : portPlayers)
-    {
-        std::string portUsername = std::string(StripWhitespace(player.username));
-        if (portUsername != p1Username && portUsername != "No Player Selected")
-        {
-            opponentUsername = portUsername;
-            break;
-        }
-    }
-    INFO_LOG_FMT(COMMON, "Opponent player identified: {}.", 
-        opponentUsername.empty() ? "none (solo game)" : opponentUsername);
 
     // Validate players match the HUD file
     bool p1IsAway = (p1Username == awayPlayer);
@@ -98,19 +93,19 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     }
 
     // If opponent is known, validate they match the other slot
-    if (!opponentUsername.empty())
+    if (!p2Username.empty())
     {
-        bool opponentIsAway = (opponentUsername == awayPlayer);
-        bool opponentIsHome = (opponentUsername == homePlayer);
+        bool opponentIsAway = (p2Username == awayPlayer);
+        bool opponentIsHome = (p2Username == homePlayer);
 
         if (!((p1IsAway && opponentIsHome) || (p1IsHome && opponentIsAway)))
         {
             ERROR_LOG_FMT(COMMON, "Player mismatch. P1='{}', Opponent='{}', HUD Away='{}', HUD Home='{}'",
-                        p1Username, opponentUsername, awayPlayer, homePlayer);
+                        p1Username, p2Username, awayPlayer, homePlayer);
             return false;
         }
     }
-    // Solo game - just verify P1 player is in the file, opponent slot can be "No Player Selected"
+    // Solo game - just verify P1 player is in the file, P2 slot can be "No Player Selected"
     else
     {
         INFO_LOG_FMT(COMMON, "Solo game detected, skipping opponent validation.");
@@ -514,40 +509,38 @@ int allowLoadFromHUD(const std::string& path)
     INFO_LOG_FMT(COMMON, "Gamemode check passed, checking players.");
 
     // ===== check players match HUD =====
-    LocalPlayers::LocalPlayers localPlayersObj;
-
-    // Get the player 1 (port 0) username
-    auto portPlayers = localPlayersObj.GetPortPlayers();
-    std::string p1Username = "";
-    if (portPlayers.count(1))
+    using namespace NetPlay;
+    std::string p1Username = std::string(StripWhitespace(NetPlayClient::GetNetplayNames(0)));
+    if (p1Username == "")
     {
-        p1Username = std::string(StripWhitespace(portPlayers.at(1).username));
-        INFO_LOG_FMT(COMMON, "P1 player found.: {}", p1Username);
-    }
-
-    if (p1Username.empty())
-    {
-        ERROR_LOG_FMT(COMMON, "Could not find player 1 in local players config.");
+        ERROR_LOG_FMT(COMMON, "Could not find player 1 in netplay data.");
         return 4;
     }
+    INFO_LOG_FMT(COMMON, "P1 player found: {}", p1Username);
 
+    std::string p2Username = "";
+    for (int i = 1; i < 4; i++)
+    {
+        std::string username = std::string(StripWhitespace(NetPlayClient::GetNetplayNames(i)));
+
+        if (username == "")
+        {
+            INFO_LOG_FMT(COMMON, "No player found in port {} of netplay data.", i);
+        }
+        else
+        {
+            INFO_LOG_FMT(COMMON, "Player 2 found in port {} of netplay data: {}", i, username);
+            p2Username = username;
+            break;
+        }
+
+        if (i == 3) INFO_LOG_FMT(COMMON, "No opponent player found in netplay data, assuming solo game.");
+    }
+    
     std::string awayPlayer = j.count("Away Player") ? 
         std::string(StripWhitespace(j.at("Away Player").get<std::string>())) : "";
     std::string homePlayer = j.count("Home Player") ? 
         std::string(StripWhitespace(j.at("Home Player").get<std::string>())) : "";
-
-    // Find opponent - port player who isn't the host/P1 player
-    std::string opponentUsername = "";
-    for (const auto& [port, player] : portPlayers)
-    {
-        if (port < 2) continue; // skip 0 = online player and 1=P1 since were interested in the 3 other ports only.
-        std::string portUsername = std::string(StripWhitespace(player.username));
-        if (portUsername != p1Username && portUsername != "No Player Selected")
-        {
-            opponentUsername = portUsername;
-            break;
-        }
-    }
 
     // Validate players match the HUD file
     bool p1IsAway = (p1Username == awayPlayer);
@@ -561,15 +554,15 @@ int allowLoadFromHUD(const std::string& path)
     }
 
     // If opponent is known, validate they match the other slot
-    if (!opponentUsername.empty())
+    if (!p2Username.empty())
     {
-        bool opponentIsAway = (opponentUsername == awayPlayer);
-        bool opponentIsHome = (opponentUsername == homePlayer);
+        bool opponentIsAway = (p2Username == awayPlayer);
+        bool opponentIsHome = (p2Username == homePlayer);
 
         if (!((p1IsAway && opponentIsHome) || (p1IsHome && opponentIsAway)))
         {
             ERROR_LOG_FMT(COMMON, "Player mismatch. P1='{}', Opponent='{}', HUD Away='{}', HUD Home='{}'",
-                        p1Username, opponentUsername, awayPlayer, homePlayer);
+                        p1Username, p2Username, awayPlayer, homePlayer);
             return 4;
         }
     }
