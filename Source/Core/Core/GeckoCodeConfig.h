@@ -9,6 +9,7 @@
 
 #include "Core/GeckoCode.h"
 #include "Core/MSB_GenerateQuickMatchSetupGeckoCode.h"
+#include "Common/FileUtil.h"
 
 namespace Common
 {
@@ -34,7 +35,6 @@ void setDisableReplays(bool disable);
 extern bool isLoadingFromHUD;
 extern MSBQuickMatchGameState HUDState;
 void setFastResetFromHUD(bool load_from_hud);
-const std::string HUD_FILE_PATH = "User/HudFiles/hud.json";
 
 const std::string MSSB_NightStadium = R"(
 +$Night Mario Stadium [LittleCoaks]

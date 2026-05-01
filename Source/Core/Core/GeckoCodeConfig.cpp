@@ -196,7 +196,7 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
           for (auto& code : debugCodes)
               gcodes.push_back(std::move(code));
       }
-      else if (LoadStateFromHud(HUD_FILE_PATH, HUDState))
+      else if (LoadStateFromHud(File::GetUserPath(D_HUDFILES_IDX) + "hud.json", HUDState))
       {
           auto hudCodes = MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSetupGeckoCode(HUDState);
           for (auto& code : hudCodes)
