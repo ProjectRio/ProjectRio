@@ -51,7 +51,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     if (p1Username == "")
     {
         ERROR_LOG_FMT(COMMON, "Could not find player 1 in netplay data.");
-        return 4;
+        return false;
     }
     INFO_LOG_FMT(COMMON, "P1 player found: {}", p1Username);
 
