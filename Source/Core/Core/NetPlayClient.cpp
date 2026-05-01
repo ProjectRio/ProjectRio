@@ -1667,7 +1667,7 @@ void NetPlayClient::OnFastResetFromHUDMsg(sf::Packet& packet)
   // check if loading from HUD is valid.
   int resultCode;
   if (load_from_hud)
-    resultCode = allowLoadFromHUD(Gecko::HUD_FILE_PATH);
+    resultCode = allowLoadFromHUD(File::GetUserPath(D_HUDFILES_IDX) + "hud.json");
   else // disable loading from HUD
   {
     m_dialog->OnFastResetFromHUDResult(1); // play disable message
