@@ -1819,9 +1819,17 @@ void StatTracker::initPlayerInfo(const Core::CPUThreadGuard& guard){
         m_game_info.team0_port = ports[0];
         m_game_info.team1_port = ports[1];
 
-        //This will be true for event 0 (when this function is executed)
-        m_game_info.home_port = FieldingPort;
-        m_game_info.away_port = BattingPort;
+        //Need to acount for possibility to init during the bottom of the inning if the fast load mod is on.
+        if (m_game_info.getCurrentEvent().half_inning == 0)
+        {
+            m_game_info.home_port = FieldingPort;
+            m_game_info.away_port = BattingPort;
+        }
+        else
+        {
+            m_game_info.home_port = BattingPort;
+            m_game_info.away_port = FieldingPort;
+        }
 
         readPlayerNames(!m_game_info.netplay);
 
