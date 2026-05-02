@@ -518,7 +518,7 @@ int allowLoadFromHUD(const std::string& path)
     std::string p2Username = "";
     for (int i = 1; i < 4; i++)
     {
-        std::string username = std::string(StripWhitespace(NetPlayClient::GetNetplayNames(i)));
+        std::string username = std::string(StripWhitespace(NetPlay::NetPlayClient::GetNetplayNames(i)));
 
         if (username == "")
         {
