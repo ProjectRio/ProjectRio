@@ -1227,6 +1227,7 @@ void NetPlayDialog::OnMsgStopGame()
   m_night_stadium->setEnabled(is_hosting);
   m_disable_replays->setEnabled(is_hosting);
   m_fast_reset_from_HUD->setEnabled(is_hosting);
+  m_fast_reset_from_HUD->setChecked(false);
   m_spectator_toggle->setEnabled(true);
 }
 
