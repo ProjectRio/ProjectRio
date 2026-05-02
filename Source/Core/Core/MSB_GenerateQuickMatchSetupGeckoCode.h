@@ -116,7 +116,7 @@ public:
 
     static constexpr uint32_t SUPERSTAR_INJECTION_ADDR = 0x8005a4f4;
     static constexpr uint32_t SUPERSTAR_BOOLS_P1_BASE = 0x80353be5;
-    static constexpr uint32_t SUPERSTAR_BOOLS_P2_BASE = 0x80354180;
+    static constexpr uint32_t SUPERSTAR_BOOLS_P2_BASE = 0x80354185;
     static constexpr uint32_t SUPERSTAR_BOOLS_STRIDE = 0xA0;
     static constexpr uint32_t SUPERSTAR_CODE_P1_INDEX_ADDR = 0x802EBF99;
     static constexpr uint32_t SUPERSTAR_CODE_P2_INDEX_ADDR = 0x802EBF9A;
