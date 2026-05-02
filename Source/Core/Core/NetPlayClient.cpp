@@ -1745,17 +1745,22 @@ bool NetPlayClient::isGolfMode()
 
 std::string NetPlayClient::GetNetplayNames(u8 PortInt)
 {
+    INFO_LOG_FMT(COMMON, "Getting netplay name for port {}", PortInt);
     if (PortInt > 3)
         return "";
 
     PlayerId pid = netplay_client->m_pad_map[PortInt];
+    INFO_LOG_FMT(COMMON, "pid for port {} is {}", PortInt, pid);
+
     if (pid == 0)  // 0 means unassigned
         return "";
 
     auto it = netplay_client->m_players.find(pid);
+    INFO_LOG_FMT(COMMON, "PlayerId {} corresponds to player {}", pid, it != netplay_client->m_players.end() ? it->second.name : "unknown");
     if (it == netplay_client->m_players.end())
         return "";
 
+    INFO_LOG_FMT(COMMON, "Found player name for port {}: {}", PortInt, it->second.name);
     return it->second.name;
 }
 
