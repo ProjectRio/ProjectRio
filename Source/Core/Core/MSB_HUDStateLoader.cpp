@@ -2,15 +2,14 @@
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Common/TagSet.h"
-#include "Core/LocalPlayers.h"
 #include "Core/Core.h"
-#include "Core/NetPlayClient.h"
 #include <fstream>
 #include <string>
 #include <picojson.h>
 
 
-bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
+bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
+                      const std::string& p1Username, const std::string& p2Username)
 {
     std::ifstream file(path);
     if (!file.is_open())
@@ -18,7 +17,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
         ERROR_LOG_FMT(COMMON, "Failed to open HUD file: {}", path);
         return false;
     }
-    
+
     INFO_LOG_FMT(COMMON, "Found HUD file: {}", path);
 
     std::string json_str((std::istreambuf_iterator<char>(file)),
@@ -32,7 +31,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
         ERROR_LOG_FMT(COMMON, "Failed to parse HUD JSON from file: {} ({})", path, err);
         return false;
     }
-    
+
     INFO_LOG_FMT(COMMON, "Successfully parsed HUD JSON from file: {}", path);
 
     if (!v.is<picojson::object>())
@@ -46,36 +45,17 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     const picojson::object& j = v.get<picojson::object>();
 
     // === P1/P2 to HOME/AWAY MAPPING and VERIFICATION ===
-    std::string p1Username = std::string(StripWhitespace(NetPlay::NetPlayClient::GetNetplayNames(0)));
-    if (p1Username == "")
+    if (p1Username.empty())
     {
         ERROR_LOG_FMT(COMMON, "Could not find player 1 in netplay data.");
         return false;
     }
-    INFO_LOG_FMT(COMMON, "P1 player found: {}", p1Username);
+    INFO_LOG_FMT(COMMON, "P1 player: {}", p1Username);
+    INFO_LOG_FMT(COMMON, "P2 player: {}", p2Username.empty() ? "none (solo)" : p2Username);
 
-    std::string p2Username = "";
-    for (int i = 1; i < 4; i++)
-    {
-        std::string username = std::string(StripWhitespace(NetPlay::NetPlayClient::GetNetplayNames(i)));
-
-        if (username == "")
-        {
-            INFO_LOG_FMT(COMMON, "No player found in port {} of netplay data.", i);
-        }
-        else
-        {
-            INFO_LOG_FMT(COMMON, "Player 2 found in port {} of netplay data: {}", i, username);
-            p2Username = username;
-            break;
-        }
-
-        if (i == 3) INFO_LOG_FMT(COMMON, "No opponent player found in netplay data, assuming solo game.");
-    }
-    
-    std::string awayPlayer = j.count("Away Player") ? 
+    std::string awayPlayer = j.count("Away Player") ?
         std::string(StripWhitespace(j.at("Away Player").get<std::string>())) : "";
-    std::string homePlayer = j.count("Home Player") ? 
+    std::string homePlayer = j.count("Home Player") ?
         std::string(StripWhitespace(j.at("Home Player").get<std::string>())) : "";
     INFO_LOG_FMT(COMMON, "Home and away players set: Home {}, Away {}.", homePlayer, awayPlayer);
 
@@ -160,7 +140,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
                 state.fieldingHandP2ByPosition[position] = static_cast<uint8_t>(roster.at("Fielding Hand").get<double>());
                 state.superstarP2ByPosition[position] = static_cast<uint8_t>(roster.at("Superstar").get<double>());
             }
-            
+
             if (roster.count("Captain") && roster.at("Captain").get<double>() == 1)
                 state.captainCharacterP2 = charID;
                 state.captainP2RosterLocation = position; // since roster is in position order, can use position directly.
@@ -169,23 +149,23 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     for (int i = 0; i < 9; i++)
     {
         INFO_LOG_FMT(
-            COMMON, 
-            "P1 Position {}: CharID {}, Batting Hand {}, Fielding Hand {}, Superstar {}", 
-            i, 
-            state.charactersP1ByPosition[i].has_value() ? std::to_string(state.charactersP1ByPosition[i].value()) : "not set", 
-            state.battingHandP1ByPosition[i].has_value() ? std::to_string(state.battingHandP1ByPosition[i].value()) : "not set", 
-            state.fieldingHandP1ByPosition[i].has_value() ? std::to_string(state.fieldingHandP1ByPosition[i].value()) : "not set", 
+            COMMON,
+            "P1 Position {}: CharID {}, Batting Hand {}, Fielding Hand {}, Superstar {}",
+            i,
+            state.charactersP1ByPosition[i].has_value() ? std::to_string(state.charactersP1ByPosition[i].value()) : "not set",
+            state.battingHandP1ByPosition[i].has_value() ? std::to_string(state.battingHandP1ByPosition[i].value()) : "not set",
+            state.fieldingHandP1ByPosition[i].has_value() ? std::to_string(state.fieldingHandP1ByPosition[i].value()) : "not set",
             state.superstarP1ByPosition[i].has_value() ? std::to_string(state.superstarP1ByPosition[i].value()) : "not set");
     }
     for (int i = 0; i < 9; i++)
     {
         INFO_LOG_FMT(
-            COMMON, 
-            "P2 Position {}: CharID {}, Batting Hand {}, Fielding Hand {}, Superstar {}", 
-            i, 
-            state.charactersP2ByPosition[i].has_value() ? std::to_string(state.charactersP2ByPosition[i].value()) : "not set", 
-            state.battingHandP2ByPosition[i].has_value() ? std::to_string(state.battingHandP2ByPosition[i].value()) : "not set", 
-            state.fieldingHandP2ByPosition[i].has_value() ? std::to_string(state.fieldingHandP2ByPosition[i].value()) : "not set", 
+            COMMON,
+            "P2 Position {}: CharID {}, Batting Hand {}, Fielding Hand {}, Superstar {}",
+            i,
+            state.charactersP2ByPosition[i].has_value() ? std::to_string(state.charactersP2ByPosition[i].value()) : "not set",
+            state.battingHandP2ByPosition[i].has_value() ? std::to_string(state.battingHandP2ByPosition[i].value()) : "not set",
+            state.fieldingHandP2ByPosition[i].has_value() ? std::to_string(state.fieldingHandP2ByPosition[i].value()) : "not set",
             state.superstarP2ByPosition[i].has_value() ? std::to_string(state.superstarP2ByPosition[i].value()) : "not set");
     }
     INFO_LOG_FMT(COMMON, "Captain P1: {}", state.captainCharacterP1.has_value() ? std::to_string(state.captainCharacterP1.value()) : "not set");
@@ -196,13 +176,13 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     {
         uint8_t awayLogo = static_cast<uint8_t>(j.at("Away Logo").get<double>());
         uint8_t homeLogo = static_cast<uint8_t>(j.at("Home Logo").get<double>());
-        
+
         state.logoP1 = p1IsAway ? awayLogo : homeLogo;
         state.logoP2 = p1IsAway ? homeLogo : awayLogo;
     }
     INFO_LOG_FMT(COMMON, "Logo P1: {}", state.logoP1.has_value() ? std::to_string(state.logoP1.value()) : "not set");
     INFO_LOG_FMT(COMMON, "Logo P2: {}", state.logoP2.has_value() ? std::to_string(state.logoP2.value()) : "not set");
-    
+
     if (j.count("StadiumID"))
     {
         // need to convert stadium ID in HUD to menu index.
@@ -257,7 +237,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
 
         if (p1IsAway) state.firstBatter = halfInning;
         else state.firstBatter = 1 - halfInning;
-    }    
+    }
     INFO_LOG_FMT(COMMON, "Half Inning: {}", state.halfInning.has_value() ? std::to_string(state.halfInning.value()) : "not set");
     INFO_LOG_FMT(COMMON, "Batting Team: {}", state.battingTeam.has_value() ? std::to_string(state.battingTeam.value()) : "not set");
     INFO_LOG_FMT(COMMON, "Fielding Team: {}", state.fieldingTeam.has_value() ? std::to_string(state.fieldingTeam.value()) : "not set");
@@ -318,7 +298,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
 
     // === POSITIONS BY BATTING ORDER ===
     if (j.count("Away Batter Roster Loc") && j.count("Home Batter Roster Loc"))
-    {    
+    {
         int awayStartingBatter = static_cast<int>(j.at("Away Batter Roster Loc").get<double>());
         int homeStartingBatter = static_cast<int>(j.at("Home Batter Roster Loc").get<double>());
 
@@ -351,7 +331,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
         if (state.homePositionByBattingOrder[i].has_value())
             INFO_LOG_FMT(COMMON, "Home Batting Order {}: Position {}", i, state.homePositionByBattingOrder[i].value());
     }
-        
+
     // === RUNNERS ===
     // Runners are indexed 1-3 for each base (1B, 2B, 3B)
     // runnerRosterSpot and runnerCharacterID are 0-indexed arrays (0=1B, 1=2B, 2=3B)
@@ -389,7 +369,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     // Your state expects it on a P1/P2 basis by roster ID.
 
     if (j.count("Away Batter Roster Loc") && j.count("Home Batter Roster Loc"))
-    {    
+    {
         int awayStartingBatter = static_cast<int>(j.at("Away Batter Roster Loc").get<double>());
         int homeStartingBatter = static_cast<int>(j.at("Home Batter Roster Loc").get<double>());
 
@@ -397,7 +377,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
         {
             int awayAdjustedIndex = (i + awayStartingBatter) % 9;
             int homeAdjustedIndex = (i + homeStartingBatter) % 9;
-            
+
             std::string p1Key = p1IsAway ? "Away Roster " + std::to_string(awayAdjustedIndex)
                                                 : "Home Roster " + std::to_string(homeAdjustedIndex);
             std::string p2Key = p1IsAway ? "Home Roster " + std::to_string(homeAdjustedIndex)
@@ -435,7 +415,8 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     return true;
 }
 
-int allowLoadFromHUD(const std::string& path) 
+int allowLoadFromHUD(const std::string& path,
+                     const std::string& p1Username, const std::string& p2Username)
 {
     INFO_LOG_FMT(COMMON, "Starting to check if HUD state load is allowed");
 
@@ -446,7 +427,7 @@ int allowLoadFromHUD(const std::string& path)
         ERROR_LOG_FMT(COMMON, "Failed to open HUD file: {}", path);
         return 2;
     }
-        
+
     std::string json_str((std::istreambuf_iterator<char>(file)),
                           std::istreambuf_iterator<char>());
 
@@ -503,40 +484,21 @@ int allowLoadFromHUD(const std::string& path)
                     activeTagSet.value().id);
         return 3;
     }
-    
+
     INFO_LOG_FMT(COMMON, "Gamemode check passed, checking players.");
 
     // ===== check players match HUD =====
-    std::string p1Username = std::string(StripWhitespace(NetPlay::NetPlayClient::GetNetplayNames(0)));
-    if (p1Username == "")
+    if (p1Username.empty())
     {
         ERROR_LOG_FMT(COMMON, "Could not find player 1 in netplay data.");
         return 4;
     }
-    INFO_LOG_FMT(COMMON, "P1 player found: {}", p1Username);
+    INFO_LOG_FMT(COMMON, "P1 player: {}", p1Username);
+    INFO_LOG_FMT(COMMON, "P2 player: {}", p2Username.empty() ? "none (solo)" : p2Username);
 
-    std::string p2Username = "";
-    for (int i = 1; i < 4; i++)
-    {
-        std::string username = std::string(StripWhitespace(NetPlay::NetPlayClient::GetNetplayNames(i)));
-
-        if (username == "")
-        {
-            INFO_LOG_FMT(COMMON, "No player found in port {} of netplay data.", i);
-        }
-        else
-        {
-            INFO_LOG_FMT(COMMON, "Player 2 found in port {} of netplay data: {}", i, username);
-            p2Username = username;
-            break;
-        }
-
-        if (i == 3) INFO_LOG_FMT(COMMON, "No opponent player found in netplay data, assuming solo game.");
-    }
-    
-    std::string awayPlayer = j.count("Away Player") ? 
+    std::string awayPlayer = j.count("Away Player") ?
         std::string(StripWhitespace(j.at("Away Player").get<std::string>())) : "";
-    std::string homePlayer = j.count("Home Player") ? 
+    std::string homePlayer = j.count("Home Player") ?
         std::string(StripWhitespace(j.at("Home Player").get<std::string>())) : "";
 
     // Validate players match the HUD file
@@ -563,8 +525,8 @@ int allowLoadFromHUD(const std::string& path)
             return 4;
         }
     }
-    
+
     INFO_LOG_FMT(COMMON, "All checks passed. HUD can load.");
-    
+
     return 0;
 }

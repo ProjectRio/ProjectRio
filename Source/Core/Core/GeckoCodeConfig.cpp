@@ -17,7 +17,6 @@
 #include "Core/MSB_GenerateQuickMatchSetupGeckoCode.h"
 #include "Core/MSB_QuickMatchStateDebugLoader.h"
 #include "Core/GeckoCode.h"
-#include "Core/MSB_HUDStateLoader.h"
 
 namespace Gecko
 {
@@ -186,17 +185,16 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
   }
 
   // append the gecko codes to allow starting a game from the latest hud game state.
+  // HUDState is pre-populated by OnFastResetFromHUDMsg before the game starts.
   if (isLoadingFromHUD)
   {
-      HUDState = MSBQuickMatchGameState{};
-
       if (LoadDebugState("User/Debug/msb_state.txt", HUDState))
       {
           auto debugCodes = MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSetupGeckoCode(HUDState);
           for (auto& code : debugCodes)
               gcodes.push_back(std::move(code));
       }
-      else if (LoadStateFromHud(File::GetUserPath(D_HUDFILES_IDX) + "hud.json", HUDState))
+      else
       {
           auto hudCodes = MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSetupGeckoCode(HUDState);
           for (auto& code : hudCodes)
