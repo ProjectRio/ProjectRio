@@ -1254,6 +1254,10 @@ void NetPlayDialog::OnMsgPowerButton()
 void NetPlayDialog::OnPlayerConnect(const std::string& player)
 {
   DisplayMessage(tr("%1 has joined").arg(QString::fromStdString(player)), "darkcyan");
+
+  // if a new player joins, uncheck the fast reset from HUD box to prevent desyncs.
+  if (m_fast_reset_from_HUD->isVisible() && m_fast_reset_from_HUD->isChecked()) // only reset if visible to avoid errors when not playing MSSB.
+    m_fast_reset_from_HUD->setChecked(false);  
 }
 
 void NetPlayDialog::OnPlayerDisconnect(const std::string& player)
