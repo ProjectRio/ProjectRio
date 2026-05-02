@@ -1153,9 +1153,9 @@ void NetPlayDialog::SetOptionsEnabled(bool enabled)
     //m_host_input_authority_action->setEnabled(enabled);
     m_golf_mode_action->setEnabled(enabled);
     m_fixed_delay_action->setEnabled(enabled);
-    m_night_stadium->setCheckable(enabled);
-    m_disable_replays->setCheckable(enabled);
-    m_fast_reset_from_HUD->setCheckable(enabled);
+    m_night_stadium->setEnabled(enabled);
+    m_disable_replays->setEnabled(enabled);
+    m_fast_reset_from_HUD->setEnabled(enabled);
     //m_night_stadium_action->setEnabled(enabled);
     //m_disable_music_action->setEnabled(enabled);
     //m_highlight_ball_shadow_action->setEnabled(enabled);
