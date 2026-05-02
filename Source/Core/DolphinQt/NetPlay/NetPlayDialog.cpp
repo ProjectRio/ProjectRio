@@ -674,6 +674,9 @@ void NetPlayDialog::OnFastResetFromHUDResult(int load_from_hud_result_code)
     DisplayMessage(tr("Cannot Enable Fast Reset: Players Don't Match HUD"), "coral");
   else
     DisplayMessage(tr("Cannot Enable Fast Reset: Unknown Error"), "coral");
+
+  if (load_from_hud_result_code != 0)
+    m_fast_reset_from_HUD->setChecked(false);
 }
 
 void NetPlayDialog::OnActiveGeckoCodes(std::string codeStr)
