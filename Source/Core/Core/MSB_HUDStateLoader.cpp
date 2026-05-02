@@ -46,7 +46,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     const picojson::object& j = v.get<picojson::object>();
 
     // === P1/P2 to HOME/AWAY MAPPING and VERIFICATION ===
-    std::string p1Username = std::string(StripWhitespace(NetPlayClient::GetNetplayNames(0)));
+    std::string p1Username = std::string(StripWhitespace(NetPlay::NetPlayClient::GetNetplayNames(0)));
     if (p1Username == "")
     {
         ERROR_LOG_FMT(COMMON, "Could not find player 1 in netplay data.");
@@ -57,7 +57,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     std::string p2Username = "";
     for (int i = 1; i < 4; i++)
     {
-        std::string username = std::string(StripWhitespace(NetPlayClient::GetNetplayNames(i)));
+        std::string username = std::string(StripWhitespace(NetPlay::NetPlayClient::GetNetplayNames(i)));
 
         if (username == "")
         {
@@ -507,7 +507,7 @@ int allowLoadFromHUD(const std::string& path)
     INFO_LOG_FMT(COMMON, "Gamemode check passed, checking players.");
 
     // ===== check players match HUD =====
-    std::string p1Username = std::string(StripWhitespace(NetPlayClient::GetNetplayNames(0)));
+    std::string p1Username = std::string(StripWhitespace(NetPlay::NetPlayClient::GetNetplayNames(0)));
     if (p1Username == "")
     {
         ERROR_LOG_FMT(COMMON, "Could not find player 1 in netplay data.");
