@@ -46,7 +46,6 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     const picojson::object& j = v.get<picojson::object>();
 
     // === P1/P2 to HOME/AWAY MAPPING and VERIFICATION ===
-    using namespace NetPlay;
     std::string p1Username = std::string(StripWhitespace(NetPlayClient::GetNetplayNames(0)));
     if (p1Username == "")
     {
@@ -58,7 +57,6 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState)
     std::string p2Username = "";
     for (int i = 1; i < 4; i++)
     {
-        using namespace NetPlay;
         std::string username = std::string(StripWhitespace(NetPlayClient::GetNetplayNames(i)));
 
         if (username == "")
@@ -509,7 +507,6 @@ int allowLoadFromHUD(const std::string& path)
     INFO_LOG_FMT(COMMON, "Gamemode check passed, checking players.");
 
     // ===== check players match HUD =====
-    using namespace NetPlay;
     std::string p1Username = std::string(StripWhitespace(NetPlayClient::GetNetplayNames(0)));
     if (p1Username == "")
     {
