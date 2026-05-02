@@ -675,8 +675,8 @@ void NetPlayDialog::OnFastResetFromHUDResult(int load_from_hud_result_code)
   else
     DisplayMessage(tr("Cannot Enable Fast Reset: Unknown Error"), "coral");
 
-  if (load_from_hud_result_code != 0)
-    m_fast_reset_from_HUD->setChecked(false);
+  if (load_from_hud_result_code > 1)
+    m_fast_reset_from_HUD->setChecked(false); // if error enabling, uncheck the box.
 }
 
 void NetPlayDialog::OnActiveGeckoCodes(std::string codeStr)
