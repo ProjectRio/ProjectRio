@@ -1745,11 +1745,18 @@ bool NetPlayClient::isGolfMode()
 
 std::string NetPlayClient::GetNetplayNames(u8 PortInt)
 {
-  bool playerExists = PortInt >= 0 && PortInt <= 3 ? true : false;  // checks that the port isn't a CPU
-  if (!playerExists)
-    return ""; // empty string for no player
+    if (PortInt > 3)
+        return "";
 
-  return netplay_client->m_players[netplay_client->m_pad_map[PortInt]].name;
+    PlayerId pid = netplay_client->m_pad_map[PortInt];
+    if (pid == 0)  // 0 means unassigned
+        return "";
+
+    auto it = netplay_client->m_players.find(pid);
+    if (it == netplay_client->m_players.end())
+        return "";
+
+    return it->second.name;
 }
 
 std::map<int, LocalPlayers::LocalPlayers::Player> NetPlayClient::getNetplayerUserInfo()
