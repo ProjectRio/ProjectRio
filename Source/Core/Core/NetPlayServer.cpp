@@ -88,8 +88,11 @@
 
 namespace NetPlay
 {
+static NetPlayServer* netplay_server = nullptr;
+
 NetPlayServer::~NetPlayServer()
 {
+  netplay_server = nullptr;
   if (is_connected)
   {
     m_do_loop = false;
@@ -167,6 +170,7 @@ NetPlayServer::NetPlayServer(const u16 port, const bool forward_port, NetPlayUI*
   {
     is_connected = true;
     m_do_loop = true;
+    netplay_server = this;
     m_thread = std::thread(&NetPlayServer::ThreadFunc, this);
     m_target_buffer_size = 8;
     m_chunked_data_thread = std::thread(&NetPlayServer::ChunkedDataThreadFunc, this);
@@ -2746,4 +2750,10 @@ void NetPlayServer::ChunkedDataAbort()
   m_chunked_data_event.Set();
   m_chunked_data_complete_event.Set();
 }
+
+bool NetPlay_IsDesyncDetected()
+{
+  return netplay_server && netplay_server->IsDesyncDetected();
+}
+
 }  // namespace NetPlay

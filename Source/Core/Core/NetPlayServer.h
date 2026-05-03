@@ -84,6 +84,8 @@ public:
 
   bool is_connected = false;
 
+  bool IsDesyncDetected() const { return m_desync_detected; }
+
 private:
   class Client
   {
@@ -227,4 +229,6 @@ private:
   NetPlayUI* m_dialog = nullptr;
   NetPlayIndex m_index;
 };
+
+bool NetPlay_IsDesyncDetected();
 }  // namespace NetPlay
