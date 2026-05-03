@@ -848,7 +848,6 @@
     <ClCompile Include="Core\Boot\ElfReader.cpp" />
     <ClCompile Include="Core\BootManager.cpp" />
     <ClCompile Include="Core\MSB_GenerateQuickMatchSetupGeckoCode.cpp" />
-    <ClCompile Include="Core\MSB_QuickMatchStateDebugLoader.cpp" />
     <ClCompile Include="Core\MSB_HUDStateLoader.cpp" />
     <ClCompile Include="Core\CheatGeneration.cpp" />
     <ClCompile Include="Core\CheatSearch.cpp" />

@@ -458,8 +458,6 @@ add_library(core
   MSB_StatTracker.h
   MSB_GenerateQuickMatchSetupGeckoCode.cpp
   MSB_GenerateQuickMatchSetupGeckoCode.h
-  MSB_QuickMatchStateDebugLoader.cpp
-  MSB_QuickMatchStateDebugLoader.h
   MSB_HUDStateLoader.cpp
   MSB_HUDStateLoader.h
   LocalPlayers.cpp
