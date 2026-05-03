@@ -62,8 +62,8 @@ struct MSBQuickMatchGameState
     std::optional<uint32_t> balls;       
     std::optional<uint32_t> outs;   
     
-    std::optional<uint8_t> awayTeamStars;
-    std::optional<uint8_t> homeTeamStars;
+    std::optional<uint8_t> p1TeamStars;
+    std::optional<uint8_t> p2TeamStars;
 
     std::optional<uint8_t> isStarChance; // 0=off, 1=on
 
@@ -154,8 +154,8 @@ public:
     static constexpr uint32_t OUTS_ADDR = 0x80892970;
     static constexpr uint32_t OUTS_STORED_ADDR = 0x80892974;
 
-    static constexpr uint32_t TEAM_STARS_AWAY_ADDR = 0x80892ad6;
-    static constexpr uint32_t TEAM_STARS_HOME_ADDR = 0x80892ad7;
+    static constexpr uint32_t TEAM_STARS_P1_ADDR = 0x80892ad6;
+    static constexpr uint32_t TEAM_STARS_P2_ADDR = 0x80892ad7;
 
     static constexpr uint32_t IS_STAR_CHANCE_ADDR = 0x80892ad8;
     

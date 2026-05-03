@@ -754,22 +754,22 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
             }
 
             // team stars
-            if (state.awayTeamStars.has_value())
+            if (state.p1TeamStars.has_value())
             {
-                uint8_t val = state.awayTeamStars.value();
+                uint8_t val = state.p1TeamStars.value();
                 if (val > 0x5)
-                    WARN_LOG_FMT(COMMON, "Away team stars not valid: {}. No gecko code produced.", val);
+                    WARN_LOG_FMT(COMMON, "P1 team stars not valid: {}. No gecko code produced.", val);
                 else
-                    codes.push_back(ToGeckoCode(0x00, TEAM_STARS_AWAY_ADDR, val));
+                    codes.push_back(ToGeckoCode(0x00, TEAM_STARS_P1_ADDR, val));
             }
 
-            if (state.homeTeamStars.has_value())
+            if (state.p2TeamStars.has_value())
             {
-                uint8_t val = state.homeTeamStars.value();
+                uint8_t val = state.p2TeamStars.value();
                 if (val > 0x5)
-                    WARN_LOG_FMT(COMMON, "Home team stars not valid: {}. No gecko code produced.", val);
+                    WARN_LOG_FMT(COMMON, "P2 team stars not valid: {}. No gecko code produced.", val);
                 else
-                    codes.push_back(ToGeckoCode(0x00, TEAM_STARS_HOME_ADDR, val));
+                    codes.push_back(ToGeckoCode(0x00, TEAM_STARS_P2_ADDR, val));
             }
 
             // star chance
