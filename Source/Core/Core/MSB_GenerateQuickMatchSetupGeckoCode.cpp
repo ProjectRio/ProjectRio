@@ -531,11 +531,14 @@ void GenerateBattingOrderScreenGeckoCodes(
 
     // superstars
     bool superstarInputsValidated = true;
-    if (!state.superstarP1ByPosition[i].has_value() || !state.superstarP2ByPosition[i].has_value() ||
-        !state.awayPositionByBattingOrder[i].has_value() || !state.homePositionByBattingOrder[i].has_value())
+    for (int i = 0; i < 9; i++ )
     {
-        superstarInputsValidated = false;
-        ERROR_LOG_FMT(COMMON, "Not all superstar inputs provided. No codes produced.");
+        if (!state.superstarP1ByPosition[i].has_value() || !state.superstarP2ByPosition[i].has_value() ||
+            !state.awayPositionByBattingOrder[i].has_value() || !state.homePositionByBattingOrder[i].has_value())
+        {
+            superstarInputsValidated = false;
+            ERROR_LOG_FMT(COMMON, "Not all superstar inputs provided. No codes produced.");
+        }
     }
     if (superstarInputsValidated)
         GenerateSuperstarGeckoCodes(state, p1IsAway, outCodes);
