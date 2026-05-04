@@ -332,16 +332,7 @@ void GenerateHandednessGeckoCodes(
 {
     INFO_LOG_FMT(COMMON, "Running GenerateHandednessGeckoCodes function");
     
-    for (int i = 0; i < 9; i++)
-    {
-        if (!state.fieldingHandP1ByPosition[i].has_value() || !state.fieldingHandP2ByPosition[i].has_value() ||
-            !state.battingHandP1ByPosition[i].has_value() || !state.battingHandP2ByPosition[i].has_value() ||
-            !state.awayPositionByBattingOrder[i].has_value() || !state.homePositionByBattingOrder[i].has_value())
-        {
-            ERROR_LOG_FMT(COMMON, "Not all handedness inputs provided. No codes produced.");
-            return;
-        }
-    }
+
 
    // Add C2 gecko code header
     outCodes.push_back(CustomGeckoCode(0xC2047E2C, 0x00000038)); 
@@ -405,18 +396,10 @@ void GenerateSuperstarGeckoCodes(
 {
     INFO_LOG_FMT(COMMON, "Running GenerateSuperstarGeckoCodes function");
     
-    // input validation
     int nSuperstarsP1 = 0;
     int nSuperstarsP2 = 0;
     for (int i = 0; i < 9; i++)
     {
-        if (!state.superstarP1ByPosition[i].has_value() || !state.superstarP2ByPosition[i].has_value() ||
-            !state.awayPositionByBattingOrder[i].has_value() || !state.homePositionByBattingOrder[i].has_value())
-        {
-            ERROR_LOG_FMT(COMMON, "Not all superstar inputs provided. No codes produced.");
-            return;
-        }
-
         nSuperstarsP1 += state.superstarP1ByPosition[i].value();
         nSuperstarsP2 += state.superstarP2ByPosition[i].value();
     }
@@ -498,23 +481,22 @@ void GenerateBattingOrderScreenGeckoCodes(
     std::vector<Gecko::GeckoCode::Code>& outCodes
 )
 {
-    // validate inputs
-    bool inputsValidated = true;
+    bool basicInputsValidated = true;
 
     if (!state.firstBatter.has_value() || !state.halfInning.has_value())
-        inputsValidated = false;
+        basicInputsValidated = false;
     
     for (int i = 0; i < 9; i++)
     {
         if (!state.charactersP1ByPosition[i].has_value() || !state.charactersP2ByPosition[i].has_value() || 
             !state.awayPositionByBattingOrder[i].has_value() || !state.homePositionByBattingOrder[i].has_value())
         {
-            inputsValidated = false;
+            basicInputsValidated = false;
             break;
         }
     }
 
-    if (!inputsValidated)
+    if (!basicInputsValidated)
     {
         ERROR_LOG_FMT(COMMON, "Not all inputs provided for batting order gecko codes. No codes produced.");
         return;
@@ -531,8 +513,39 @@ void GenerateBattingOrderScreenGeckoCodes(
     INFO_LOG_FMT(COMMON, "P1 is away: {}", p1IsAway);
 
     GenerateBattingOrderGeckoCodes(state, p1IsAway, outCodes);
-    GenerateHandednessGeckoCodes(state, p1IsAway, outCodes);
-    GenerateSuperstarGeckoCodes(state, p1IsAway, outCodes);
+
+    // handedness
+    bool handednessInputsValidated = true;
+    for (int i = 0; i < 9; i++)
+    {
+        if (!state.fieldingHandP1ByPosition[i].has_value() || !state.fieldingHandP2ByPosition[i].has_value() ||
+            !state.battingHandP1ByPosition[i].has_value() || !state.battingHandP2ByPosition[i].has_value() ||
+            !state.awayPositionByBattingOrder[i].has_value() || !state.homePositionByBattingOrder[i].has_value())
+        {
+            handednessInputsValidated = false;
+            ERROR_LOG_FMT(COMMON, "Not all handedness inputs provided. No codes produced.");
+        }
+    }
+    if (handednessInputsValidated)
+        GenerateHandednessGeckoCodes(state, p1IsAway, outCodes);
+
+    // superstars
+    bool superstarInputsValidated = true;
+    if (!state.superstarP1ByPosition[i].has_value() || !state.superstarP2ByPosition[i].has_value() ||
+        !state.awayPositionByBattingOrder[i].has_value() || !state.homePositionByBattingOrder[i].has_value())
+    {
+        superstarInputsValidated = false;
+        ERROR_LOG_FMT(COMMON, "Not all superstar inputs provided. No codes produced.");
+    }
+    if (superstarInputsValidated)
+        GenerateSuperstarGeckoCodes(state, p1IsAway, outCodes);
+
+    // prevent movement if all inputs provided
+    if (basicInputsValidated && handednessInputsValidated && superstarInputsValidated)
+    {
+        outCodes.push_back(ToGeckoCode(0x04, MSBQuickMatchCodeBuilder::TEAM_MANAGEMENT_UP_PRESS_INSTR_ADDR, 0x48000074));
+        outCodes.push_back(ToGeckoCode(0x04, MSBQuickMatchCodeBuilder::TEAM_MANAGEMENT_DOWN_PRESS_INSTR_ADDR, 0x48000074));
+    }
 }
 
 std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSetupGeckoCode(
@@ -855,6 +868,10 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
 
             // for superstarred players, need to replace the c2 injection instruction. No condition needed since just replacing vanilla instruction
             codes.push_back(ToGeckoCode(0x04, SUPERSTAR_INJECTION_ADDR, 0x3C608033));
+
+            // for team management cursor, need to replace original instruction once in game.
+            codes.push_back(ToGeckoCode(0x04, TEAM_MANAGEMENT_UP_PRESS_INSTR_ADDR, 0x41820074));
+            codes.push_back(ToGeckoCode(0x04, TEAM_MANAGEMENT_DOWN_PRESS_INSTR_ADDR, 0x41820074));
 
         codes.push_back(EndConditional()); // end game-has-started conditional
     codes.push_back(EndConditional()); // end in-game conditional

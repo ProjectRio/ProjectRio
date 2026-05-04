@@ -132,6 +132,9 @@ public:
     static constexpr uint32_t GAME_SETTINGS_CURSOR_RIGHT_INSTR_ADDR = 0x80049616;
     static constexpr uint32_t GAME_SETTINGS_CURSOR_LEFT_INSTR_ADDR = 0x800495da;
 
+    static constexpr uint32_t TEAM_MANAGEMENT_UP_PRESS_INSTR_ADDR = 0x800463c8;
+    static constexpr uint32_t TEAM_MANAGEMENT_DOWN_PRESS_INSTR_ADDR = 0x8004643c;
+
 
     // In game addresses
     static constexpr uint32_t INNING_ADDR = 0x808928A0;
