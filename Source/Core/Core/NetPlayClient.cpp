@@ -1075,6 +1075,7 @@ void NetPlayClient::OnDesyncDetected(sf::Packet& packet)
 
   INFO_LOG_FMT(NETPLAY, "Player {} ({}) desynced!", player, pid_to_blame);
 
+  m_desync_detected = true;
   m_dialog->OnDesync(frame, player);
 }
 
@@ -3199,6 +3200,12 @@ void NetPlay_Disable()
 {
   std::lock_guard lk(crit_netplay_client);
   netplay_client = nullptr;
+}
+
+bool NetPlay_IsClientDesyncDetected()
+{
+  std::lock_guard lk(crit_netplay_client);
+  return netplay_client && netplay_client->m_desync_detected;
 }
 
 }  // namespace NetPlay

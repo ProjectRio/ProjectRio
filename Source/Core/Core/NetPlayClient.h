@@ -255,6 +255,7 @@ protected:
   SyncIdentifier m_selected_game;
   Common::Flag m_is_running{false};
   Common::Flag m_do_loop{true};
+  bool m_desync_detected = false;
 
   // In non-host input authority mode, this is how many packets each client should
   // try to keep in-flight to the other clients. In host input authority mode, this is how
@@ -413,4 +414,5 @@ void NetPlay_Enable(NetPlayClient* const np);
 void NetPlay_Disable();
 bool NetPlay_GetWiimoteData(const std::span<NetPlayClient::WiimoteDataBatchEntry>& entries);
 unsigned int NetPlay_GetLocalWiimoteForSlot(unsigned int slot);
+bool NetPlay_IsClientDesyncDetected();
 }  // namespace NetPlay

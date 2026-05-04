@@ -2753,7 +2753,8 @@ void NetPlayServer::ChunkedDataAbort()
 
 bool NetPlay_IsDesyncDetected()
 {
-  return netplay_server && netplay_server->IsDesyncDetected();
+  return (netplay_server && netplay_server->IsDesyncDetected()) ||
+         NetPlay_IsClientDesyncDetected();
 }
 
 }  // namespace NetPlay
