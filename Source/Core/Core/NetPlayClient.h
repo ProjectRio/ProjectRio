@@ -145,6 +145,7 @@ public:
 
   // Called from the GUI thread.
   bool IsConnected() const { return m_is_connected; }
+  bool IsDesyncDetected() const { return m_desync_detected; }
   bool StartGame(const std::string& path);
   void InvokeStop();
   bool StopGame();
@@ -255,7 +256,6 @@ protected:
   SyncIdentifier m_selected_game;
   Common::Flag m_is_running{false};
   Common::Flag m_do_loop{true};
-  bool m_desync_detected = false;
 
   // In non-host input authority mode, this is how many packets each client should
   // try to keep in-flight to the other clients. In host input authority mode, this is how
@@ -375,6 +375,7 @@ private:
   int framesAsGolfer = 0;
 
   bool m_is_connected = false;
+  bool m_desync_detected = false;
   ConnectionState m_connection_state = ConnectionState::Failure;
 
   PlayerId m_pid = 0;

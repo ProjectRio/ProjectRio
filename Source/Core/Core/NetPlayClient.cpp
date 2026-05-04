@@ -920,6 +920,7 @@ void NetPlayClient::OnStartGame(sf::Packet& packet)
   {
     std::lock_guard lkg(m_crit.game);
 
+    m_desync_detected = false;
     INFO_LOG_FMT(NETPLAY, "Start of game {}", m_selected_game.game_id);
 
     packet >> m_current_game;
@@ -3205,7 +3206,7 @@ void NetPlay_Disable()
 bool NetPlay_IsClientDesyncDetected()
 {
   std::lock_guard lk(crit_netplay_client);
-  return netplay_client && netplay_client->m_desync_detected;
+  return netplay_client && netplay_client->IsDesyncDetected();
 }
 
 }  // namespace NetPlay
