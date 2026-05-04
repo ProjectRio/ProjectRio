@@ -174,14 +174,11 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
 
     if (j.count("Away Logo") && j.count("Home Logo"))
     {
-        uint8_t awayLogo = static_cast<uint8_t>(j.at("Away Logo").get<double>());
-        uint8_t homeLogo = static_cast<uint8_t>(j.at("Home Logo").get<double>());
-
-        state.logoP1 = p1IsAway ? awayLogo : homeLogo;
-        state.logoP2 = p1IsAway ? homeLogo : awayLogo;
+        state.logoAway = static_cast<uint32_t>(j.at("Away Logo").get<double>());
+        state.logoHome = static_cast<uint32_t>(j.at("Home Logo").get<double>());
     }
-    INFO_LOG_FMT(COMMON, "Logo P1: {}", state.logoP1.has_value() ? std::to_string(state.logoP1.value()) : "not set");
-    INFO_LOG_FMT(COMMON, "Logo P2: {}", state.logoP2.has_value() ? std::to_string(state.logoP2.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Logo Away: {}", state.logoAway.has_value() ? std::to_string(state.logoAway.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Logo Home: {}", state.logoHome.has_value() ? std::to_string(state.logoHome.value()) : "not set");
 
     if (j.count("StadiumID"))
     {

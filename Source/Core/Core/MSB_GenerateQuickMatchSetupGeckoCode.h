@@ -29,9 +29,6 @@ struct MSBQuickMatchGameState
     std::optional<uint8_t> superstarP1ByPosition[9];
     std::optional<uint8_t> superstarP2ByPosition[9];
 
-    std::optional<uint8_t> logoP1; // 0-47
-    std::optional<uint8_t> logoP2; // 0-47
-
     std::optional<uint8_t> stadium; // this is the cursor position. Diff from in-game enums, which are: 0=Mario, 1=Bowser, 2=Wario, 3=Yoshi, 4=Peach, 5=DK
 
     std::optional<uint8_t> firstBatter; // 0=P1, 1=P2
@@ -66,6 +63,9 @@ struct MSBQuickMatchGameState
     std::optional<uint8_t> p2TeamStars;
 
     std::optional<uint8_t> isStarChance; // 0=off, 1=on
+
+    std::optional<uint32_t> logoAway; // 0-47
+    std::optional<uint32_t> logoHome; // 0-47
 
     std::optional<uint32_t> captainP1RosterLocation; // use their index in the characterByPosition struct.
     std::optional<uint32_t> captainP2RosterLocation; // use their index in the characterByPosition struct.
@@ -132,9 +132,6 @@ public:
     static constexpr uint32_t GAME_SETTINGS_CURSOR_RIGHT_INSTR_ADDR = 0x80049616;
     static constexpr uint32_t GAME_SETTINGS_CURSOR_LEFT_INSTR_ADDR = 0x800495da;
 
-    static constexpr uint32_t LOGO_P1_ADDR = 0x803530AD;
-    static constexpr uint32_t LOGO_P2_ADDR = 0x803530AE;
-
 
     // In game addresses
     static constexpr uint32_t INNING_ADDR = 0x808928A0;
@@ -158,6 +155,9 @@ public:
     static constexpr uint32_t TEAM_STARS_P2_ADDR = 0x80892ad7;
 
     static constexpr uint32_t IS_STAR_CHANCE_ADDR = 0x80892ad8;
+
+    static constexpr uint32_t LOGO_AWAY_ADDR = 0x808929b0;
+    static constexpr uint32_t LOGO_HOME_ADDR = 0x808929bc;
     
     static constexpr uint32_t CAPTAIN_ROSTER_LOCATION_P1_ADDR = 0x80892a80;
     static constexpr uint32_t CAPTAIN_ROSTER_LOCATION_P2_ADDR = 0x80892a84;

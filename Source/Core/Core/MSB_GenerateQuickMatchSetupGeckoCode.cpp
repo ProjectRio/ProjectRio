@@ -584,24 +584,6 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
         if (state.charactersP1ByPosition[0].has_value() && state.charactersP2ByPosition[0].has_value())
             codes.push_back(ToGeckoCode(0x04, CHARACTER_SELECT_PREVENT_CURSOR_MOVEMENT_ADDR, 0x60000000));
 
-        if (state.logoP1.has_value())
-        {
-            uint8_t val = state.logoP1.value();
-            if (val > 0x2F)
-                WARN_LOG_FMT(COMMON, "P1 logo ID not valid: {}. No gecko code produced.", val);
-            else
-                codes.push_back(ToGeckoCode(0x00, LOGO_P1_ADDR, val));
-        }
-
-        if (state.logoP2.has_value())
-        {
-            uint8_t val = state.logoP2.value();
-            if (val > 0x2F)
-                WARN_LOG_FMT(COMMON, "P2 logo ID not valid: {}. No gecko code produced.", val);
-            else
-                codes.push_back(ToGeckoCode(0x00, LOGO_P2_ADDR, val));
-        }
-
         // generate batting order codes.
         GenerateBattingOrderScreenGeckoCodes(state, codes);
 
@@ -780,6 +762,24 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
                     WARN_LOG_FMT(COMMON, "Star chance setting not valid: {}. No gecko code produced.", val);
                 else
                     codes.push_back(ToGeckoCode(0x00, IS_STAR_CHANCE_ADDR, val));
+            }        
+            
+            if (state.logoAway.has_value())
+            {
+                uint32_t val = state.logoAway.value();
+                if (val > 0x2F)
+                    WARN_LOG_FMT(COMMON, "Away logo ID not valid: {}. No gecko code produced.", val);
+                else
+                    codes.push_back(ToGeckoCode(0x04, LOGO_AWAY_ADDR, val));
+            }
+
+            if (state.logoHome.has_value())
+            {
+                uint32_t val = state.logoHome.value();
+                if (val > 0x2F)
+                    WARN_LOG_FMT(COMMON, "Home logo ID not valid: {}. No gecko code produced.", val);
+                else
+                    codes.push_back(ToGeckoCode(0x04, LOGO_HOME_ADDR, val));
             }
 
             if (state.captainP1RosterLocation.has_value())
