@@ -330,6 +330,14 @@ static const std::map<u8, std::string> cAtBatResult = {
     {0x10, "Foul catch"}
 };
 
+static const std::map<u8, std::string> cDeadBallReason = {
+    {0x0,  "N/A"},
+    {0x1,  "Home Run"},
+    {0x2,  "Foul Ball"},
+    {0x3,  "Ground Rule Double"},
+    {0x4,  "Ball Dead"}
+};
+
 static const std::map<u8, std::string> cManualSelectDecode = {
     {0x0,  "No Selected Char"},
     {0x1,  "Pitcher"},
@@ -550,6 +558,7 @@ static const u32 aAB_BallPos_Z = 0x80890B40;
 static const u32 aAB_NumOutsDuringPlay = 0x808938AD;
 static const u32 aAB_HitByPitch = 0x808909A3;
 
+static const u32 aAB_DeadBallReason = 0x80892709; //0 = n/a, 1 = HR, 2=foul, 3=ground rule double, 4 = ball dead
 static const u32 aAB_FinalResult = 0x80893BAA;
 
 //Frame Data. Capture once play is over
@@ -815,6 +824,7 @@ public:
         TrackerAdr<u8> num_outs_during_play = TrackerAdr<u8>("Num Outs During Play", aAB_NumOutsDuringPlay, 0xFF);
 
         u8 rbi;
+        u8 dead_ball_reason;
         u8 result_of_atbat;
 
         //Partial game. indicates this game has not been finished
