@@ -578,6 +578,24 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
                 codes.push_back(ToGeckoCode(0x04, CAPTAIN_CHARACTER_P2_ADDR, state.captainCharacterP2.value()));
         }
         
+        if (state.captainRosterLocationP1.has_value())
+        {
+            uint8_t val = state.captainRosterLocationP1.value();
+            if (val > 0x8)
+                WARN_LOG_FMT(COMMON, "P1 captain roster location not valid: {}. No gecko code produced.", val);
+            else
+                codes.push_back(ToGeckoCode(0x00, CAPTAIN_ROSTER_LOCATION_P1_ADDR, val));
+        }
+        
+        if (state.captainRosterLocationP2.has_value())
+        {
+            uint8_t val = state.captainRosterLocationP2.value();
+            if (val > 0x8)
+                WARN_LOG_FMT(COMMON, "P2 captain roster location not valid: {}. No gecko code produced.", val);
+            else
+                codes.push_back(ToGeckoCode(0x00, CAPTAIN_ROSTER_LOCATION_P2_ADDR, val));
+        }
+        
         GenerateRosterGeckoCodes(
             state.charactersP1ByPosition, 
             CHARACTERS_P1_BASE, 
@@ -798,23 +816,6 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
                     codes.push_back(ToGeckoCode(0x04, LOGO_HOME_ADDR, val));
             }
 
-            if (state.captainP1RosterLocation.has_value())
-            {
-                uint32_t val = state.captainP1RosterLocation.value();
-                if (val > 0x8)
-                    WARN_LOG_FMT(COMMON, "P1 captain roster location not valid: {}. No gecko code produced.", val);
-                else
-                    codes.push_back(ToGeckoCode(0x04, CAPTAIN_ROSTER_LOCATION_P1_ADDR, val));
-            }
-            
-            if (state.captainP2RosterLocation.has_value())
-            {
-                uint32_t val = state.captainP2RosterLocation.value();
-                if (val > 0x8)
-                    WARN_LOG_FMT(COMMON, "P2 captain roster location not valid: {}. No gecko code produced.", val);
-                else
-                    codes.push_back(ToGeckoCode(0x04, CAPTAIN_ROSTER_LOCATION_P2_ADDR, val));
-            }
 
             // batting order and position struct
             GenerateOrderAndPositionGeckoCodes(

@@ -125,7 +125,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
 
             if (roster.count("Captain") && roster.at("Captain").get<double>() == 1)
                 state.captainCharacterP1 = charID;
-                state.captainP1RosterLocation = position; // since roster is in position order, can use position directly.
+                state.captainRosterLocationP1 = position; // since roster is in position order, can use position directly.
         }
 
         if (j.count(p2Key))
@@ -143,7 +143,7 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
 
             if (roster.count("Captain") && roster.at("Captain").get<double>() == 1)
                 state.captainCharacterP2 = charID;
-                state.captainP2RosterLocation = position; // since roster is in position order, can use position directly.
+                state.captainRosterLocationP2 = position; // since roster is in position order, can use position directly.
         }
     }
     for (int i = 0; i < 9; i++)
@@ -168,8 +168,12 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
             state.fieldingHandP2ByPosition[i].has_value() ? std::to_string(state.fieldingHandP2ByPosition[i].value()) : "not set",
             state.superstarP2ByPosition[i].has_value() ? std::to_string(state.superstarP2ByPosition[i].value()) : "not set");
     }
-    INFO_LOG_FMT(COMMON, "Captain P1: {}", state.captainCharacterP1.has_value() ? std::to_string(state.captainCharacterP1.value()) : "not set");
-    INFO_LOG_FMT(COMMON, "Captain P2: {}", state.captainCharacterP2.has_value() ? std::to_string(state.captainCharacterP2.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Captain P1: {}, Roster Location: {}", 
+        state.captainCharacterP1.has_value() ? std::to_string(state.captainCharacterP1.value()) : "not set", 
+        state.captainRosterLocationP1.has_value() ? std::to_string(state.captainRosterLocationP1.value()) : "not set");
+    INFO_LOG_FMT(COMMON, "Captain P2: {}, Roster Location: {}", 
+        state.captainCharacterP2.has_value() ? std::to_string(state.captainCharacterP2.value()) : "not set", 
+        state.captainRosterLocationP2.has_value() ? std::to_string(state.captainRosterLocationP2.value()) : "not set");
 
 
     if (j.count("Away Logo") && j.count("Home Logo"))
