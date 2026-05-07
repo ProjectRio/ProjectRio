@@ -13,8 +13,8 @@ struct MSBQuickMatchGameState
     std::optional<uint32_t> captainCharacterP1;
     std::optional<uint32_t> captainCharacterP2;
 
-    std::optional<uint8_t> captainRosterLocationP1;
-    std::optional<uint8_t> captainRosterLocationP2;
+    std::optional<uint8_t> captainPositionP1;
+    std::optional<uint8_t> captainPositionP2;
 
     // rosters need to be given in position order (P, C, 1B, 2B, 3B, SS, LF, CF, RF)
     std::optional<uint8_t> charactersP1ByPosition[9]; 
@@ -103,8 +103,8 @@ public:
     static constexpr uint32_t CAPTAIN_CHARACTER_P1_ADDR = 0x80353080;
     static constexpr uint32_t CAPTAIN_CHARACTER_P2_ADDR = 0x80353084;
 
-    static constexpr uint32_t CAPTAIN_ROSTER_LOCATION_P1_ADDR = 0x803530a9;
-    static constexpr uint32_t CAPTAIN_ROSTER_LOCATION_P2_ADDR = 0x803530aa;
+    static constexpr uint32_t CAPTAIN_BATTING_ORDER_LOCATION_P1_ADDR = 0x803530a9;
+    static constexpr uint32_t CAPTAIN_BATTING_ORDER_LOCATION_P2_ADDR = 0x803530aa;
     
     static constexpr uint32_t CHARACTERS_P1_BASE = 0x803C6726;
     static constexpr uint32_t CHARACTERS_P2_BASE = 0x803C672F;

@@ -514,6 +514,36 @@ void GenerateBattingOrderScreenGeckoCodes(
 
     GenerateBattingOrderGeckoCodes(state, p1IsAway, outCodes);
 
+    // captain location in batting order
+    if (state.captainPositionP1.has_value() && state.captainPositionP2.has_value())
+    {
+        for (int team = 0; team < 2; team++)
+        {
+            uint8_t captainPosition = (team == 0) ? state.captainPositionP1.value() : state.captainPositionP2.value();
+            
+            uint8_t captainOrderLoc = -1;
+            for (int orderLoc = 0; orderLoc < 9; orderLoc++)
+            {
+                uint8_t position = (team == 0) ? 
+                    (p1IsAway ? state.awayPositionByBattingOrder[orderLoc].value() : state.homePositionByBattingOrder[orderLoc].value()) :
+                    (p1IsAway ? state.homePositionByBattingOrder[orderLoc].value() : state.awayPositionByBattingOrder[orderLoc].value());
+
+                if (position == captainPosition)
+                {
+                    captainOrderLoc = orderLoc;
+                    break;
+                }
+            }
+
+            uint32_t address = (team == 0) ? MSBQuickMatchCodeBuilder::CAPTAIN_BATTING_ORDER_LOCATION_P1_ADDR : MSBQuickMatchCodeBuilder::CAPTAIN_BATTING_ORDER_LOCATION_P2_ADDR;
+
+            if (captainPosition > 0x8 || captainOrderLoc == -1)
+                WARN_LOG_FMT(COMMON, "Captain position not valid: {}. No gecko code produced for captain location.", captainPosition);
+            else
+                outCodes.push_back(ToGeckoCode(0x00, address, captainOrderLoc));
+        }
+    }
+
     // handedness
     bool handednessInputsValidated = true;
     for (int i = 0; i < 9; i++)
@@ -576,24 +606,6 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
                 WARN_LOG_FMT(COMMON, "P2 captain not a valid character ID: {}. No gecko code produced.", val);
             else
                 codes.push_back(ToGeckoCode(0x04, CAPTAIN_CHARACTER_P2_ADDR, state.captainCharacterP2.value()));
-        }
-        
-        if (state.captainRosterLocationP1.has_value())
-        {
-            uint8_t val = state.captainRosterLocationP1.value();
-            if (val > 0x8)
-                WARN_LOG_FMT(COMMON, "P1 captain roster location not valid: {}. No gecko code produced.", val);
-            else
-                codes.push_back(ToGeckoCode(0x00, CAPTAIN_ROSTER_LOCATION_P1_ADDR, val));
-        }
-        
-        if (state.captainRosterLocationP2.has_value())
-        {
-            uint8_t val = state.captainRosterLocationP2.value();
-            if (val > 0x8)
-                WARN_LOG_FMT(COMMON, "P2 captain roster location not valid: {}. No gecko code produced.", val);
-            else
-                codes.push_back(ToGeckoCode(0x00, CAPTAIN_ROSTER_LOCATION_P2_ADDR, val));
         }
         
         GenerateRosterGeckoCodes(
