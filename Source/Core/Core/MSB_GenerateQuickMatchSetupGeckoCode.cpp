@@ -289,8 +289,8 @@ void GenerateBattingOrderGeckoCodes(
     outCodes.push_back(CustomGeckoCode(0xC2066A48, 0x00000016));
     // check if team equals P2 (1)
     outCodes.push_back(CustomGeckoCode(0x3AE10038, 0x2C080001));
-    // brach to P2 code. Nop for alignment.
-    outCodes.push_back(CustomGeckoCode(0x41820058, 0x60000000));
+    // branch to P2 code. Nop for alignment.
+    outCodes.push_back(CustomGeckoCode(0x41820058, MSBQuickMatchCodeBuilder::NOP_INSTR));
 
     // P1 batting order
     for (int i = 0; i < 9; i++)
@@ -305,7 +305,7 @@ void GenerateBattingOrderGeckoCodes(
     }
 
     // Put branch instruction to end. Nop for alignment.
-    outCodes.push_back(CustomGeckoCode(0x48000050, 0x60000000));
+    outCodes.push_back(CustomGeckoCode(0x48000050, MSBQuickMatchCodeBuilder::NOP_INSTR));
 
     // P2 batting order. 
     // CharID and batting order are now on separate lines since there is an intermediate branch instruction.
@@ -321,7 +321,7 @@ void GenerateBattingOrderGeckoCodes(
     }
 
     // finish the code
-    outCodes.push_back(CustomGeckoCode(0x60000000, 0x00000000));
+    outCodes.push_back(CustomGeckoCode(MSBQuickMatchCodeBuilder::NOP_INSTR, 0x00000000));
 }
 
 void GenerateHandednessGeckoCodes(
@@ -380,7 +380,7 @@ void GenerateHandednessGeckoCodes(
             outCodes.push_back(CustomGeckoCode(0x98640000, 0x98C40001));
 
             // go to next roster spot by adding stride to base address in r4. Also add nop for allignment.
-            outCodes.push_back(CustomGeckoCode(0x388400A0, 0x60000000));
+            outCodes.push_back(CustomGeckoCode(0x388400A0, MSBQuickMatchCodeBuilder::NOP_INSTR));
         }
     }
 
@@ -607,6 +607,12 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
             else
                 codes.push_back(ToGeckoCode(0x04, CAPTAIN_CHARACTER_P2_ADDR, state.captainCharacterP2.value()));
         }
+
+        if (state.captainCharacterP1.has_value() && state.captainCharacterP2.has_value())
+        {
+            // if both captains provided, prevent P1 from selecting the CPU captain when spamming A to avoid an invalid read error.
+            codes.push_back(ToGeckoCode(0x04, CAPTAIN_SCREEN_PREVENT_CPU_CAPTAIN_ADDR, CAPTAIN_SCREEN_PREVENT_CPU_CAPTAIN_NEW_INSTR));
+        }
         
         GenerateRosterGeckoCodes(
             state.charactersP1ByPosition, 
@@ -628,7 +634,7 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
 
         // if both rosters provided, prevent cursor movement by nop'ing function call.
         if (state.charactersP1ByPosition[0].has_value() && state.charactersP2ByPosition[0].has_value())
-            codes.push_back(ToGeckoCode(0x04, CHARACTER_SELECT_PREVENT_CURSOR_MOVEMENT_ADDR, 0x60000000));
+            codes.push_back(ToGeckoCode(0x04, CHARACTER_SELECT_PREVENT_CURSOR_MOVEMENT_ADDR, NOP_INSTR));
 
         // generate batting order codes.
         GenerateBattingOrderScreenGeckoCodes(state, codes);
@@ -860,7 +866,7 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
                         codes.push_back(ToGeckoCode(0x02, RUNNER_CHARACTER_ID_BASE + RUNNER_STRIDE * i, val_charID));
 
                     // nop the instruction that clears the roster ID when the game starts
-                    codes.push_back(ToGeckoCode(0x04, RUNNER_NOP_BASE + RUNNER_NOP_STRIDE * i, 0x60000000));
+                    codes.push_back(ToGeckoCode(0x04, RUNNER_NOP_BASE + RUNNER_NOP_STRIDE * i, NOP_INSTRUCTION));
                 }
             }
 
@@ -883,11 +889,14 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
             }
 
             // for superstarred players, need to replace the c2 injection instruction. No condition needed since just replacing vanilla instruction
-            codes.push_back(ToGeckoCode(0x04, SUPERSTAR_INJECTION_ADDR, 0x3C608033));
+            codes.push_back(ToGeckoCode(0x04, SUPERSTAR_INJECTION_ADDR, SUPERSTAR_INJECTION_REPLACEMENT_INSTR));
 
             // for team management cursor, need to replace original instruction once in game.
-            codes.push_back(ToGeckoCode(0x04, TEAM_MANAGEMENT_UP_PRESS_INSTR_ADDR, 0x41820074));
-            codes.push_back(ToGeckoCode(0x04, TEAM_MANAGEMENT_DOWN_PRESS_INSTR_ADDR, 0x41820074));
+            codes.push_back(ToGeckoCode(0x04, TEAM_MANAGEMENT_UP_PRESS_INSTR_ADDR, TEAM_MANAGEMENT_UP_PRESS_REPLACEMENT_INSTR));
+            codes.push_back(ToGeckoCode(0x04, TEAM_MANAGEMENT_DOWN_PRESS_INSTR_ADDR, TEAM_MANAGEMENT_DOWN_PRESS_REPLACEMENT_INSTR));
+
+            // for P1 prevention of picking a CPU captain, need to replace original instruction once in game.
+            codes.push_back(ToGeckoCode(0x04, CAPTAIN_SCREEN_PREVENT_CPU_CAPTAIN_ADDR, CAPTAIN_SCREEN_PREVENT_CPU_CAPTAIN_REPLACEMENT_INSTR));
 
         codes.push_back(EndConditional()); // end game-has-started conditional
     codes.push_back(EndConditional()); // end in-game conditional

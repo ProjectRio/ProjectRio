@@ -98,6 +98,8 @@ public:
     static constexpr uint8_t GAME_STARTED = 1;
     static constexpr uint16_t GAME_STARTED_MASK = 0xFF00;
 
+    static constexpr uint32_t NOP_INSTR = 0x60000000;
+
 
     // Pre game addresses
     static constexpr uint32_t CAPTAIN_CHARACTER_P1_ADDR = 0x80353080;
@@ -105,6 +107,10 @@ public:
 
     static constexpr uint32_t CAPTAIN_BATTING_ORDER_LOCATION_P1_ADDR = 0x803530a9;
     static constexpr uint32_t CAPTAIN_BATTING_ORDER_LOCATION_P2_ADDR = 0x803530aa;
+
+    static constexpr uint32_t CAPTAIN_SCREEN_PREVENT_CPU_CAPTAIN_ADDR = 0x806548dc;
+    static constexpr uint32_t CAPTAIN_SCREEN_PREVENT_CPU_CAPTAIN_NEW_INSTR = 0x48000234;
+    static constexpr uint32_t CAPTAIN_SCREEN_PREVENT_CPU_CAPTAIN_REPLACEMENT_INSTR = 0x38E70154;
     
     static constexpr uint32_t CHARACTERS_P1_BASE = 0x803C6726;
     static constexpr uint32_t CHARACTERS_P2_BASE = 0x803C672F;
@@ -118,6 +124,7 @@ public:
     static constexpr uint32_t CHARACTER_SELECT_PREVENT_CURSOR_MOVEMENT_ADDR = 0x8064df60;
 
     static constexpr uint32_t SUPERSTAR_INJECTION_ADDR = 0x8005a4f4;
+    static constexpr uint32_t SUPERSTAR_INJECTION_REPLACEMENT_INSTR = 0x3C608033;
     static constexpr uint32_t SUPERSTAR_BOOLS_P1_BASE = 0x80353be5;
     static constexpr uint32_t SUPERSTAR_BOOLS_P2_BASE = 0x80354185;
     static constexpr uint32_t SUPERSTAR_BOOLS_STRIDE = 0xA0;
@@ -137,6 +144,8 @@ public:
 
     static constexpr uint32_t TEAM_MANAGEMENT_UP_PRESS_INSTR_ADDR = 0x800463c8;
     static constexpr uint32_t TEAM_MANAGEMENT_DOWN_PRESS_INSTR_ADDR = 0x80046440;
+    static constexpr uint32_t TEAM_MANAGEMENT_UP_PRESS_REPLACEMENT_INSTR = 0x41820074;
+    static constexpr uint32_t TEAM_MANAGEMENT_DOWN_PRESS_REPLACEMENT_INSTR = 0x41820074;
 
 
     // In game addresses
