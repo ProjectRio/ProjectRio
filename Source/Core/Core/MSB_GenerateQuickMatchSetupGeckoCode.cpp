@@ -866,7 +866,7 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
                         codes.push_back(ToGeckoCode(0x02, RUNNER_CHARACTER_ID_BASE + RUNNER_STRIDE * i, val_charID));
 
                     // nop the instruction that clears the roster ID when the game starts
-                    codes.push_back(ToGeckoCode(0x04, RUNNER_NOP_BASE + RUNNER_NOP_STRIDE * i, NOP_INSTRUCTION));
+                    codes.push_back(ToGeckoCode(0x04, RUNNER_NOP_BASE + RUNNER_NOP_STRIDE * i, NOP_INSTR));
                 }
             }
 
