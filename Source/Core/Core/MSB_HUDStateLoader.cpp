@@ -124,8 +124,10 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
             }
 
             if (roster.count("Captain") && roster.at("Captain").get<double>() == 1)
+            {
                 state.captainCharacterP1 = charID;
-                state.captainPositionP1 = position; 
+                state.captainPositionP1 = position;
+            }
         }
 
         if (j.count(p2Key))
@@ -142,8 +144,10 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
             }
 
             if (roster.count("Captain") && roster.at("Captain").get<double>() == 1)
+            {
                 state.captainCharacterP2 = charID;
-                state.captainPositionP2 = position; 
+                state.captainPositionP2 = position;
+            }
         }
     }
     for (int i = 0; i < 9; i++)
