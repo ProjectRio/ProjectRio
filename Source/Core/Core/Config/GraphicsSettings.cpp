@@ -64,6 +64,11 @@ const Info<int> GFX_TEXTURE_PNG_COMPRESSION_LEVEL{
 const Info<bool> GFX_HIRES_TEXTURES{{System::GFX, "Settings", "HiresTextures"}, false};
 const Info<bool> GFX_CACHE_HIRES_TEXTURES{{System::GFX, "Settings", "CacheHiresTextures"}, false};
 const Info<std::string> GFX_TEXTURE_PACK{{System::GFX, "Settings", "TexturePack"}, ""};
+// Pipe-delimited ordered list of active texture pack folder names (top of list = highest priority).
+// Replaces the legacy single-value GFX_TEXTURE_PACK; the legacy value is migrated on first run
+// (see HiresTextures.cpp) and then cleared.
+const Info<std::string> GFX_TEXTURE_PACKS_ACTIVE{
+    {System::GFX, "Settings", "TexturePacksActive"}, ""};
 const Info<bool> GFX_DUMP_EFB_TARGET{{System::GFX, "Settings", "DumpEFBTarget"}, false};
 const Info<bool> GFX_DUMP_XFB_TARGET{{System::GFX, "Settings", "DumpXFBTarget"}, false};
 const Info<bool> GFX_DUMP_FRAMES_AS_IMAGES{{System::GFX, "Settings", "DumpFramesAsImages"}, false};

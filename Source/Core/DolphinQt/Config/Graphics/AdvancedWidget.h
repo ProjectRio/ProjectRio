@@ -10,7 +10,6 @@ class ConfigChoice;
 class ConfigInteger;
 class GraphicsWindow;
 class QCheckBox;
-class QComboBox;
 class QSpinBox;
 class ToolTipCheckBox;
 
@@ -52,7 +51,6 @@ private:
   ConfigBool* m_disable_vram_copies;
   ConfigBool* m_load_custom_textures;
   ToolTipCheckBox* m_enable_graphics_mods;
-  QComboBox* m_custom_textures_list;
 
   // Texture dumping
   ConfigBool* m_dump_textures;

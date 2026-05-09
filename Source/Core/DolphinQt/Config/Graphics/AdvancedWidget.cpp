@@ -24,9 +24,6 @@
 #include "DolphinQt/Settings.h"
 
 #include "VideoCommon/VideoConfig.h"
-#include <Common/FileSearch.h>
-#include <Common/FileUtil.h>
-#include <Common/CommonPaths.h>
 
 AdvancedWidget::AdvancedWidget(GraphicsWindow* parent)
 {
@@ -108,19 +105,6 @@ void AdvancedWidget::CreateWidgets()
   m_dump_efb_target = new ConfigBool(tr("Dump EFB Target"), Config::GFX_DUMP_EFB_TARGET);
   m_dump_xfb_target = new ConfigBool(tr("Dump XFB Target"), Config::GFX_DUMP_XFB_TARGET);
 
-  auto* custom_textures_label = new QLabel(tr("Texture Pack: "));
-  m_custom_textures_list = new QComboBox;
-  m_custom_textures_list->addItem(tr("Custom"));
-
-  // List avalable themes
-  auto textures_search_results = Common::DoFileSearch(
-      {File::GetUserPath(D_TEXTUREPACKS_IDX), File::GetSysDirectory() + TEXTUREPACKS_DIR});
-  for (const std::string& path : textures_search_results)
-  {
-    const QString qt_name = QString::fromStdString(PathToFileName(path));
-    m_custom_textures_list->addItem(qt_name);
-  }
-
   m_disable_vram_copies =
       new ConfigBool(tr("Disable EFB VRAM Copies"), Config::GFX_HACK_DISABLE_COPY_TO_VRAM);
   m_enable_graphics_mods = new ToolTipCheckBox(tr("Enable Graphics Mods"));
@@ -133,9 +117,6 @@ void AdvancedWidget::CreateWidgets()
 
   utility_layout->addWidget(m_dump_efb_target, 2, 0);
   utility_layout->addWidget(m_dump_xfb_target, 2, 1);
-
-  utility_layout->addWidget(custom_textures_label, 3, 0);
-  utility_layout->addWidget(m_custom_textures_list, 3, 1);
 
   // Texture dumping
   auto* texture_dump_box = new QGroupBox(tr("Texture Dumping"));
@@ -229,19 +210,12 @@ void AdvancedWidget::ConnectWidgets()
   connect(m_enable_prog_scan, &QCheckBox::toggled, this, &AdvancedWidget::SaveSettings);
   connect(m_dump_textures, &QCheckBox::toggled, this, &AdvancedWidget::SaveSettings);
   connect(m_enable_graphics_mods, &QCheckBox::toggled, this, &AdvancedWidget::SaveSettings);
-  connect(m_custom_textures_list, qOverload<int>(&QComboBox::currentIndexChanged), this,
-          &AdvancedWidget::SaveSettings);
 }
 
 void AdvancedWidget::LoadSettings()
 {
   m_prefetch_custom_textures->setEnabled(Config::Get(Config::GFX_HIRES_TEXTURES));
   m_dump_bitrate->setEnabled(!Config::Get(Config::GFX_USE_FFV1));
-
-  // set index of combobox to matching element from config file
-  std::string current_pack = Config::Get(Config::GFX_TEXTURE_PACK);
-  int iPack = m_custom_textures_list->findText(QString::fromStdString(current_pack));
-  m_custom_textures_list->setCurrentIndex(iPack == -1 ? 0 : iPack);
 
   m_enable_prog_scan->setChecked(Config::Get(Config::SYSCONF_PROGRESSIVE_SCAN));
   m_dump_mip_textures->setEnabled(Config::Get(Config::GFX_DUMP_TEXTURES));
@@ -259,8 +233,6 @@ void AdvancedWidget::SaveSettings()
   m_dump_mip_textures->setEnabled(Config::Get(Config::GFX_DUMP_TEXTURES));
   m_dump_base_textures->setEnabled(Config::Get(Config::GFX_DUMP_TEXTURES));
   Settings::Instance().SetGraphicModsEnabled(m_enable_graphics_mods->isChecked());
-
-  Config::SetBaseOrCurrent(Config::GFX_TEXTURE_PACK, m_custom_textures_list->currentText().toStdString());
 }
 
 void AdvancedWidget::OnBackendChanged()

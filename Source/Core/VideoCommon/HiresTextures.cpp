@@ -4,6 +4,7 @@
 #include "VideoCommon/HiresTextures.h"
 
 #include <algorithm>
+#include <cctype>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -15,6 +16,10 @@
 #include <xxhash.h>
 
 #include <fmt/format.h>
+#include <fstream>
+#include <sstream>
+
+#include <picojson.h>
 
 #include "Common/CommonPaths.h"
 #include "Common/FileSearch.h"
@@ -37,6 +42,9 @@ static std::unordered_map<std::string, std::shared_ptr<HiresTexture>> s_hires_te
 static std::unordered_map<std::string, bool> s_hires_texture_id_to_arbmipmap;
 
 static auto s_file_library = std::make_shared<VideoCommon::DirectFilesystemAssetLibrary>();
+
+// Forward declaration; defined alongside the public helpers near the bottom of the file.
+static TexturePackGame ReadPackDeclaredGame(const std::string& pack_root);
 
 namespace
 {
@@ -97,8 +105,40 @@ void HiresTexture::Update()
   }
 
   const std::string& game_id = SConfig::GetInstance().GetGameID();
-  const std::set<std::string> texture_directories =
+
+  // Build an ORDERED list of texture directories. Earlier entries win on hash conflict
+  // (try_emplace below is first-insert-wins), so the priority order is:
+  //   1. Each active texture pack, in user-configured order (top of UI list = first here).
+  //   2. The standard User/Load/Textures/<game_id>/ fallback (always-on lowest priority).
+  std::vector<std::string> texture_directories;
+
+  const TexturePackGame current_game = DetectCurrentTexturePackGame(game_id);
+  const std::vector<std::string> active_packs = GetActiveTexturePacks();
+  for (const auto& pack_name : active_packs)
+  {
+    const std::string pack_root = ResolveTexturePackPath(pack_name);
+    if (pack_root.empty())
+      continue;  // Pack folder no longer exists; silently skip.
+
+    // Game filter: if the pack declares a game and it doesn't match the running one, skip it.
+    // Packs that don't declare a game (Any) load for any title. We also skip the filter when the
+    // running game itself isn't one we recognize, to avoid hiding everything in unsupported titles.
+    if (current_game != TexturePackGame::Any)
+    {
+      const TexturePackGame pack_game = ReadPackDeclaredGame(pack_root);
+      if (pack_game != TexturePackGame::Any && pack_game != current_game)
+        continue;
+    }
+
+    texture_directories.push_back(pack_root);
+  }
+
+  // Lowest-priority fallback: User/Load/Textures/<game_id>/ (and gameid.txt subfolders).
+  const std::set<std::string> custom_dirs =
       GetTextureDirectoriesWithGameId(File::GetUserPath(D_HIRESTEXTURES_IDX), game_id);
+  for (const auto& dir : custom_dirs)
+    texture_directories.push_back(dir);
+
   const std::vector<std::string> extensions{".png", ".dds"};
 
   auto& system = Core::System::GetInstance();
@@ -262,4 +302,175 @@ std::set<std::string> GetTextureDirectoriesWithGameId(const std::string& root_di
   }
 
   return result;
+}
+
+namespace
+{
+constexpr char kActivePackDelimiter = '|';
+
+std::vector<std::string> SplitActivePacksString(const std::string& serialized)
+{
+  std::vector<std::string> packs;
+  std::string current;
+  for (const char c : serialized)
+  {
+    if (c == kActivePackDelimiter)
+    {
+      if (!current.empty())
+        packs.push_back(current);
+      current.clear();
+    }
+    else
+    {
+      current.push_back(c);
+    }
+  }
+  if (!current.empty())
+    packs.push_back(current);
+  return packs;
+}
+
+std::string JoinActivePacksString(const std::vector<std::string>& packs)
+{
+  std::string out;
+  for (size_t i = 0; i < packs.size(); ++i)
+  {
+    if (i > 0)
+      out.push_back(kActivePackDelimiter);
+    out += packs[i];
+  }
+  return out;
+}
+
+// One-time migration from the legacy single-value GFX_TEXTURE_PACK setting.
+// Runs at most once per process: if the new list is empty and the legacy key holds a real
+// pack name (not "" or "Custom"), seed the new list and clear the legacy key so this no
+// longer fires on subsequent reads.
+void MigrateLegacyTexturePackSetting()
+{
+  static bool s_migrated = false;
+  if (s_migrated)
+    return;
+  s_migrated = true;
+
+  const std::string current_active = Config::Get(Config::GFX_TEXTURE_PACKS_ACTIVE);
+  if (!current_active.empty())
+    return;
+
+  const std::string legacy = Config::Get(Config::GFX_TEXTURE_PACK);
+  if (legacy.empty() || legacy == "Custom")
+    return;
+
+  Config::SetBaseOrCurrent(Config::GFX_TEXTURE_PACKS_ACTIVE, legacy);
+  Config::SetBaseOrCurrent(Config::GFX_TEXTURE_PACK, std::string{});
+}
+}  // namespace
+
+std::vector<std::string> GetActiveTexturePacks()
+{
+  MigrateLegacyTexturePackSetting();
+  return SplitActivePacksString(Config::Get(Config::GFX_TEXTURE_PACKS_ACTIVE));
+}
+
+void SetActiveTexturePacks(const std::vector<std::string>& packs)
+{
+  Config::SetBaseOrCurrent(Config::GFX_TEXTURE_PACKS_ACTIVE, JoinActivePacksString(packs));
+}
+
+std::string ResolveTexturePackPath(const std::string& pack_name)
+{
+  if (pack_name.empty())
+    return {};
+
+  // Defense-in-depth: reject anything that could escape the TexturePacks roots.
+  if (pack_name.find(DIR_SEP_CHR) != std::string::npos ||
+      pack_name.find('/') != std::string::npos || pack_name.find('\\') != std::string::npos ||
+      pack_name.find(kActivePackDelimiter) != std::string::npos || pack_name == "." ||
+      pack_name == ".." || pack_name.find("..") != std::string::npos)
+  {
+    return {};
+  }
+
+  const std::string user_candidate = File::GetUserPath(D_TEXTUREPACKS_IDX) + pack_name;
+  if (File::IsDirectory(user_candidate))
+    return user_candidate;
+
+  const std::string sys_candidate =
+      File::GetSysDirectory() + TEXTUREPACKS_DIR + DIR_SEP + pack_name;
+  if (File::IsDirectory(sys_candidate))
+    return sys_candidate;
+
+  return {};
+}
+
+TexturePackGame ParseTexturePackGame(const std::string& s)
+{
+  std::string lower;
+  lower.reserve(s.size());
+  for (char c : s)
+    lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+
+  // Friendly names.
+  if (lower == "baseball" || lower == "msb" || lower == "mssb")
+    return TexturePackGame::Baseball;
+  if (lower == "golf" || lower == "mggt")
+    return TexturePackGame::Golf;
+
+  // Game-ID aliases. Accept the 3-char region-free prefix or any region-specific full ID.
+  // Mario Superstar Baseball: GYQ / GYQE01 / GYQP01 / GYQJ01.
+  // Mario Golf Toadstool Tour: GFT / GFTE01 / GFTP01 / GFTJ01.
+  if (lower.rfind("gyq", 0) == 0)
+    return TexturePackGame::Baseball;
+  if (lower.rfind("gft", 0) == 0)
+    return TexturePackGame::Golf;
+
+  return TexturePackGame::Any;
+}
+
+std::string TexturePackGameToString(TexturePackGame g)
+{
+  switch (g)
+  {
+  case TexturePackGame::Baseball:
+    return "baseball";
+  case TexturePackGame::Golf:
+    return "golf";
+  case TexturePackGame::Any:
+  default:
+    return "";
+  }
+}
+
+TexturePackGame DetectCurrentTexturePackGame(const std::string& game_id)
+{
+  if (game_id.size() < 3)
+    return TexturePackGame::Any;
+  const std::string prefix = game_id.substr(0, 3);
+  // Mario Superstar Baseball: GYQE01 / GYQP01 / GYQJ01 -> prefix GYQ.
+  // Mario Golf Toadstool Tour: GFTE01 / GFTP01 / GFTJ01 -> prefix GFT.
+  if (prefix == "GYQ")
+    return TexturePackGame::Baseball;
+  if (prefix == "GFT")
+    return TexturePackGame::Golf;
+  return TexturePackGame::Any;
+}
+
+static TexturePackGame ReadPackDeclaredGame(const std::string& pack_root)
+{
+  if (pack_root.empty())
+    return TexturePackGame::Any;
+  const std::string manifest_path = pack_root + DIR_SEP + "pack.json";
+  std::ifstream in(manifest_path);
+  if (!in.good())
+    return TexturePackGame::Any;
+  std::stringstream buffer;
+  buffer << in.rdbuf();
+  picojson::value parsed;
+  if (!picojson::parse(parsed, buffer.str()).empty() || !parsed.is<picojson::object>())
+    return TexturePackGame::Any;
+  const auto& obj = parsed.get<picojson::object>();
+  auto it = obj.find("game");
+  if (it == obj.end() || !it->second.is<std::string>())
+    return TexturePackGame::Any;
+  return ParseTexturePackGame(it->second.get<std::string>());
 }
