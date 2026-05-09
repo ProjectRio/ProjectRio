@@ -5,6 +5,186 @@
 #include <vector>
 #include <cstdint>
 #include <optional>
+#include <array>
+
+// ============================================================
+// MSB_Player — all data for a single roster slot.
+// Stored in MSB_Team indexed by fielding position (0–8):
+//   0=P, 1=C, 2=1B, 3=2B, 4=3B, 5=SS, 6=LF, 7=CF, 8=RF
+// ============================================================
+struct MSB_Player
+{
+    std::optional<uint8_t>  charID;
+    std::optional<uint8_t>  position;         // fielding position (0–8); redundant with array index but useful for validation
+    std::optional<uint8_t>  battingOrderSlot; // 0–8
+    std::optional<uint8_t>  battingHand;      // 0=right, 1=left
+    std::optional<uint8_t>  fieldingHand;     // 0=right, 1=left
+    std::optional<uint8_t>  superstar;        // 0=off, 1=on
+    std::optional<uint16_t> pitcherStamina;
+
+    MSB_Player() = default;
+
+    MSB_Player(uint8_t inCharID, uint8_t inPosition, uint8_t inBattingOrderSlot,
+               uint8_t inBattingHand, uint8_t inFieldingHand, uint8_t inSuperstar,
+               uint16_t inStamina = 10)
+        : charID(inCharID), position(inPosition), battingOrderSlot(inBattingOrderSlot)
+        , battingHand(inBattingHand), fieldingHand(inFieldingHand), superstar(inSuperstar)
+        , pitcherStamina(inStamina)
+    {}
+
+    bool IsSet() const { return charID.has_value(); }
+
+    // Logs any invalid fields and returns false if any are out of range.
+    bool Validate(const std::string& context = "") const;
+};
+
+// ============================================================
+// MSB_Team — 9 players indexed by fielding position.
+// ============================================================
+struct MSB_Team
+{
+public:
+    MSB_Team() = default;
+    explicit MSB_Team(std::array<MSB_Player, 9> inPlayers);
+
+    // Writes player into the slot at pos; stamps player.position to match. Logs and returns false if pos >= 9.
+    bool SetPlayer(uint8_t pos, const MSB_Player& player);
+
+    // Returns player at fielding position pos, or nullptr if pos >= 9.
+    const MSB_Player* GetPlayer(uint8_t pos) const;
+
+    // Returns the first player whose battingOrderSlot matches slot, or nullptr.
+    const MSB_Player* GetPlayerByBattingSlot(uint8_t slot) const;
+
+    // Returns the player at captainBattingSlot, or nullptr if not set or unmatched.
+    const MSB_Player* GetCaptain() const;
+
+    // Returns true if all 9 positions have IsSet() == true.
+    bool IsFull() const;
+
+    bool SetCaptainBattingSlot(uint8_t slot); // 0–8; logs and returns false if out of range
+    bool SetLogo(uint32_t val);               // 0–47
+    bool SetTeamStars(uint8_t val);           // 0–5
+
+    std::optional<uint8_t>  GetCaptainBattingSlot() const { return captainBattingSlot; }
+    std::optional<uint32_t> GetLogo()               const { return logo; }
+    std::optional<uint8_t>  GetTeamStars()           const { return teamStars; }
+
+    bool Validate(const std::string& context = "") const;
+
+private:
+    std::array<MSB_Player, 9> players;
+    std::optional<uint8_t>  captainBattingSlot; // batting order slot (0–8) of the captain
+    std::optional<uint32_t> logo;               // 0–47
+    std::optional<uint8_t>  teamStars;          // 0–5
+};
+
+// ============================================================
+// MSB_QuickMatchState — full match state using the new layout.
+// p1 and p2 are always in P1/P2 terms (not home/away).
+// ============================================================
+class MSB_QuickMatchState
+{
+public:
+    MSB_QuickMatchState() = default;
+    MSB_QuickMatchState(MSB_Team inP1, MSB_Team inP2, bool inP1IsAway);
+
+    // Team access — mutable refs so callers can use MSB_Team setters directly.
+    MSB_Team&       GetP1()       { return p1; }
+    MSB_Team&       GetP2()       { return p2; }
+    const MSB_Team& GetP1() const { return p1; }
+    const MSB_Team& GetP2() const { return p2; }
+    void SetP1(MSB_Team team)     { p1 = std::move(team); }
+    void SetP2(MSB_Team team)     { p2 = std::move(team); }
+    void SetP1IsAway(bool val)    { p1IsAway = val; }
+    bool GetP1IsAway()      const { return p1IsAway; }
+
+    // Pre-game setters — log and return false if value is out of range.
+    bool SetStadium(uint8_t val);         // 0–5; Toy Field (6) unsupported
+    bool SetFirstBatter(uint8_t val);     // 0=P1, 1=P2
+    bool SetStarSkills(uint8_t val);      // 0=off, 1=on
+    bool SetInningsSelected(uint8_t val); // >= 1; warns if even (result will be value-1)
+    bool SetMercy(uint8_t val);           // 0=off, 1=on
+
+    // In-game setters
+    bool SetInning(uint32_t val);                        // 1–18
+    bool SetHalfInning(uint8_t val);                     // 0=top, 1=bottom
+    bool SetBattingTeam(uint32_t val);                   // 0 or 1
+    bool SetFieldingTeam(uint32_t val);                  // 0 or 1
+    bool SetHomeScore(uint16_t val);
+    bool SetAwayScore(uint16_t val);
+    bool SetHomeInningScore(int inningIndex, uint16_t val); // inningIndex 0–17
+    bool SetAwayInningScore(int inningIndex, uint16_t val);
+    bool SetStrikes(uint32_t val);                       // 0–2
+    bool SetBalls(uint32_t val);                         // 0–3
+    bool SetOuts(uint32_t val);                          // 0–2
+    bool SetIsStarChance(uint8_t val);                   // 0=off, 1=on
+
+    // Sets a runner by their batting order slot. Derives fielding position and charID from the team struct.
+    // useP1: true=P1's team, false=P2's team, nullopt=infer from halfInning + p1IsAway.
+    // Returns false if the team cannot be determined, or no player with that battingSlot exists.
+    bool SetRunner(int base, uint8_t battingSlot, std::optional<bool> useP1 = std::nullopt);
+
+    // Getters
+    std::optional<uint8_t>  GetStadium()         const { return stadium; }
+    std::optional<uint8_t>  GetFirstBatter()     const { return firstBatter; }
+    std::optional<uint8_t>  GetStarSkills()      const { return starSkills; }
+    std::optional<uint8_t>  GetInningsSelected() const { return inningsSelected; }
+    std::optional<uint8_t>  GetMercy()           const { return mercy; }
+    std::optional<uint32_t> GetInning()          const { return inning; }
+    std::optional<uint8_t>  GetHalfInning()      const { return halfInning; }
+    std::optional<uint32_t> GetBattingTeam()     const { return battingTeam; }
+    std::optional<uint32_t> GetFieldingTeam()    const { return fieldingTeam; }
+    std::optional<uint16_t> GetHomeScore()       const { return homeScore; }
+    std::optional<uint16_t> GetAwayScore()       const { return awayScore; }
+    std::optional<uint32_t> GetStrikes()         const { return strikes; }
+    std::optional<uint32_t> GetBalls()           const { return balls; }
+    std::optional<uint32_t> GetOuts()            const { return outs; }
+    std::optional<uint8_t>  GetIsStarChance()    const { return isStarChance; }
+
+    std::optional<uint16_t> GetHomeInningScore(int i) const
+    { return (i >= 0 && i < 18) ? homeInningScores[i] : std::nullopt; }
+    std::optional<uint16_t> GetAwayInningScore(int i) const
+    { return (i >= 0 && i < 18) ? awayInningScores[i] : std::nullopt; }
+    // Returns the fielding position (0–8) of the runner at the given base, or nullopt if unset.
+    std::optional<uint16_t> GetRunnerFieldingPosition(int base) const
+    { return (base >= 0 && base < 3) ? runnerRosterSpot[base] : std::nullopt; }
+    std::optional<uint16_t> GetRunnerCharacterID(int base) const
+    { return (base >= 0 && base < 3) ? runnerCharacterID[base] : std::nullopt; }
+
+    // Logs all invalid or out-of-range fields and returns false if any errors are found.
+    bool Validate() const;
+
+private:
+    MSB_Team p1;
+    MSB_Team p2;
+    bool p1IsAway = false;
+
+    std::optional<uint8_t> stadium;
+    std::optional<uint8_t> firstBatter;
+    std::optional<uint8_t> starSkills;
+    std::optional<uint8_t> inningsSelected;
+    std::optional<uint8_t> mercy;
+
+    std::optional<uint32_t> inning;
+    std::optional<uint8_t>  halfInning;
+    std::optional<uint32_t> battingTeam;
+    std::optional<uint32_t> fieldingTeam;
+
+    std::optional<uint16_t> homeScore;
+    std::optional<uint16_t> awayScore;
+    std::optional<uint16_t> homeInningScores[18];
+    std::optional<uint16_t> awayInningScores[18];
+
+    std::optional<uint32_t> strikes;
+    std::optional<uint32_t> balls;
+    std::optional<uint32_t> outs;
+
+    std::optional<uint8_t>  isStarChance;
+
+    std::optional<uint16_t> runnerRosterSpot[3];
+    std::optional<uint16_t> runnerCharacterID[3];
+};
 
 // Optional game state struct
 struct MSBQuickMatchGameState

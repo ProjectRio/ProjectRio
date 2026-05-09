@@ -66,6 +66,350 @@ static Gecko::GeckoCode::Code CustomGeckoCode(
     return code;
 }
 
+bool MSB_Player::Validate(const std::string& context) const
+{
+    bool valid = true;
+    const std::string p = context.empty() ? "" : context + ": ";
+
+    if (charID.has_value() && charID.value() > 0x35)
+    { ERROR_LOG_FMT(COMMON, "{}charID {} exceeds max (0x35=53)", p, charID.value()); valid = false; }
+    if (position.has_value() && position.value() > 8)
+    { ERROR_LOG_FMT(COMMON, "{}position {} out of range (0-8)", p, position.value()); valid = false; }
+    if (battingOrderSlot.has_value() && battingOrderSlot.value() > 8)
+    { ERROR_LOG_FMT(COMMON, "{}battingOrderSlot {} out of range (0-8)", p, battingOrderSlot.value()); valid = false; }
+    if (battingHand.has_value() && battingHand.value() > 1)
+    { ERROR_LOG_FMT(COMMON, "{}battingHand {} must be 0 (right) or 1 (left)", p, battingHand.value()); valid = false; }
+    if (fieldingHand.has_value() && fieldingHand.value() > 1)
+    { ERROR_LOG_FMT(COMMON, "{}fieldingHand {} must be 0 (right) or 1 (left)", p, fieldingHand.value()); valid = false; }
+    if (superstar.has_value() && superstar.value() > 1)
+    { ERROR_LOG_FMT(COMMON, "{}superstar {} must be 0 (off) or 1 (on)", p, superstar.value()); valid = false; }
+
+    return valid;
+}
+
+MSB_Team::MSB_Team(std::array<MSB_Player, 9> inPlayers)
+    : players(std::move(inPlayers))
+{
+    for (uint8_t i = 0; i < 9; i++)
+    {
+        if (players[i].IsSet())
+            players[i].position = i;
+    }
+}
+
+bool MSB_Team::SetPlayer(uint8_t pos, const MSB_Player& player)
+{
+    if (pos >= 9)
+    {
+        WARN_LOG_FMT(COMMON, "SetPlayer: position {} out of range (0-8)", pos);
+        return false;
+    }
+    players[pos] = player;
+    players[pos].position = pos;
+    return true;
+}
+
+const MSB_Player* MSB_Team::GetPlayer(uint8_t pos) const
+{
+    if (pos >= 9)
+        return nullptr;
+    return &players[pos];
+}
+
+const MSB_Player* MSB_Team::GetPlayerByBattingSlot(uint8_t slot) const
+{
+    for (const MSB_Player& p : players)
+    {
+        if (p.battingOrderSlot.has_value() && p.battingOrderSlot.value() == slot)
+            return &p;
+    }
+    return nullptr;
+}
+
+const MSB_Player* MSB_Team::GetCaptain() const
+{
+    if (!captainBattingSlot.has_value())
+        return nullptr;
+    return GetPlayerByBattingSlot(captainBattingSlot.value());
+}
+
+bool MSB_Team::IsFull() const
+{
+    for (const MSB_Player& p : players)
+    {
+        if (!p.IsSet())
+            return false;
+    }
+    return true;
+}
+
+bool MSB_Team::SetCaptainBattingSlot(uint8_t slot)
+{
+    if (slot > 8)
+    {
+        WARN_LOG_FMT(COMMON, "SetCaptainBattingSlot: {} out of range (0-8)", slot);
+        return false;
+    }
+    captainBattingSlot = slot;
+    return true;
+}
+
+bool MSB_Team::SetLogo(uint32_t val)
+{
+    if (val > 0x2F)
+    {
+        WARN_LOG_FMT(COMMON, "SetLogo: {} exceeds max (0x2F=47)", val);
+        return false;
+    }
+    logo = val;
+    return true;
+}
+
+bool MSB_Team::SetTeamStars(uint8_t val)
+{
+    if (val > 5)
+    {
+        WARN_LOG_FMT(COMMON, "SetTeamStars: {} exceeds max (5)", val);
+        return false;
+    }
+    teamStars = val;
+    return true;
+}
+
+bool MSB_Team::Validate(const std::string& context) const
+{
+    bool valid = true;
+    const std::string p = context.empty() ? "" : context + ": ";
+
+    for (int i = 0; i < 9; i++)
+    {
+        if (players[i].IsSet())
+            valid &= players[i].Validate(p + "pos" + std::to_string(i));
+    }
+
+    bool slotUsed[9] = {};
+    for (int i = 0; i < 9; i++)
+    {
+        if (!players[i].battingOrderSlot.has_value())
+            continue;
+        uint8_t slot = players[i].battingOrderSlot.value();
+        if (slot > 8)
+            continue; // already caught by player validate
+        if (slotUsed[slot])
+        { ERROR_LOG_FMT(COMMON, "{}duplicate battingOrderSlot {}", p, slot); valid = false; }
+        slotUsed[slot] = true;
+    }
+
+    if (captainBattingSlot.has_value())
+    {
+        if (captainBattingSlot.value() > 8)
+        { ERROR_LOG_FMT(COMMON, "{}captainBattingSlot {} out of range (0-8)", p, captainBattingSlot.value()); valid = false; }
+        else if (GetCaptain() == nullptr)
+        { ERROR_LOG_FMT(COMMON, "{}captainBattingSlot {} does not match any player's battingOrderSlot", p, captainBattingSlot.value()); valid = false; }
+    }
+
+    if (logo.has_value() && logo.value() > 0x2F)
+    { ERROR_LOG_FMT(COMMON, "{}logo {} exceeds max (0x2F=47)", p, logo.value()); valid = false; }
+    if (teamStars.has_value() && teamStars.value() > 5)
+    { ERROR_LOG_FMT(COMMON, "{}teamStars {} exceeds max (5)", p, teamStars.value()); valid = false; }
+
+    return valid;
+}
+
+MSB_QuickMatchState::MSB_QuickMatchState(MSB_Team inP1, MSB_Team inP2, bool inP1IsAway)
+    : p1(std::move(inP1)), p2(std::move(inP2)), p1IsAway(inP1IsAway)
+{}
+
+bool MSB_QuickMatchState::SetStadium(uint8_t val)
+{
+    if (val > 5) { WARN_LOG_FMT(COMMON, "SetStadium: {} out of range (0-5); Toy Field unsupported", val); return false; }
+    stadium = val; return true;
+}
+
+bool MSB_QuickMatchState::SetFirstBatter(uint8_t val)
+{
+    if (val > 1) { WARN_LOG_FMT(COMMON, "SetFirstBatter: {} must be 0 (P1) or 1 (P2)", val); return false; }
+    firstBatter = val; return true;
+}
+
+bool MSB_QuickMatchState::SetStarSkills(uint8_t val)
+{
+    if (val > 1) { WARN_LOG_FMT(COMMON, "SetStarSkills: {} must be 0 (off) or 1 (on)", val); return false; }
+    starSkills = val; return true;
+}
+
+bool MSB_QuickMatchState::SetInningsSelected(uint8_t val)
+{
+    if (val == 0) { WARN_LOG_FMT(COMMON, "SetInningsSelected: must be at least 1"); return false; }
+    if (val % 2 == 0)
+        WARN_LOG_FMT(COMMON, "SetInningsSelected: {} is even; result will be {}", val, val - 1);
+    inningsSelected = val; return true;
+}
+
+bool MSB_QuickMatchState::SetMercy(uint8_t val)
+{
+    if (val > 1) { WARN_LOG_FMT(COMMON, "SetMercy: {} must be 0 (off) or 1 (on)", val); return false; }
+    mercy = val; return true;
+}
+
+bool MSB_QuickMatchState::SetInning(uint32_t val)
+{
+    if (val > 18) { WARN_LOG_FMT(COMMON, "SetInning: {} exceeds max (18)", val); return false; }
+    inning = val; return true;
+}
+
+bool MSB_QuickMatchState::SetHalfInning(uint8_t val)
+{
+    if (val > 1) { WARN_LOG_FMT(COMMON, "SetHalfInning: {} must be 0 (top) or 1 (bottom)", val); return false; }
+    halfInning = val; return true;
+}
+
+bool MSB_QuickMatchState::SetBattingTeam(uint32_t val)
+{
+    if (val > 1) { WARN_LOG_FMT(COMMON, "SetBattingTeam: {} must be 0 or 1", val); return false; }
+    battingTeam = val; return true;
+}
+
+bool MSB_QuickMatchState::SetFieldingTeam(uint32_t val)
+{
+    if (val > 1) { WARN_LOG_FMT(COMMON, "SetFieldingTeam: {} must be 0 or 1", val); return false; }
+    fieldingTeam = val; return true;
+}
+
+bool MSB_QuickMatchState::SetHomeScore(uint16_t val)
+{
+    homeScore = val; return true;
+}
+
+bool MSB_QuickMatchState::SetAwayScore(uint16_t val)
+{
+    awayScore = val; return true;
+}
+
+bool MSB_QuickMatchState::SetHomeInningScore(int i, uint16_t val)
+{
+    if (i < 0 || i >= 18) { WARN_LOG_FMT(COMMON, "SetHomeInningScore: index {} out of range (0-17)", i); return false; }
+    homeInningScores[i] = val; return true;
+}
+
+bool MSB_QuickMatchState::SetAwayInningScore(int i, uint16_t val)
+{
+    if (i < 0 || i >= 18) { WARN_LOG_FMT(COMMON, "SetAwayInningScore: index {} out of range (0-17)", i); return false; }
+    awayInningScores[i] = val; return true;
+}
+
+bool MSB_QuickMatchState::SetStrikes(uint32_t val)
+{
+    if (val > 2) { WARN_LOG_FMT(COMMON, "SetStrikes: {} out of range (0-2)", val); return false; }
+    strikes = val; return true;
+}
+
+bool MSB_QuickMatchState::SetBalls(uint32_t val)
+{
+    if (val > 3) { WARN_LOG_FMT(COMMON, "SetBalls: {} out of range (0-3)", val); return false; }
+    balls = val; return true;
+}
+
+bool MSB_QuickMatchState::SetOuts(uint32_t val)
+{
+    if (val > 2) { WARN_LOG_FMT(COMMON, "SetOuts: {} out of range (0-2)", val); return false; }
+    outs = val; return true;
+}
+
+bool MSB_QuickMatchState::SetIsStarChance(uint8_t val)
+{
+    if (val > 1) { WARN_LOG_FMT(COMMON, "SetIsStarChance: {} must be 0 (off) or 1 (on)", val); return false; }
+    isStarChance = val; return true;
+}
+
+bool MSB_QuickMatchState::SetRunner(int base, uint8_t battingSlot, std::optional<bool> useP1)
+{
+    if (base < 0 || base > 2)
+    { WARN_LOG_FMT(COMMON, "SetRunner: base {} out of range (0=1B,1=2B,2=3B)", base); return false; }
+    if (battingSlot > 8)
+    { WARN_LOG_FMT(COMMON, "SetRunner: battingSlot {} out of range (0-8)", battingSlot); return false; }
+
+    bool teamIsP1;
+    if (useP1.has_value())
+    {
+        teamIsP1 = useP1.value();
+    }
+    else if (halfInning.has_value())
+    {
+        bool awayIsBatting = (halfInning.value() == 0);
+        teamIsP1 = (awayIsBatting == p1IsAway);
+    }
+    else
+    {
+        WARN_LOG_FMT(COMMON, "SetRunner: halfInning not set and useP1 not specified; cannot determine batting team");
+        return false;
+    }
+
+    const MSB_Team& team = teamIsP1 ? p1 : p2;
+    const MSB_Player* player = team.GetPlayerByBattingSlot(battingSlot);
+    if (player == nullptr || !player->charID.has_value() || !player->position.has_value())
+    {
+        WARN_LOG_FMT(COMMON, "SetRunner: no complete player found at battingSlot {} in {}", battingSlot, teamIsP1 ? "P1" : "P2");
+        return false;
+    }
+
+    runnerRosterSpot[base]   = player->position.value();
+    runnerCharacterID[base]  = player->charID.value();
+    return true;
+}
+
+bool MSB_QuickMatchState::Validate() const
+{
+    bool valid = true;
+
+    valid &= p1.Validate("P1");
+    valid &= p2.Validate("P2");
+
+    if (stadium.has_value() && stadium.value() > 5)
+    { ERROR_LOG_FMT(COMMON, "stadium {} out of range (0-5); Toy Field unsupported", stadium.value()); valid = false; }
+    if (firstBatter.has_value() && firstBatter.value() > 1)
+    { ERROR_LOG_FMT(COMMON, "firstBatter {} must be 0 (P1) or 1 (P2)", firstBatter.value()); valid = false; }
+    if (starSkills.has_value() && starSkills.value() > 1)
+    { ERROR_LOG_FMT(COMMON, "starSkills {} must be 0 (off) or 1 (on)", starSkills.value()); valid = false; }
+    if (inningsSelected.has_value())
+    {
+        if (inningsSelected.value() == 0)
+        { ERROR_LOG_FMT(COMMON, "inningsSelected must be at least 1"); valid = false; }
+        else if (inningsSelected.value() % 2 == 0)
+            WARN_LOG_FMT(COMMON, "inningsSelected {} is even; result will be {}", inningsSelected.value(), inningsSelected.value() - 1);
+    }
+    if (mercy.has_value() && mercy.value() > 1)
+    { ERROR_LOG_FMT(COMMON, "mercy {} must be 0 (off) or 1 (on)", mercy.value()); valid = false; }
+
+    if (inning.has_value() && inning.value() > 18)
+    { ERROR_LOG_FMT(COMMON, "inning {} exceeds max (18)", inning.value()); valid = false; }
+    if (halfInning.has_value() && halfInning.value() > 1)
+    { ERROR_LOG_FMT(COMMON, "halfInning {} must be 0 (top) or 1 (bottom)", halfInning.value()); valid = false; }
+    if (battingTeam.has_value() && battingTeam.value() > 1)
+    { ERROR_LOG_FMT(COMMON, "battingTeam {} must be 0 or 1", battingTeam.value()); valid = false; }
+    if (fieldingTeam.has_value() && fieldingTeam.value() > 1)
+    { ERROR_LOG_FMT(COMMON, "fieldingTeam {} must be 0 or 1", fieldingTeam.value()); valid = false; }
+
+    if (strikes.has_value() && strikes.value() > 2)
+    { ERROR_LOG_FMT(COMMON, "strikes {} out of range (0-2)", strikes.value()); valid = false; }
+    if (balls.has_value() && balls.value() > 3)
+    { ERROR_LOG_FMT(COMMON, "balls {} out of range (0-3)", balls.value()); valid = false; }
+    if (outs.has_value() && outs.value() > 2)
+    { ERROR_LOG_FMT(COMMON, "outs {} out of range (0-2)", outs.value()); valid = false; }
+    if (isStarChance.has_value() && isStarChance.value() > 1)
+    { ERROR_LOG_FMT(COMMON, "isStarChance {} must be 0 (off) or 1 (on)", isStarChance.value()); valid = false; }
+
+    for (int i = 0; i < 3; i++)
+    {
+        if (runnerRosterSpot[i].has_value() && runnerRosterSpot[i].value() > 8)
+        { ERROR_LOG_FMT(COMMON, "runnerRosterSpot[{}] {} out of range (0-8)", i, runnerRosterSpot[i].value()); valid = false; }
+        if (runnerCharacterID[i].has_value() && runnerCharacterID[i].value() > 0x35)
+        { ERROR_LOG_FMT(COMMON, "runnerCharacterID[{}] {} exceeds max (0x35=53)", i, runnerCharacterID[i].value()); valid = false; }
+    }
+
+    return valid;
+}
+
 void GenerateRosterGeckoCodes(
     const std::optional<uint8_t> charactersByPosition[9],
     uint32_t rosterBaseAddress,
