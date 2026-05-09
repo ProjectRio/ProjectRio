@@ -44,7 +44,6 @@ public:
     Golf,
   };
 
-private:
   struct PackInfo
   {
     std::string folder_name;     // identifier persisted in config
@@ -57,6 +56,7 @@ private:
     bool is_builtin = false;     // lives under Sys/ rather than User/
   };
 
+private:
   void BuildLayout();
   void ScanAvailablePacks();
   void PopulateAvailableTree();
