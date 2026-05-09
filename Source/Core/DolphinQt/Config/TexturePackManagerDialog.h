@@ -28,7 +28,6 @@ class TexturePackManagerDialog final : public QDialog
 public:
   explicit TexturePackManagerDialog(QWidget* parent = nullptr);
 
-private:
   enum class Category
   {
     Stadium,
@@ -45,6 +44,7 @@ private:
     Golf,
   };
 
+private:
   struct PackInfo
   {
     std::string folder_name;     // identifier persisted in config
