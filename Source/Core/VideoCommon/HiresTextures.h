@@ -55,6 +55,12 @@ std::string TexturePackGameToString(TexturePackGame g);
 // doesn't match either supported game (the loader then disables the filter).
 TexturePackGame DetectCurrentTexturePackGame(const std::string& game_id);
 
+// User-side override store for pack game tags. Lets the UI tag built-in (Sys/) packs that
+// can't have their pack.json edited in place. Overrides win over pack.json when both exist.
+// Returns Any if no override is set. Pass Any to clear the override.
+TexturePackGame ReadPackGameOverride(const std::string& pack_name);
+bool WritePackGameOverride(const std::string& pack_name, TexturePackGame tag);
+
 class HiresTexture
 {
 public:

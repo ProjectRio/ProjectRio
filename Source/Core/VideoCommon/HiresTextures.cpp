@@ -114,24 +114,40 @@ void HiresTexture::Update()
 
   const TexturePackGame current_game = DetectCurrentTexturePackGame(game_id);
   const std::vector<std::string> active_packs = GetActiveTexturePacks();
+  std::vector<std::string> skipped_for_game;
+  std::vector<std::string> missing_packs;
   for (const auto& pack_name : active_packs)
   {
     const std::string pack_root = ResolveTexturePackPath(pack_name);
     if (pack_root.empty())
-      continue;  // Pack folder no longer exists; silently skip.
+    {
+      missing_packs.push_back(pack_name);
+      continue;
+    }
 
-    // Game filter: if the pack declares a game and it doesn't match the running one, skip it.
-    // Packs that don't declare a game (Any) load for any title. We also skip the filter when the
-    // running game itself isn't one we recognize, to avoid hiding everything in unsupported titles.
+    // Game filter: if the pack declares a game (via override or pack.json) and it doesn't match
+    // the running one, skip it. Packs that don't declare a game (Any) load for any title. We
+    // also skip the filter when the running game itself isn't one we recognize, to avoid hiding
+    // everything in unsupported titles.
     if (current_game != TexturePackGame::Any)
     {
-      const TexturePackGame pack_game = ReadPackDeclaredGame(pack_root);
+      TexturePackGame pack_game = ReadPackGameOverride(pack_name);
+      if (pack_game == TexturePackGame::Any)
+        pack_game = ReadPackDeclaredGame(pack_root);
       if (pack_game != TexturePackGame::Any && pack_game != current_game)
+      {
+        skipped_for_game.push_back(pack_name);
         continue;
+      }
     }
 
     texture_directories.push_back(pack_root);
+    INFO_LOG_FMT(VIDEO, "Texture pack active: '{}' -> {}", pack_name, pack_root);
   }
+  for (const auto& name : missing_packs)
+    WARN_LOG_FMT(VIDEO, "Texture pack '{}' could not be resolved (folder missing).", name);
+  for (const auto& name : skipped_for_game)
+    INFO_LOG_FMT(VIDEO, "Texture pack '{}' skipped: declared for a different game.", name);
 
   // Lowest-priority fallback: User/Load/Textures/<game_id>/ (and gameid.txt subfolders).
   const std::set<std::string> custom_dirs =
@@ -473,4 +489,59 @@ static TexturePackGame ReadPackDeclaredGame(const std::string& pack_root)
   if (it == obj.end() || !it->second.is<std::string>())
     return TexturePackGame::Any;
   return ParseTexturePackGame(it->second.get<std::string>());
+}
+
+namespace
+{
+// User-side override dir for tagging built-in packs whose pack.json can't be edited in place.
+std::string PackOverrideDir()
+{
+  return File::GetUserPath(D_USER_IDX) + "TexturePackOverrides" + DIR_SEP;
+}
+
+std::string PackOverridePath(const std::string& pack_name)
+{
+  return PackOverrideDir() + pack_name + ".json";
+}
+}  // namespace
+
+TexturePackGame ReadPackGameOverride(const std::string& pack_name)
+{
+  if (pack_name.empty())
+    return TexturePackGame::Any;
+  std::ifstream in(PackOverridePath(pack_name));
+  if (!in.good())
+    return TexturePackGame::Any;
+  std::stringstream buffer;
+  buffer << in.rdbuf();
+  picojson::value parsed;
+  if (!picojson::parse(parsed, buffer.str()).empty() || !parsed.is<picojson::object>())
+    return TexturePackGame::Any;
+  const auto& obj = parsed.get<picojson::object>();
+  auto it = obj.find("game");
+  if (it == obj.end() || !it->second.is<std::string>())
+    return TexturePackGame::Any;
+  return ParseTexturePackGame(it->second.get<std::string>());
+}
+
+bool WritePackGameOverride(const std::string& pack_name, TexturePackGame tag)
+{
+  if (pack_name.empty())
+    return false;
+  const std::string path = PackOverridePath(pack_name);
+  if (tag == TexturePackGame::Any)
+  {
+    // Clear the override: delete the file if it exists.
+    if (File::Exists(path))
+      File::Delete(path);
+    return true;
+  }
+  File::CreateFullPath(PackOverrideDir());
+  picojson::object obj;
+  obj["game"] = picojson::value(TexturePackGameToString(tag));
+  std::ofstream out(path, std::ios::trunc);
+  if (!out.good())
+    return false;
+  out << picojson::value(obj).serialize(/*prettify=*/true);
+  return out.good();
 }
