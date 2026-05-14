@@ -12,13 +12,14 @@
 #include <QAction>
 #include <QBrush>
 #include <QDesktopServices>
-#include <QDialogButtonBox>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
+#include <QPainter>
+#include <QPixmap>
 #include <QPushButton>
 #include <QSizePolicy>
 #include <QTreeWidget>
@@ -79,6 +80,88 @@ TexturePackManagerDialog::Category ParseCategory(const std::string& s)
   return Category::Uncategorized;
 }
 
+std::string CategoryToString(TexturePackManagerDialog::Category c)
+{
+  using Category = TexturePackManagerDialog::Category;
+  switch (c)
+  {
+  case Category::Stadium:
+    return "stadium";
+  case Category::Character:
+    return "character";
+  case Category::Logo:
+    return "logo";
+  case Category::Misc:
+    return "misc";
+  case Category::Uncategorized:
+  default:
+    return "";
+  }
+}
+
+// Colors chosen to be distinguishable on both light and dark Qt palettes. Kept muted so they
+// read as tags rather than alerts. Returned color is always opaque.
+QColor CategoryColor(TexturePackManagerDialog::Category c)
+{
+  using Category = TexturePackManagerDialog::Category;
+  switch (c)
+  {
+  case Category::Stadium:
+    return QColor(0x4C, 0xAF, 0x50);  // green
+  case Category::Character:
+    return QColor(0xFF, 0x98, 0x00);  // orange
+  case Category::Logo:
+    return QColor(0x21, 0x96, 0xF3);  // blue
+  case Category::Misc:
+    return QColor(0x9E, 0x9E, 0x9E);  // gray
+  case Category::Uncategorized:
+  default:
+    return QColor(0xBD, 0xBD, 0xBD);  // light gray
+  }
+}
+
+QColor GameColor(TexturePackManagerDialog::GameTag g)
+{
+  switch (g)
+  {
+  case TexturePackManagerDialog::GameTag::Baseball:
+    return QColor(0xE5, 0x39, 0x35);  // red
+  case TexturePackManagerDialog::GameTag::Golf:
+    return QColor(0xFF, 0xC1, 0x07);  // amber
+  case TexturePackManagerDialog::GameTag::Any:
+  default:
+    return QColor();  // invalid -> caller skips drawing
+  }
+}
+
+// Builds a small two-tone tag icon: left half = category color, right half = game color
+// (omitted when game is Any). 22x14 fits the default Qt row height without inflating it.
+QIcon MakeTagsIcon(TexturePackManagerDialog::Category cat, TexturePackManagerDialog::GameTag game)
+{
+  constexpr int kWidth = 22;
+  constexpr int kHeight = 14;
+  constexpr int kGap = 2;
+  QPixmap pix(kWidth, kHeight);
+  pix.fill(Qt::transparent);
+  QPainter p(&pix);
+  p.setRenderHint(QPainter::Antialiasing, true);
+
+  const int half_w = (kWidth - kGap) / 2;
+
+  // Category swatch (always drawn).
+  p.setPen(Qt::NoPen);
+  p.setBrush(CategoryColor(cat));
+  p.drawRoundedRect(0, 0, half_w, kHeight, 3, 3);
+
+  // Game swatch (only when set).
+  if (game != TexturePackManagerDialog::GameTag::Any)
+  {
+    p.setBrush(GameColor(game));
+    p.drawRoundedRect(half_w + kGap, 0, half_w, kHeight, 3, 3);
+  }
+  return QIcon(pix);
+}
+
 TexturePackManagerDialog::GameTag GameTagFromHires(TexturePackGame g)
 {
   switch (g)
@@ -107,28 +190,37 @@ TexturePackGame HiresFromGameTag(TexturePackManagerDialog::GameTag g)
   }
 }
 
-QString GameTagSuffix(TexturePackManagerDialog::GameTag g)
-{
-  switch (g)
-  {
-  case TexturePackManagerDialog::GameTag::Baseball:
-    return QObject::tr("  [Baseball]");
-  case TexturePackManagerDialog::GameTag::Golf:
-    return QObject::tr("  [Golf]");
-  case TexturePackManagerDialog::GameTag::Any:
-  default:
-    return QString();
-  }
-}
-
-// Single source of truth for how a pack name is rendered in either pane.
+// Single source of truth for how a pack name is rendered in either pane. Game/category info
+// is conveyed primarily via the row icon (see MakeTagsIcon); the text suffix is omitted to
+// keep the row compact.
 QString MakeItemLabel(const TexturePackManagerDialog::PackInfo& info)
 {
   QString label = QString::fromStdString(info.display_name);
   if (info.is_builtin)
     label += QObject::tr(" (built-in)");
-  label += GameTagSuffix(info.game);
   return label;
+}
+
+// Human-readable game name for tooltips.
+QString GameDisplayName(TexturePackManagerDialog::GameTag g)
+{
+  switch (g)
+  {
+  case TexturePackManagerDialog::GameTag::Baseball:
+    return QObject::tr("Baseball");
+  case TexturePackManagerDialog::GameTag::Golf:
+    return QObject::tr("Golf");
+  case TexturePackManagerDialog::GameTag::Any:
+  default:
+    return QObject::tr("Any");
+  }
+}
+
+QString MakeTagTooltipLine(const TexturePackManagerDialog::PackInfo& info)
+{
+  return QObject::tr("Category: %1 • Game: %2")
+      .arg(CategoryLabel(info.category))
+      .arg(GameDisplayName(info.game));
 }
 
 bool IsValidPackFolderName(const std::string& name)
@@ -151,6 +243,97 @@ std::string ClampString(std::string s, size_t max_len)
   if (s.size() > max_len)
     s.resize(max_len);
   return s;
+}
+
+// Path used for user-side overrides (mirrors HiresTextures.cpp's PackOverridePath but for
+// category, which only the dialog cares about). Lives in the same JSON file so a single pack
+// has one override blob.
+std::string PackOverridePathForDialog(const std::string& pack_name)
+{
+  return File::GetUserPath(D_USER_IDX) + "TexturePackOverrides" + DIR_SEP + pack_name + ".json";
+}
+
+picojson::object ReadOverrideObject(const std::string& pack_name)
+{
+  picojson::object obj;
+  std::ifstream in(PackOverridePathForDialog(pack_name));
+  if (!in.good())
+    return obj;
+  std::stringstream buffer;
+  buffer << in.rdbuf();
+  picojson::value parsed;
+  if (picojson::parse(parsed, buffer.str()).empty() && parsed.is<picojson::object>())
+    obj = parsed.get<picojson::object>();
+  return obj;
+}
+
+bool WriteOverrideObject(const std::string& pack_name, const picojson::object& obj)
+{
+  const std::string path = PackOverridePathForDialog(pack_name);
+  if (obj.empty())
+  {
+    if (File::Exists(path))
+      File::Delete(path);
+    return true;
+  }
+  File::CreateFullPath(File::GetUserPath(D_USER_IDX) + "TexturePackOverrides" + DIR_SEP);
+  std::ofstream out(path, std::ios::trunc);
+  if (!out.good())
+    return false;
+  out << picojson::value(obj).serialize(/*prettify=*/true);
+  return out.good();
+}
+
+TexturePackManagerDialog::Category ReadCategoryOverride(const std::string& pack_name)
+{
+  const picojson::object obj = ReadOverrideObject(pack_name);
+  auto it = obj.find("category");
+  if (it == obj.end() || !it->second.is<std::string>())
+    return TexturePackManagerDialog::Category::Uncategorized;
+  return ParseCategory(it->second.get<std::string>());
+}
+
+bool WriteCategoryOverride(const std::string& pack_name,
+                           TexturePackManagerDialog::Category cat)
+{
+  picojson::object obj = ReadOverrideObject(pack_name);
+  const std::string cat_str = CategoryToString(cat);
+  if (cat_str.empty())
+    obj.erase("category");
+  else
+    obj["category"] = picojson::value(cat_str);
+  return WriteOverrideObject(pack_name, obj);
+}
+
+// Writes a category into a *user* pack's pack.json. Built-ins go through WriteCategoryOverride.
+bool WriteCategoryToManifest(const std::string& pack_root,
+                             TexturePackManagerDialog::Category cat)
+{
+  if (pack_root.empty())
+    return false;
+  const std::string manifest_path = pack_root + DIR_SEP + "pack.json";
+  picojson::object obj;
+  {
+    std::ifstream in(manifest_path);
+    if (in.good())
+    {
+      std::stringstream buffer;
+      buffer << in.rdbuf();
+      picojson::value parsed;
+      if (picojson::parse(parsed, buffer.str()).empty() && parsed.is<picojson::object>())
+        obj = parsed.get<picojson::object>();
+    }
+  }
+  const std::string cat_str = CategoryToString(cat);
+  if (cat_str.empty())
+    obj.erase("category");
+  else
+    obj["category"] = picojson::value(cat_str);
+  std::ofstream out(manifest_path, std::ios::trunc);
+  if (!out.good())
+    return false;
+  out << picojson::value(obj).serialize(/*prettify=*/true);
+  return out.good();
 }
 
 void ScanRoot(const std::string& root, bool is_builtin,
@@ -208,10 +391,26 @@ void ScanRoot(const std::string& root, bool is_builtin,
       }
     }
 
-    // User-side override wins over manifest (and is the only way to tag built-ins).
-    const TexturePackGame override_tag = ReadPackGameOverride(folder_name);
-    if (override_tag != TexturePackGame::Any)
-      info.game = GameTagFromHires(override_tag);
+    // Built-in defaults apply when neither pack.json nor override sets the field. Currently
+    // all built-ins are Baseball stadium themes (see GetBuiltinDefaultGame).
+    if (is_builtin)
+    {
+      if (info.game == TexturePackManagerDialog::GameTag::Any)
+        info.game = GameTagFromHires(GetBuiltinDefaultGame(folder_name));
+      if (info.category == TexturePackManagerDialog::Category::Uncategorized &&
+          GetBuiltinDefaultGame(folder_name) != TexturePackGame::Any)
+      {
+        info.category = TexturePackManagerDialog::Category::Stadium;
+      }
+    }
+
+    // User-side overrides win over both manifest and built-in defaults.
+    const TexturePackGame override_game = ReadPackGameOverride(folder_name);
+    if (override_game != TexturePackGame::Any)
+      info.game = GameTagFromHires(override_game);
+    const TexturePackManagerDialog::Category override_cat = ReadCategoryOverride(folder_name);
+    if (override_cat != TexturePackManagerDialog::Category::Uncategorized)
+      info.category = override_cat;
 
     out.emplace(folder_name, std::move(info));
   }
@@ -321,8 +520,9 @@ void TexturePackManagerDialog::BuildLayout()
   mid_buttons_layout->setSpacing(6);
   m_add_button = new QPushButton(tr("Add →"));
   m_remove_button = new QPushButton(tr("← Remove"));
-  m_add_button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-  m_remove_button->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+  // Both buttons expand horizontally to fill the gap column so they're identical width.
+  m_add_button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  m_remove_button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
   mid_buttons_layout->addStretch();
   mid_buttons_layout->addWidget(m_add_button);
   mid_buttons_layout->addWidget(m_remove_button);
@@ -335,10 +535,18 @@ void TexturePackManagerDialog::BuildLayout()
   m_active_list->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_active_list->setContextMenuPolicy(Qt::CustomContextMenu);
   m_active_list->setMinimumWidth(300);
+  // Enable drag-and-drop reorder within the active list. Internal move keeps semantics tight:
+  // items can be reordered but neither moved out nor accept drops from elsewhere.
+  m_active_list->setDragDropMode(QAbstractItemView::InternalMove);
+  m_active_list->setDefaultDropAction(Qt::MoveAction);
   connect(m_active_list, &QListWidget::customContextMenuRequested, this,
           &TexturePackManagerDialog::OnActiveContextMenu);
   connect(m_active_list, &QListWidget::itemDoubleClicked, this,
           [this](QListWidgetItem*) { OnRemoveSelected(); });
+  // QListWidget emits this signal after an internal-move drag completes; keep the inline
+  // notice in sync with the new order.
+  connect(m_active_list->model(), &QAbstractItemModel::rowsMoved, this,
+          [this] { UpdateInlineNotice(); });
   active_layout->addWidget(m_active_list);
 
   auto* active_buttons_layout = new QHBoxLayout;
@@ -445,8 +653,9 @@ void TexturePackManagerDialog::PopulateAvailableTree()
 
     auto* item = new QTreeWidgetItem(category_nodes[info.category], {MakeItemLabel(info)});
     item->setData(0, kPackInfoRole, QString::fromStdString(info.folder_name));
+    item->setIcon(0, MakeTagsIcon(info.category, info.game));
 
-    QString tooltip;
+    QString tooltip = MakeTagTooltipLine(info) + QStringLiteral("\n");
     if (!info.author.empty())
       tooltip += tr("Author: %1\n").arg(QString::fromStdString(info.author));
     if (!info.description.empty())
@@ -460,8 +669,7 @@ void TexturePackManagerDialog::PopulateAvailableTree()
       tooltip += tr("Not loaded for the running game.");
     }
 
-    if (!tooltip.isEmpty())
-      item->setToolTip(0, tooltip);
+    item->setToolTip(0, tooltip.trimmed());
   }
 
   // Hide empty category nodes for cleaner display.
@@ -497,13 +705,18 @@ void TexturePackManagerDialog::PopulateActiveListFromConfig()
 
     auto* item = new QListWidgetItem(label, m_active_list);
     item->setData(kPackInfoRole, QString::fromStdString(folder_name));
+    if (info)
+    {
+      item->setIcon(MakeTagsIcon(info->category, info->game));
+      item->setToolTip(MakeTagTooltipLine(*info));
+    }
 
     const bool mismatched = current_game != GameTag::Any && pack_game != GameTag::Any &&
                             pack_game != current_game;
     if (mismatched)
     {
       item->setForeground(QBrush(palette().color(QPalette::Disabled, QPalette::Text)));
-      item->setToolTip(tr("Not loaded for the running game."));
+      item->setToolTip(item->toolTip() + tr("\nNot loaded for the running game."));
     }
     else if (!info)
     {
@@ -550,13 +763,24 @@ void TexturePackManagerDialog::OnAddSelected()
       continue;
 
     QString label;
+    const PackInfo* info = nullptr;
     if (auto it = by_folder.find(folder); it != by_folder.end())
-      label = MakeItemLabel(*it->second);
+    {
+      info = it->second;
+      label = MakeItemLabel(*info);
+    }
     else
+    {
       label = folder_qs;
+    }
 
     auto* row = new QListWidgetItem(label, m_active_list);
     row->setData(kPackInfoRole, folder_qs);
+    if (info)
+    {
+      row->setIcon(MakeTagsIcon(info->category, info->game));
+      row->setToolTip(MakeTagTooltipLine(*info));
+    }
     already_active.insert(folder);
   }
   PopulateAvailableTree();
@@ -607,12 +831,23 @@ void TexturePackManagerDialog::OnRefresh()
   for (const std::string& folder_name : current_active)
   {
     QString label;
+    const PackInfo* info = nullptr;
     if (auto it = by_folder.find(folder_name); it != by_folder.end())
-      label = MakeItemLabel(*it->second);
+    {
+      info = it->second;
+      label = MakeItemLabel(*info);
+    }
     else
+    {
       label = QString::fromStdString(folder_name) + tr(" (missing)");
+    }
     auto* item = new QListWidgetItem(label, m_active_list);
     item->setData(kPackInfoRole, QString::fromStdString(folder_name));
+    if (info)
+    {
+      item->setIcon(MakeTagsIcon(info->category, info->game));
+      item->setToolTip(MakeTagTooltipLine(*info));
+    }
   }
   PopulateAvailableTree();
   UpdateInlineNotice();
@@ -690,27 +925,45 @@ void TexturePackManagerDialog::ShowPackContextMenu(const std::string& folder_nam
   }
 
   QMenu menu(this);
-  QMenu* game_menu = menu.addMenu(tr("Set Game"));
   // Built-ins now editable too: tag is stored in a User-side override file.
   const bool can_edit = info != nullptr;
-  const GameTag current = info ? info->game : GameTag::Any;
 
-  auto add = [&](const QString& label, GameTag tag) {
+  // Set Category submenu.
+  QMenu* category_menu = menu.addMenu(tr("Set Category"));
+  const Category current_cat = info ? info->category : Category::Uncategorized;
+  auto add_category = [&](const QString& label, Category cat) {
+    auto* action = category_menu->addAction(label);
+    action->setCheckable(true);
+    action->setChecked(current_cat == cat);
+    action->setEnabled(can_edit);
+    connect(action, &QAction::triggered, this,
+            [this, folder_name, cat] { SetPackCategory(folder_name, cat); });
+  };
+  add_category(tr("Auto (uncategorized)"), Category::Uncategorized);
+  add_category(CategoryLabel(Category::Stadium), Category::Stadium);
+  add_category(CategoryLabel(Category::Character), Category::Character);
+  add_category(CategoryLabel(Category::Logo), Category::Logo);
+  add_category(CategoryLabel(Category::Misc), Category::Misc);
+
+  // Set Game submenu.
+  QMenu* game_menu = menu.addMenu(tr("Set Game"));
+  const GameTag current_game = info ? info->game : GameTag::Any;
+  auto add_game = [&](const QString& label, GameTag tag) {
     auto* action = game_menu->addAction(label);
     action->setCheckable(true);
-    action->setChecked(current == tag);
+    action->setChecked(current_game == tag);
     action->setEnabled(can_edit);
     connect(action, &QAction::triggered, this,
             [this, folder_name, tag] { SetPackGameTag(folder_name, tag); });
   };
-  add(tr("Auto (any)"), GameTag::Any);
-  add(tr("Baseball"), GameTag::Baseball);
-  add(tr("Golf"), GameTag::Golf);
+  add_game(tr("Auto (any)"), GameTag::Any);
+  add_game(tr("Baseball"), GameTag::Baseball);
+  add_game(tr("Golf"), GameTag::Golf);
 
   if (info && info->is_builtin)
   {
     menu.addSeparator();
-    auto* note = menu.addAction(tr("Built-in pack — tag stored as user override"));
+    auto* note = menu.addAction(tr("Built-in pack — tags stored as user overrides"));
     note->setEnabled(false);
   }
 
@@ -748,6 +1001,41 @@ void TexturePackManagerDialog::SetPackGameTag(const std::string& folder_name, Ga
   {
     QMessageBox::warning(this, tr("Texture Pack Manager"),
                          tr("Failed to update game tag for \"%1\".")
+                             .arg(QString::fromStdString(info->display_name)));
+    return;
+  }
+
+  OnRefresh();
+}
+
+void TexturePackManagerDialog::SetPackCategory(const std::string& folder_name, Category cat)
+{
+  const PackInfo* info = nullptr;
+  for (const auto& p : m_available_packs)
+  {
+    if (p.folder_name == folder_name)
+    {
+      info = &p;
+      break;
+    }
+  }
+  if (!info)
+    return;
+
+  bool ok = false;
+  if (info->is_builtin)
+  {
+    ok = WriteCategoryOverride(folder_name, cat);
+  }
+  else if (!info->absolute_path.empty())
+  {
+    ok = WriteCategoryToManifest(info->absolute_path, cat);
+  }
+
+  if (!ok)
+  {
+    QMessageBox::warning(this, tr("Texture Pack Manager"),
+                         tr("Failed to update category for \"%1\".")
                              .arg(QString::fromStdString(info->display_name)));
     return;
   }

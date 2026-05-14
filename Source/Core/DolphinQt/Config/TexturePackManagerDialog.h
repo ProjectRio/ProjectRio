@@ -73,6 +73,7 @@ private:
   void OnActiveContextMenu(const QPoint& point);
   void ShowPackContextMenu(const std::string& folder_name, const QPoint& global_pos);
   void SetPackGameTag(const std::string& folder_name, GameTag tag);
+  void SetPackCategory(const std::string& folder_name, Category cat);
 
   GameTag CurrentEmulatedGame() const;  // Returns Any if not running or unknown.
 

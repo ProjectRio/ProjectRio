@@ -131,9 +131,12 @@ void HiresTexture::Update()
     // everything in unsupported titles.
     if (current_game != TexturePackGame::Any)
     {
+      // Resolution order: explicit override > pack.json > hardcoded built-in default.
       TexturePackGame pack_game = ReadPackGameOverride(pack_name);
       if (pack_game == TexturePackGame::Any)
         pack_game = ReadPackDeclaredGame(pack_root);
+      if (pack_game == TexturePackGame::Any)
+        pack_game = GetBuiltinDefaultGame(pack_name);
       if (pack_game != TexturePackGame::Any && pack_game != current_game)
       {
         skipped_for_game.push_back(pack_name);
@@ -529,19 +532,53 @@ bool WritePackGameOverride(const std::string& pack_name, TexturePackGame tag)
   if (pack_name.empty())
     return false;
   const std::string path = PackOverridePath(pack_name);
-  if (tag == TexturePackGame::Any)
+
+  // Read-modify-write so we don't clobber other override keys (e.g. category) set by the UI.
+  picojson::object obj;
   {
-    // Clear the override: delete the file if it exists.
+    std::ifstream in(path);
+    if (in.good())
+    {
+      std::stringstream buffer;
+      buffer << in.rdbuf();
+      picojson::value parsed;
+      if (picojson::parse(parsed, buffer.str()).empty() && parsed.is<picojson::object>())
+        obj = parsed.get<picojson::object>();
+    }
+  }
+
+  if (tag == TexturePackGame::Any)
+    obj.erase("game");
+  else
+    obj["game"] = picojson::value(TexturePackGameToString(tag));
+
+  // If the resulting object is empty, just delete the file rather than leaving a stub.
+  if (obj.empty())
+  {
     if (File::Exists(path))
       File::Delete(path);
     return true;
   }
+
   File::CreateFullPath(PackOverrideDir());
-  picojson::object obj;
-  obj["game"] = picojson::value(TexturePackGameToString(tag));
   std::ofstream out(path, std::ios::trunc);
   if (!out.good())
     return false;
   out << picojson::value(obj).serialize(/*prettify=*/true);
   return out.good();
+}
+
+TexturePackGame GetBuiltinDefaultGame(const std::string& pack_name)
+{
+  // All currently shipped built-ins are Mario Superstar Baseball stadium/UI themes.
+  // Update this list when new built-ins are added.
+  static const char* const kBaseballBuiltins[] = {
+      "Purple Theme", "Cyan Theme", "Golden Theme", "Red Theme", "Candy Land Theme",
+  };
+  for (const char* name : kBaseballBuiltins)
+  {
+    if (pack_name == name)
+      return TexturePackGame::Baseball;
+  }
+  return TexturePackGame::Any;
 }

@@ -61,6 +61,11 @@ TexturePackGame DetectCurrentTexturePackGame(const std::string& game_id);
 TexturePackGame ReadPackGameOverride(const std::string& pack_name);
 bool WritePackGameOverride(const std::string& pack_name, TexturePackGame tag);
 
+// Returns the hardcoded default game tag for a known built-in pack folder name. The current
+// shipped built-ins are all stadium themes for Mario Superstar Baseball; returns Any for any
+// pack not in that list. Used as a fallback when no override or pack.json declares a game.
+TexturePackGame GetBuiltinDefaultGame(const std::string& pack_name);
+
 class HiresTexture
 {
 public:
