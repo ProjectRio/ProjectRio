@@ -12,6 +12,8 @@
 #include "Core/GeckoCodeConfig.h"
 #include "Core/MSB_StatTracker.h"
 
+bool menuInputRestrictionEnabled = true; // default to on, but for some debugging contexts can be set to false.
+
 static Gecko::GeckoCode::Code ToGeckoCode(uint8_t geckoType, uint32_t address, uint32_t value)
 {
     std::ostringstream oss;
@@ -574,7 +576,7 @@ void GenerateBattingOrderScreenGeckoCodes(
         GenerateSuperstarGeckoCodes(state, p1IsAway, outCodes);
 
     // prevent movement if all inputs provided
-    if (basicInputsValidated && handednessInputsValidated && superstarInputsValidated)
+    if (basicInputsValidated && handednessInputsValidated && superstarInputsValidated && menuInputRestrictionEnabled)
     {
         outCodes.push_back(ToGeckoCode(0x04, MSBQuickMatchCodeBuilder::TEAM_MANAGEMENT_UP_PRESS_INSTR_ADDR, 0x48000074));
         outCodes.push_back(ToGeckoCode(0x04, MSBQuickMatchCodeBuilder::TEAM_MANAGEMENT_DOWN_PRESS_INSTR_ADDR, 0x48000074));
@@ -608,7 +610,7 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
                 codes.push_back(ToGeckoCode(0x04, CAPTAIN_CHARACTER_P2_ADDR, state.captainCharacterP2.value()));
         }
 
-        if (state.captainCharacterP1.has_value() && state.captainCharacterP2.has_value())
+        if (state.captainCharacterP1.has_value() && state.captainCharacterP2.has_value() && menuInputRestrictionEnabled)
         {
             // if both captains provided, prevent P1 from selecting the CPU captain when spamming A to avoid an invalid read error.
             codes.push_back(ToGeckoCode(0x04, CAPTAIN_SCREEN_PREVENT_CPU_CAPTAIN_ADDR, CAPTAIN_SCREEN_PREVENT_CPU_CAPTAIN_NEW_INSTR));
@@ -633,7 +635,7 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
             codes);
 
         // if both rosters provided, prevent cursor movement by nop'ing function call.
-        if (state.charactersP1ByPosition[0].has_value() && state.charactersP2ByPosition[0].has_value())
+        if (state.charactersP1ByPosition[0].has_value() && state.charactersP2ByPosition[0].has_value() && menuInputRestrictionEnabled)
             codes.push_back(ToGeckoCode(0x04, CHARACTER_SELECT_PREVENT_CURSOR_MOVEMENT_ADDR, NOP_INSTR));
 
         // generate batting order codes.
@@ -650,8 +652,11 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
                 codes.push_back(ToGeckoCode(0x00, STADIUM_ADDR, val));
 
                 // prevent cursor movement on stadium select screen
-                codes.push_back(ToGeckoCode(0x02, STADIUM_CURSOR_RIGHT_INSTR_ADDR, 0x0000));
-                codes.push_back(ToGeckoCode(0x02, STADIUM_CURSOR_LEFT_INSTR_ADDR, 0x0000));
+                if (menuInputRestrictionEnabled)
+                {
+                    codes.push_back(ToGeckoCode(0x02, STADIUM_CURSOR_RIGHT_INSTR_ADDR, 0x0000));
+                    codes.push_back(ToGeckoCode(0x02, STADIUM_CURSOR_LEFT_INSTR_ADDR, 0x0000));
+                }
             }
         }
 
@@ -701,7 +706,8 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
         if (state.firstBatter.has_value() &&
             state.starSkills.has_value() &&
             state.inningsSelected.has_value() &&
-            state.mercy.has_value()) 
+            state.mercy.has_value() &&
+            menuInputRestrictionEnabled) 
         {
             codes.push_back(ToGeckoCode(0x02, GAME_SETTINGS_CURSOR_RIGHT_INSTR_ADDR, 0x0000));
             codes.push_back(ToGeckoCode(0x02, GAME_SETTINGS_CURSOR_LEFT_INSTR_ADDR, 0x0000));

@@ -1,4 +1,5 @@
 #include "Core/MSB_HUDStateLoader.h"
+#include "Core/MSB_GenerateQuickMatchSetupGeckoCode.h"
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Common/TagSet.h"
@@ -82,10 +83,13 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
                         p1Username, p2Username, awayPlayer, homePlayer);
             return false;
         }
+
+        menuInputRestrictionEnabled = true; // if both players present, restrict menu inputs to prevent accidental desync. 
     }
     // Solo game - just verify P1 player is in the file, P2 slot can be "No Player Selected"
     else
     {
+        menuInputRestrictionEnabled = false; // if solo, don't restrict menu inputs since P1 needs some control on the captain screen. Used for debugging.
         INFO_LOG_FMT(COMMON, "Solo game detected, skipping opponent validation.");
     }
 

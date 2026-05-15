@@ -190,3 +190,5 @@ public:
     static constexpr uint32_t PITCHER_STAMINA_P2_BASE = 0x803536e6;
     static constexpr uint32_t PITCHER_STAMINA_STRIDE = 0x1E;
 };
+
+extern bool menuInputRestrictionEnabled; // enables gecko codes that prevent the user from moving during the menuing.
