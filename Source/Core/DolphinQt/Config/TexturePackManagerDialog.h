@@ -72,7 +72,6 @@ private:
     QPushButton* remove_button = nullptr;
     QPushButton* up_button = nullptr;
     QPushButton* down_button = nullptr;
-    QLabel* inline_notice = nullptr;
     // The active list at dialog-open time, so we can detect "did the user change anything
     // mid-emulation?" and disable Load Custom Textures on Apply when they did.
     std::vector<std::string> initial_active;
@@ -85,7 +84,8 @@ private:
   void PopulateAvailableTree(Tab& tab);
   void PopulateActiveListFromConfig(Tab& tab);
   std::vector<std::string> CurrentActiveOrder(const Tab& tab) const;
-  void UpdateInlineNotice(Tab& tab);
+  // Dialog-level: refreshes the single inline notice based on both tabs' state.
+  void UpdateInlineNotice();
 
   void OnAddSelected(Tab& tab);
   void OnRemoveSelected(Tab& tab);
@@ -110,4 +110,5 @@ private:
 
   ConfigBool* m_load_custom_textures = nullptr;
   ConfigBool* m_prefetch_custom_textures = nullptr;
+  QLabel* m_inline_notice = nullptr;
 };

@@ -24,6 +24,7 @@
 #include <QSizePolicy>
 #include <QStyle>
 #include <QStyledItemDelegate>
+#include <QTimer>
 #include <QTabWidget>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -489,8 +490,7 @@ TexturePackManagerDialog::TexturePackManagerDialog(QWidget* parent) : QDialog(pa
   PopulateAvailableTree(m_golf_tab);
   m_baseball_tab.initial_active = CurrentActiveOrder(m_baseball_tab);
   m_golf_tab.initial_active = CurrentActiveOrder(m_golf_tab);
-  UpdateInlineNotice(m_baseball_tab);
-  UpdateInlineNotice(m_golf_tab);
+  UpdateInlineNotice();
 
   // If a game is running, default to its tab so the user sees the relevant list first.
   const GameTag current = CurrentEmulatedGame();
@@ -520,6 +520,17 @@ void TexturePackManagerDialog::BuildLayout()
                        tr("Mario Superstar Baseball"));
   m_tab_widget->addTab(BuildTab(m_golf_tab, GameTag::Golf), tr("Mario Golf Toadstool Tour"));
   main_layout->addWidget(m_tab_widget, 1);
+
+  // Inline notice. Sits in its own row between the tabs and the bottom buttons so it has a
+  // clearly-bounded slot — no fighting with the tab content area's bottom margin.
+  m_inline_notice = new QLabel;
+  m_inline_notice->setWordWrap(false);
+  m_inline_notice->setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+  m_inline_notice->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  m_inline_notice->setStyleSheet(
+      QStringLiteral("QLabel { color: palette(highlight); padding: 0; margin: 0; }"));
+  m_inline_notice->hide();
+  main_layout->addWidget(m_inline_notice);
 
   // Bottom bar shared across tabs.
   auto* bottom_layout = new QHBoxLayout;
@@ -602,7 +613,7 @@ QWidget* TexturePackManagerDialog::BuildTab(Tab& tab, GameTag game)
   connect(tab.active_list, &QListWidget::itemDoubleClicked, this,
           [this, &tab](QListWidgetItem*) { OnRemoveSelected(tab); });
   connect(tab.active_list->model(), &QAbstractItemModel::rowsMoved, this,
-          [this, &tab] { UpdateInlineNotice(tab); });
+          [this] { UpdateInlineNotice(); });
   active_layout->addWidget(tab.active_list);
 
   auto* active_buttons_layout = new QHBoxLayout;
@@ -618,13 +629,6 @@ QWidget* TexturePackManagerDialog::BuildTab(Tab& tab, GameTag game)
   panes_layout->addLayout(mid_buttons_layout, 0);
   panes_layout->addWidget(active_box, 1);
   outer->addLayout(panes_layout, 1);
-
-  // Per-tab inline notice (emulation-running edit warning).
-  tab.inline_notice = new QLabel;
-  tab.inline_notice->setWordWrap(true);
-  tab.inline_notice->setStyleSheet(QStringLiteral("color: palette(highlight);"));
-  tab.inline_notice->hide();
-  outer->addWidget(tab.inline_notice);
 
   connect(tab.add_button, &QPushButton::clicked, this,
           [this, &tab] { OnAddSelected(tab); });
@@ -744,17 +748,22 @@ std::vector<std::string> TexturePackManagerDialog::CurrentActiveOrder(const Tab&
   return out;
 }
 
-void TexturePackManagerDialog::UpdateInlineNotice(Tab& tab)
+void TexturePackManagerDialog::UpdateInlineNotice()
 {
   const bool emulation_running = Core::GetState() != Core::State::Uninitialized;
-  const bool changed = CurrentActiveOrder(tab) != tab.initial_active;
-  const bool matches_running_game = CurrentEmulatedGame() == tab.game;
-  // Only show the in-emulation warning on the tab whose list actually affects the running
-  // game — changes to the other tab don't disturb the live texture cache.
-  tab.inline_notice->setVisible(emulation_running && changed && matches_running_game);
-  tab.inline_notice->setText(
-      tr("Emulation is running. Applying these changes will turn off Load Custom Textures; "
-         "re-enable it to load the new pack list."));
+  const GameTag running = CurrentEmulatedGame();
+  // Only show the in-emulation warning when the running game's list has actually changed —
+  // edits to the other tab don't disturb the live texture cache.
+  bool running_list_changed = false;
+  if (running == GameTag::Baseball)
+    running_list_changed = CurrentActiveOrder(m_baseball_tab) != m_baseball_tab.initial_active;
+  else if (running == GameTag::Golf)
+    running_list_changed = CurrentActiveOrder(m_golf_tab) != m_golf_tab.initial_active;
+
+  m_inline_notice->setVisible(emulation_running && running_list_changed);
+  m_inline_notice->setText(
+      tr("Emulation is running. Applying will reload the texture cache so the new pack "
+         "order takes effect immediately."));
 }
 
 void TexturePackManagerDialog::OnAddSelected(Tab& tab)
@@ -798,7 +807,7 @@ void TexturePackManagerDialog::OnAddSelected(Tab& tab)
     already_active.insert(folder);
   }
   PopulateAvailableTree(tab);
-  UpdateInlineNotice(tab);
+  UpdateInlineNotice();
 }
 
 void TexturePackManagerDialog::OnRemoveSelected(Tab& tab)
@@ -807,7 +816,7 @@ void TexturePackManagerDialog::OnRemoveSelected(Tab& tab)
   for (QListWidgetItem* item : selected)
     delete tab.active_list->takeItem(tab.active_list->row(item));
   PopulateAvailableTree(tab);
-  UpdateInlineNotice(tab);
+  UpdateInlineNotice();
 }
 
 void TexturePackManagerDialog::OnMoveUp(Tab& tab)
@@ -818,7 +827,7 @@ void TexturePackManagerDialog::OnMoveUp(Tab& tab)
   QListWidgetItem* item = tab.active_list->takeItem(row);
   tab.active_list->insertItem(row - 1, item);
   tab.active_list->setCurrentRow(row - 1);
-  UpdateInlineNotice(tab);
+  UpdateInlineNotice();
 }
 
 void TexturePackManagerDialog::OnMoveDown(Tab& tab)
@@ -829,7 +838,7 @@ void TexturePackManagerDialog::OnMoveDown(Tab& tab)
   QListWidgetItem* item = tab.active_list->takeItem(row);
   tab.active_list->insertItem(row + 1, item);
   tab.active_list->setCurrentRow(row + 1);
-  UpdateInlineNotice(tab);
+  UpdateInlineNotice();
 }
 
 void TexturePackManagerDialog::OnRefresh()
@@ -871,8 +880,7 @@ void TexturePackManagerDialog::OnRefresh()
   rebuild_active(m_golf_tab, golf_active);
   PopulateAvailableTree(m_baseball_tab);
   PopulateAvailableTree(m_golf_tab);
-  UpdateInlineNotice(m_baseball_tab);
-  UpdateInlineNotice(m_golf_tab);
+  UpdateInlineNotice();
 }
 
 void TexturePackManagerDialog::OnOpenFolder()
@@ -893,8 +901,12 @@ void TexturePackManagerDialog::OnApply()
   SetActiveTexturePacks(TexturePackGame::Golf, golf_new);
   Config::Save();
 
-  // If the running game's list changed mid-emulation, force-disable Load Custom Textures so
-  // the change takes effect cleanly when the user re-enables it.
+  // If the running game's list changed mid-emulation, reload the texture cache so the new
+  // pack order takes effect immediately. We do this by briefly toggling GFX_HIRES_TEXTURES
+  // off and then back on: the off-edge triggers HiresTexture::Clear() and a TextureCacheBase
+  // invalidation (dropping bound textures), and the on-edge re-runs HiresTexture::Update()
+  // with the new active list. We defer the on-toggle via the event loop so the video thread
+  // gets a chance to observe the off state — an immediate flip can collapse into a no-op.
   const GameTag running = CurrentEmulatedGame();
   const bool running_list_changed = (running == GameTag::Baseball && baseball_changed) ||
                                     (running == GameTag::Golf && golf_changed);
@@ -902,12 +914,16 @@ void TexturePackManagerDialog::OnApply()
       Config::Get(Config::GFX_HIRES_TEXTURES))
   {
     Config::SetBaseOrCurrent(Config::GFX_HIRES_TEXTURES, false);
+    // 150ms = ~9 frames at 60fps, comfortable margin for the video thread to observe the
+    // off-edge even under stutter. The visible "no custom textures" gap is barely perceptible.
+    QTimer::singleShot(150, this, [] {
+      Config::SetBaseOrCurrent(Config::GFX_HIRES_TEXTURES, true);
+    });
   }
 
   m_baseball_tab.initial_active = baseball_new;
   m_golf_tab.initial_active = golf_new;
-  UpdateInlineNotice(m_baseball_tab);
-  UpdateInlineNotice(m_golf_tab);
+  UpdateInlineNotice();
 }
 
 TexturePackManagerDialog::GameTag TexturePackManagerDialog::CurrentEmulatedGame() const
