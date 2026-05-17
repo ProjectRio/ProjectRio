@@ -220,6 +220,7 @@ void ToolBar::UpdateIcons()
   m_graphics_action->setIcon(Resources::GetThemeIcon("graphics"));
   m_start_netplay_action->setIcon(Resources::GetThemeIcon("wifi"));
   m_view_gecko_codes_action->setIcon(Resources::GetThemeIcon("debugger_add_breakpoint@2x"));
+  m_view_texture_packs_action->setIcon(Resources::GetThemeIcon("brush"));
   m_local_play_action->setIcon(Resources::GetThemeIcon("rio"));
   m_discord_action->setIcon(Resources::GetThemeIcon("discord"));
 }
