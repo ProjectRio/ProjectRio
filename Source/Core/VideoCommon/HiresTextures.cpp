@@ -113,7 +113,13 @@ void HiresTexture::Update()
   std::vector<std::string> texture_directories;
 
   const TexturePackGame current_game = DetectCurrentTexturePackGame(game_id);
-  const std::vector<std::string> active_packs = GetActiveTexturePacks();
+  // Per-game active list. If we can't identify the running game (Any) we skip the user's
+  // pack list entirely and fall back to the User/Load/Textures/<game_id>/ scan below — that
+  // path is the legacy "drop textures in here" workflow and doesn't depend on the new
+  // dialog's per-game state.
+  std::vector<std::string> active_packs;
+  if (current_game != TexturePackGame::Any)
+    active_packs = GetActiveTexturePacks(current_game);
   std::vector<std::string> skipped_for_game;
   std::vector<std::string> missing_packs;
   for (const auto& pack_name : active_packs)
@@ -125,23 +131,14 @@ void HiresTexture::Update()
       continue;
     }
 
-    // Game filter: if the pack declares a game (via override or pack.json) and it doesn't match
-    // the running one, skip it. Packs that don't declare a game (Any) load for any title. We
-    // also skip the filter when the running game itself isn't one we recognize, to avoid hiding
-    // everything in unsupported titles.
-    if (current_game != TexturePackGame::Any)
+    // Game filter still applies: a pack tagged for the other game could end up in this game's
+    // list if the user moved it across after retagging. Skip mismatches so retags take effect
+    // without requiring the user to also prune their lists manually.
+    const TexturePackGame pack_game = ResolvePackGame(pack_name);
+    if (pack_game != TexturePackGame::Any && pack_game != current_game)
     {
-      // Resolution order: explicit override > pack.json > hardcoded built-in default.
-      TexturePackGame pack_game = ReadPackGameOverride(pack_name);
-      if (pack_game == TexturePackGame::Any)
-        pack_game = ReadPackDeclaredGame(pack_root);
-      if (pack_game == TexturePackGame::Any)
-        pack_game = GetBuiltinDefaultGame(pack_name);
-      if (pack_game != TexturePackGame::Any && pack_game != current_game)
-      {
-        skipped_for_game.push_back(pack_name);
-        continue;
-      }
+      skipped_for_game.push_back(pack_name);
+      continue;
     }
 
     texture_directories.push_back(pack_root);
@@ -150,7 +147,7 @@ void HiresTexture::Update()
   for (const auto& name : missing_packs)
     WARN_LOG_FMT(VIDEO, "Texture pack '{}' could not be resolved (folder missing).", name);
   for (const auto& name : skipped_for_game)
-    INFO_LOG_FMT(VIDEO, "Texture pack '{}' skipped: declared for a different game.", name);
+    INFO_LOG_FMT(VIDEO, "Texture pack '{}' skipped: tagged for a different game.", name);
 
   // Lowest-priority fallback: User/Load/Textures/<game_id>/ (and gameid.txt subfolders).
   const std::set<std::string> custom_dirs =
@@ -361,10 +358,17 @@ std::string JoinActivePacksString(const std::vector<std::string>& packs)
   return out;
 }
 
-// One-time migration from the legacy single-value GFX_TEXTURE_PACK setting.
-// Runs at most once per process: if the new list is empty and the legacy key holds a real
-// pack name (not "" or "Custom"), seed the new list and clear the legacy key so this no
-// longer fires on subsequent reads.
+// One-time migration. Runs at most once per process and rolls forward in two steps:
+//
+//   1. Legacy GFX_TEXTURE_PACK (single-value, pre-priority-list) -> GFX_TEXTURE_PACKS_ACTIVE
+//      (flat pipe-delimited list). This is the migration from the very first iteration.
+//
+//   2. GFX_TEXTURE_PACKS_ACTIVE (flat list, all games mixed) -> per-game lists
+//      GFX_TEXTURE_PACKS_BASEBALL and GFX_TEXTURE_PACKS_GOLF. The legacy flat list is copied
+//      into both per-game lists (so packs the user already had set keep working in whichever
+//      game launches next) and then cleared.
+//
+// Either step is skipped if its destination is already populated.
 void MigrateLegacyTexturePackSetting()
 {
   static bool s_migrated = false;
@@ -372,28 +376,50 @@ void MigrateLegacyTexturePackSetting()
     return;
   s_migrated = true;
 
-  const std::string current_active = Config::Get(Config::GFX_TEXTURE_PACKS_ACTIVE);
-  if (!current_active.empty())
-    return;
+  // Step 1: legacy single-pack -> flat list.
+  if (Config::Get(Config::GFX_TEXTURE_PACKS_ACTIVE).empty())
+  {
+    const std::string legacy = Config::Get(Config::GFX_TEXTURE_PACK);
+    if (!legacy.empty() && legacy != "Custom")
+    {
+      Config::SetBaseOrCurrent(Config::GFX_TEXTURE_PACKS_ACTIVE, legacy);
+      Config::SetBaseOrCurrent(Config::GFX_TEXTURE_PACK, std::string{});
+    }
+  }
 
-  const std::string legacy = Config::Get(Config::GFX_TEXTURE_PACK);
-  if (legacy.empty() || legacy == "Custom")
-    return;
+  // Step 2: flat list -> per-game lists. Only runs if BOTH per-game lists are empty (so an
+  // already-migrated user doesn't get their per-game customization clobbered).
+  const std::string flat = Config::Get(Config::GFX_TEXTURE_PACKS_ACTIVE);
+  if (!flat.empty() && Config::Get(Config::GFX_TEXTURE_PACKS_BASEBALL).empty() &&
+      Config::Get(Config::GFX_TEXTURE_PACKS_GOLF).empty())
+  {
+    Config::SetBaseOrCurrent(Config::GFX_TEXTURE_PACKS_BASEBALL, flat);
+    Config::SetBaseOrCurrent(Config::GFX_TEXTURE_PACKS_GOLF, flat);
+    Config::SetBaseOrCurrent(Config::GFX_TEXTURE_PACKS_ACTIVE, std::string{});
+  }
+}
 
-  Config::SetBaseOrCurrent(Config::GFX_TEXTURE_PACKS_ACTIVE, legacy);
-  Config::SetBaseOrCurrent(Config::GFX_TEXTURE_PACK, std::string{});
+const Config::Info<std::string>& ConfigKeyFor(TexturePackGame game)
+{
+  // We never call this with Any — caller must have resolved that already.
+  return game == TexturePackGame::Golf ? Config::GFX_TEXTURE_PACKS_GOLF
+                                       : Config::GFX_TEXTURE_PACKS_BASEBALL;
 }
 }  // namespace
 
-std::vector<std::string> GetActiveTexturePacks()
+std::vector<std::string> GetActiveTexturePacks(TexturePackGame game)
 {
   MigrateLegacyTexturePackSetting();
-  return SplitActivePacksString(Config::Get(Config::GFX_TEXTURE_PACKS_ACTIVE));
+  if (game == TexturePackGame::Any)
+    return {};
+  return SplitActivePacksString(Config::Get(ConfigKeyFor(game)));
 }
 
-void SetActiveTexturePacks(const std::vector<std::string>& packs)
+void SetActiveTexturePacks(TexturePackGame game, const std::vector<std::string>& packs)
 {
-  Config::SetBaseOrCurrent(Config::GFX_TEXTURE_PACKS_ACTIVE, JoinActivePacksString(packs));
+  if (game == TexturePackGame::Any)
+    return;
+  Config::SetBaseOrCurrent(ConfigKeyFor(game), JoinActivePacksString(packs));
 }
 
 std::string ResolveTexturePackPath(const std::string& pack_name)
@@ -566,6 +592,22 @@ bool WritePackGameOverride(const std::string& pack_name, TexturePackGame tag)
     return false;
   out << picojson::value(obj).serialize(/*prettify=*/true);
   return out.good();
+}
+
+TexturePackGame ResolvePackGame(const std::string& pack_name)
+{
+  // Resolution order matches the loader: explicit override > pack.json > built-in default.
+  TexturePackGame tag = ReadPackGameOverride(pack_name);
+  if (tag != TexturePackGame::Any)
+    return tag;
+  const std::string root = ResolveTexturePackPath(pack_name);
+  if (!root.empty())
+  {
+    tag = ReadPackDeclaredGame(root);
+    if (tag != TexturePackGame::Any)
+      return tag;
+  }
+  return GetBuiltinDefaultGame(pack_name);
 }
 
 TexturePackGame GetBuiltinDefaultGame(const std::string& pack_name)

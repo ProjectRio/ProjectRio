@@ -11,17 +11,21 @@ class ConfigBool;
 class QLabel;
 class QListWidget;
 class QPushButton;
+class QTabWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
 
 // Dialog for managing the active set and priority of texture packs.
 //
 // Packs live under either User/TexturePacks/<pack>/ or Sys/Load/TexturePacks/<pack>/. Each pack
-// optionally contains a pack.json describing its name, author, category, and description; packs
-// without one show up under "Uncategorized" using the folder name. The dialog edits the
-// pipe-delimited GFX_TEXTURE_PACKS_ACTIVE config setting in priority order (top of list = highest
-// priority). Linked checkboxes for "Load Custom Textures" and "Prefetch Custom Textures" mirror
-// the controls in Graphics > Advanced via shared Config bindings.
+// optionally contains a pack.json describing its name, author, category, description, and game
+// family; packs without one show up under "Uncategorized" using the folder name.
+//
+// The dialog presents two tabs (Mario Superstar Baseball, Mario Golf Toadstool Tour). Each tab
+// owns an independent priority list persisted to its own config key
+// (GFX_TEXTURE_PACKS_BASEBALL / GFX_TEXTURE_PACKS_GOLF). Packs tagged "Any" appear in both
+// tabs' available panes and can be activated in either, independently. Tagging a pack to a
+// specific game restricts it to that tab.
 class TexturePackManagerDialog final : public QDialog
 {
   Q_OBJECT
@@ -57,39 +61,53 @@ public:
   };
 
 private:
-  void BuildLayout();
-  void ScanAvailablePacks();
-  void PopulateAvailableTree();
-  void PopulateActiveListFromConfig();
+  // One tab's set of widgets + state. Two instances are created (Baseball / Golf) and most
+  // populate/handler methods take a Tab& so the same code drives both.
+  struct Tab
+  {
+    GameTag game = GameTag::Baseball;
+    QTreeWidget* available_tree = nullptr;
+    QListWidget* active_list = nullptr;
+    QPushButton* add_button = nullptr;
+    QPushButton* remove_button = nullptr;
+    QPushButton* up_button = nullptr;
+    QPushButton* down_button = nullptr;
+    QLabel* inline_notice = nullptr;
+    // The active list at dialog-open time, so we can detect "did the user change anything
+    // mid-emulation?" and disable Load Custom Textures on Apply when they did.
+    std::vector<std::string> initial_active;
+  };
 
-  void OnAddSelected();
-  void OnRemoveSelected();
-  void OnMoveUp();
-  void OnMoveDown();
+  void BuildLayout();
+  QWidget* BuildTab(Tab& tab, GameTag game);
+  void ScanAvailablePacks();
+
+  void PopulateAvailableTree(Tab& tab);
+  void PopulateActiveListFromConfig(Tab& tab);
+  std::vector<std::string> CurrentActiveOrder(const Tab& tab) const;
+  void UpdateInlineNotice(Tab& tab);
+
+  void OnAddSelected(Tab& tab);
+  void OnRemoveSelected(Tab& tab);
+  void OnMoveUp(Tab& tab);
+  void OnMoveDown(Tab& tab);
   void OnRefresh();
   void OnOpenFolder();
   void OnApply();
-  void OnAvailableContextMenu(const QPoint& point);
-  void OnActiveContextMenu(const QPoint& point);
+  void OnAvailableContextMenu(Tab& tab, const QPoint& point);
+  void OnActiveContextMenu(Tab& tab, const QPoint& point);
   void ShowPackContextMenu(const std::string& folder_name, const QPoint& global_pos);
   void SetPackGameTag(const std::string& folder_name, GameTag tag);
   void SetPackCategory(const std::string& folder_name, Category cat);
 
   GameTag CurrentEmulatedGame() const;  // Returns Any if not running or unknown.
 
-  std::vector<std::string> CurrentActiveOrder() const;
-  void UpdateInlineNotice();
-
   std::vector<PackInfo> m_available_packs;
-  std::vector<std::string> m_initial_active;
 
-  QTreeWidget* m_available_tree = nullptr;
-  QListWidget* m_active_list = nullptr;
-  QPushButton* m_add_button = nullptr;
-  QPushButton* m_remove_button = nullptr;
-  QPushButton* m_up_button = nullptr;
-  QPushButton* m_down_button = nullptr;
+  QTabWidget* m_tab_widget = nullptr;
+  Tab m_baseball_tab;
+  Tab m_golf_tab;
+
   ConfigBool* m_load_custom_textures = nullptr;
   ConfigBool* m_prefetch_custom_textures = nullptr;
-  QLabel* m_inline_notice = nullptr;
 };

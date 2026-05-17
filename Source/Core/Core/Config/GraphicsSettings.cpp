@@ -69,6 +69,12 @@ const Info<std::string> GFX_TEXTURE_PACK{{System::GFX, "Settings", "TexturePack"
 // (see HiresTextures.cpp) and then cleared.
 const Info<std::string> GFX_TEXTURE_PACKS_ACTIVE{
     {System::GFX, "Settings", "TexturePacksActive"}, ""};
+// Per-game pipe-delimited active pack lists. Replaces GFX_TEXTURE_PACKS_ACTIVE; on first run
+// HiresTextures::Update seeds these from the legacy key (and then clears it).
+const Info<std::string> GFX_TEXTURE_PACKS_BASEBALL{
+    {System::GFX, "Settings", "TexturePacksActiveBaseball"}, ""};
+const Info<std::string> GFX_TEXTURE_PACKS_GOLF{
+    {System::GFX, "Settings", "TexturePacksActiveGolf"}, ""};
 const Info<bool> GFX_DUMP_EFB_TARGET{{System::GFX, "Settings", "DumpEFBTarget"}, false};
 const Info<bool> GFX_DUMP_XFB_TARGET{{System::GFX, "Settings", "DumpXFBTarget"}, false};
 const Info<bool> GFX_DUMP_FRAMES_AS_IMAGES{{System::GFX, "Settings", "DumpFramesAsImages"}, false};
