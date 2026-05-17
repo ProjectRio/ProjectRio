@@ -412,7 +412,19 @@ std::vector<std::string> GetActiveTexturePacks(TexturePackGame game)
   MigrateLegacyTexturePackSetting();
   if (game == TexturePackGame::Any)
     return {};
-  return SplitActivePacksString(Config::Get(ConfigKeyFor(game)));
+  std::vector<std::string> result =
+      SplitActivePacksString(Config::Get(ConfigKeyFor(game)));
+  // Filter out packs whose effective tag is for the other game. This cleans up the artifact
+  // of the legacy -> per-game migration (which seeded both lists with the same flat content)
+  // without requiring the user to manually prune. We don't write back here — the dialog will
+  // persist the cleaned list on Apply, and the loader is happy with the filtered view.
+  result.erase(std::remove_if(result.begin(), result.end(),
+                              [game](const std::string& name) {
+                                const TexturePackGame tag = ResolvePackGame(name);
+                                return tag != TexturePackGame::Any && tag != game;
+                              }),
+               result.end());
+  return result;
 }
 
 void SetActiveTexturePacks(TexturePackGame game, const std::vector<std::string>& packs)
