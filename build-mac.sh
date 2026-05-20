@@ -21,6 +21,12 @@ fi
 
 CMAKE_FLAGS+=' -DCMAKE_POLICY_VERSION_MINIMUM=3.5'
 
+# When BUILD_ARCH is set (CI cross-builds x86_64 on Apple Silicon via Rosetta),
+# pin the slice we produce. Otherwise CMake targets the host arch.
+if [[ -n "${BUILD_ARCH}" ]]; then
+    CMAKE_FLAGS+=" -DCMAKE_OSX_ARCHITECTURES=${BUILD_ARCH}"
+fi
+
 # Use ccache if available (speeds up incremental CI builds significantly)
 if command -v ccache &> /dev/null; then
     CMAKE_FLAGS+=' -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache'

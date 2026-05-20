@@ -1,7 +1,8 @@
+#!/usr/bin/env xdg-open
 [Desktop Entry]
 Version=1.0
-Icon=RioLogo
-Exec=env QT_QPA_PLATFORM=xcb dolphin-emu
+Icon=ProjectRio
+Exec=sh -c "env QT_QPA_PLATFORM=xcb ~/.local/share/project-rio/dolphin-emu"
 Terminal=false
 Type=Application
 Categories=Game;Emulator;

@@ -8,6 +8,7 @@
 #include <fmt/chrono.h>
 
 #include "Common/CommonTypes.h"
+#include "Common/TimeUtil.h"
 #include "Core/HW/EXI/EXI_DeviceIPL.h"
 #include "Core/HW/Memmap.h"
 #include "Core/System.h"
@@ -95,7 +96,7 @@ u64 NetKDTimeDevice::GetAdjustedUTC() const
 
   time_t dst_diff{};
   const time_t current_time = CEXIIPL::GetEmulatedTime(GetSystem(), CEXIIPL::UNIX_EPOCH);
-  tm gm_time = fmt::gmtime(current_time);
+  tm gm_time = Common::GmTime(current_time).value_or(std::tm{});
 
   const u32 emulated_time = mktime(&gm_time);
   if (gm_time.tm_isdst == 1)
@@ -110,7 +111,7 @@ void NetKDTimeDevice::SetAdjustedUTC(u64 wii_utc)
 
   time_t dst_diff{};
   const time_t current_time = CEXIIPL::GetEmulatedTime(GetSystem(), CEXIIPL::UNIX_EPOCH);
-  tm gm_time = fmt::gmtime(current_time);
+  tm gm_time = Common::GmTime(current_time).value_or(std::tm{});
 
   const u32 emulated_time = mktime(&gm_time);
   if (gm_time.tm_isdst == 1)

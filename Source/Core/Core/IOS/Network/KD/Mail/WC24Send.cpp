@@ -14,6 +14,7 @@
 #include <fmt/chrono.h>
 
 #include "Common/Assert.h"
+#include "Common/TimeUtil.h"
 #include "Common/CommonTypes.h"
 #include "Common/Logging/Log.h"
 #include "Common/Swap.h"
@@ -222,7 +223,7 @@ ErrorCode WC24SendList::AddRegistrationMessages(const WC24FriendList& friend_lis
     const std::time_t t = std::time(nullptr);
 
     const std::string formatted_message =
-        fmt::format(MAIL_REGISTRATION_STRING, sender, code, fmt::gmtime(t));
+        fmt::format(MAIL_REGISTRATION_STRING, sender, code, Common::GmTime(t).value_or(std::tm{}));
     const std::span message{reinterpret_cast<const u8*>(formatted_message.data()),
                             formatted_message.size()};
     const ErrorCode reply = WriteToVFF(SEND_BOX_PATH, GetMailPath(entry_index), m_fs, message);

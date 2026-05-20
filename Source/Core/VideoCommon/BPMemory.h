@@ -1253,7 +1253,7 @@ struct fmt::formatter<ScissorPos>
 {
   constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
   template <typename FormatContext>
-  auto format(const ScissorPos& pos, FormatContext& ctx)
+  auto format(const ScissorPos& pos, FormatContext& ctx) const
   {
     return fmt::format_to(ctx.out(),
                           "X: {} (raw: {})\n"
@@ -1279,7 +1279,7 @@ struct fmt::formatter<ScissorOffset>
 {
   constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
   template <typename FormatContext>
-  auto format(const ScissorOffset& off, FormatContext& ctx)
+  auto format(const ScissorOffset& off, FormatContext& ctx) const
   {
     return fmt::format_to(ctx.out(),
                           "X: {} (raw: {})\n"

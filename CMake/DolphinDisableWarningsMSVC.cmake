@@ -1,5 +1,29 @@
 include(RemoveCompileFlag)
 
+# Cross-platform variant — matches upstream dolphin-emu/dolphin.
+# Used by externals brought in from upstream (pugixml, enet, rcheevos, ...).
+macro(dolphin_disable_warnings _target)
+  get_target_property(_target_cxx_flags ${_target} COMPILE_OPTIONS)
+  if (_target_cxx_flags)
+    set(new_flags "")
+    foreach(flag IN LISTS _target_cxx_flags)
+      # all warning flags start with "/W" or "/w" or "-W" or "-w"
+      if (NOT "${flag}" MATCHES "^[-/][Ww]")
+        list(APPEND new_flags "${flag}")
+      endif()
+    endforeach()
+    set_target_properties(${_target} PROPERTIES COMPILE_OPTIONS "${new_flags}")
+  endif()
+  if (MSVC)
+    target_compile_options(${_target} PRIVATE "/W0")
+  elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    target_compile_options(${_target} PRIVATE "-w")
+  endif()
+endmacro()
+
+# Legacy MSVC-only macro kept for the many Rio externals that still call it.
+# Acts as a no-op on Clang/GCC for backwards compatibility with the previous
+# Rio behavior.
 macro(dolphin_disable_warnings_msvc _target)
   if (MSVC)
     get_target_property(_target_cxx_flags ${_target} COMPILE_OPTIONS)

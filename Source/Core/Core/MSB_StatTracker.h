@@ -44,7 +44,6 @@ enum class EVENT_STATE
     INIT_EVENT,
     PITCH_RESULT,
     CONTACT_RESULT,
-    LOG_FIELDER,
     MONITOR_RUNNERS,
     PLAY_OVER,
     FINAL_RESULT,
@@ -53,11 +52,19 @@ enum class EVENT_STATE
     UNDEFINED
 };
 
+enum class DEAD_BALL_REASON
+{
+    N_A,
+    HOME_RUN,
+    FOUL_BALL,
+    GROUND_RULE_DOUBLE,
+    BALL_DEAD
+};
+
 static std::map<EVENT_STATE, std::string> c_event_state = {
     {EVENT_STATE::INIT_EVENT, "INIT_EVENT"},
     {EVENT_STATE::PITCH_RESULT, "PITCH_RESULT"},
     {EVENT_STATE::CONTACT_RESULT, "CONTACT_RESULT"},
-    {EVENT_STATE::LOG_FIELDER, "LOG_FIELDER"},
     {EVENT_STATE::MONITOR_RUNNERS, "MONITOR_RUNNERS"},
     {EVENT_STATE::PLAY_OVER, "PLAY_OVER"},
     {EVENT_STATE::FINAL_RESULT, "FINAL_RESULT"},
@@ -127,6 +134,21 @@ static const std::map<u8, std::string> cCharIdToCharName = {
     {0x35, "Bro(B)"}
 };
 
+static const std::set<u8> cCaptainTypeCharIds = {
+    0x0,  // Mario
+    0x1,  // Luigi
+    0x2,  // DK
+    0x3,  // Diddy
+    0x4,  // Peach
+    0x5,  // Daisy
+    0x6,  // Yoshi
+    0x9,  // Bowser
+    0xa,  // Wario
+    0xb,  // Waluigi
+    0x11, // Birdo
+    0x13, // Bowser Jr
+};
+
 static const std::map<u8, std::string> cStadiumIdToStadiumName = {
     {0x0, "Mario Stadium"},
     {0x1, "Bowser Castle"},
@@ -138,54 +160,54 @@ static const std::map<u8, std::string> cStadiumIdToStadiumName = {
 };
 
 static const std::map<u32, std::string> cLogoIdToTeamName = {
-    {0,  "Mario Sunshines"},
-    {1,  "Mario All Stars"},
-    {2,  "Mario Fireballs"},
-    {3,  "Mario Heroes"},
-    {4,  "Luigi Mansioneers"},
-    {5,  "Luigi Leapers"},
-    {6,  "Luigi Vacuums"},
-    {7,  "Luigi Gentlemen"},
-    {8,  "Peach Monarchs"},
-    {9,  "Peach Princesses"},
-    {10, "Peach Dynasties"},
-    {11, "Peach Roses"},
-    {12, "Daisy Queen Bees"},
-    {13, "Daisy Petals"},
-    {14, "Daisy Cupids"},
-    {15, "Daisy Lillies"},
-    {16, "Yoshi Islanders"},
-    {17, "Yoshi Flutters"},
-    {18, "Yoshi Speed Stars"},
-    {19, "Yoshi Eggs"},
-    {20, "Birdo Bows"},
-    {21, "Birdo Fans"},
-    {22, "Birdo Models"},
-    {23, "Birdo Beauties"},
-    {24, "Wario Greats"},
-    {25, "Wario Beasts"},
-    {26, "Wario Steakheads"},
-    {27, "Wario Garlics"},
-    {28, "Waluigi Flankers"},
-    {29, "Waluigi Mashers"},
-    {30, "Waluigi Smart Alecks"},
-    {31, "Waluigi Mystiques"},
-    {32, "DK Kongs"},
-    {33, "DK Animals"},
-    {34, "DK Wild Ones"},
-    {35, "DK Explorers"},
-    {36, "Diddy Tails"},
-    {37, "Diddy Red Caps"},
-    {38, "Diddy Ninjas"},
-    {39, "Diddy Survivors"},
-    {40, "Bowser Monsters"},
-    {41, "Bowser Black Stars"},
-    {42, "Bowser Blue Shells"},
-    {43, "Bowser Flames"},
-    {44, "Jr Pixies"},
-    {45, "Jr Rookies"},
-    {46, "Jr Bombers"},
-    {47, "Jr Fangs"}
+    {0x0,  "Mario Sunshines"},
+    {0x1,  "Mario All Stars"},
+    {0x2,  "Mario Fireballs"},
+    {0x3,  "Mario Heroes"},
+    {0x4,  "Luigi Mansioneers"},
+    {0x5,  "Luigi Leapers"},
+    {0x6,  "Luigi Vacuums"},
+    {0x7,  "Luigi Gentlemen"},
+    {0x8,  "Peach Monarchs"},
+    {0x9,  "Peach Princesses"},
+    {0xA,  "Peach Dynasties"},
+    {0xB,  "Peach Roses"},
+    {0xC,  "Daisy Queen Bees"},
+    {0xD,  "Daisy Petals"},
+    {0xE,  "Daisy Cupids"},
+    {0xF,  "Daisy Lillies"},
+    {0x10, "Yoshi Islanders"},
+    {0x11, "Yoshi Flutters"},
+    {0x12, "Yoshi Speed Stars"},
+    {0x13, "Yoshi Eggs"},
+    {0x14, "Birdo Bows"},
+    {0x15, "Birdo Fans"},
+    {0x16, "Birdo Models"},
+    {0x17, "Birdo Beauties"},
+    {0x18, "Wario Greats"},
+    {0x19, "Wario Beasts"},
+    {0x1A, "Wario Steakheads"},
+    {0x1B, "Wario Garlics"},
+    {0x1C, "Waluigi Flankers"},
+    {0x1D, "Waluigi Mashers"},
+    {0x1E, "Waluigi Smart Alecks"},
+    {0x1F, "Waluigi Mystiques"},
+    {0x20, "DK Kongs"},
+    {0x21, "DK Animals"},
+    {0x22, "DK Wild Ones"},
+    {0x23, "DK Explorers"},
+    {0x24, "Diddy Tails"},
+    {0x25, "Diddy Red Caps"},
+    {0x26, "Diddy Ninjas"},
+    {0x27, "Diddy Survivors"},
+    {0x28, "Bowser Monsters"},
+    {0x29, "Bowser Black Stars"},
+    {0x2A, "Bowser Blue Shells"},
+    {0x2B, "Bowser Flames"},
+    {0x2C, "Jr Pixies"},
+    {0x2D, "Jr Rookies"},
+    {0x2E, "Jr Bombers"},
+    {0x2F, "Jr Fangs"},
 };
 
 static const std::map<u8, std::string> cTypeOfContactToHR = {
@@ -526,7 +548,8 @@ static const u32 aAB_ContactRandInt3 = 0x802ec014;
 
 static const u32 aAB_ContactAbsolute = 0x80890950;
 static const u32 aAB_ContactQuality  = 0x80890954;
-static const u32 aAB_TypeOfSwing    = 0x8089099B; //1=Slap, 2=Charge, 3=Bunt. Set on contact
+// 0=slap/linedrive star, 1=charge/grounder star/pop star, 2=captain star/moonshot, 3=bunt
+static const u32 aAB_TypeOfSwing    = 0x8089099B; 
 static const u32 aAB_ChargeUp       = 0x80890968;
 static const u32 aAB_ChargeDown     = 0x8089096C;
 static const u32 aAB_BatterHand     = 0x8089098B; //Right=0, Left=1
@@ -1145,6 +1168,7 @@ public:
     //RunnerInfo
     std::optional<Runner> logRunnerInfo(const Core::CPUThreadGuard& guard, u8 base);
     bool anyRunnerStealing(const Core::CPUThreadGuard& guard, Event& in_event);
+    bool hasEnoughStarsForStarSwing(const Core::CPUThreadGuard& guard, Event& in_event);
     void logRunnerEvents(const Core::CPUThreadGuard& guard, Runner* in_runner);
 
     //TODO Redo these tuple functions

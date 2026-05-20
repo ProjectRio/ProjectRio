@@ -22,6 +22,7 @@
 #include "AudioCommon/AudioCommon.h"
 
 #include "Common/Assert.h"
+#include "Common/TimeUtil.h"
 #include "Core/HW/AddressSpace.h"
 #include "Common/CPUDetect.h"
 #include "Common/CommonPaths.h"
@@ -1444,7 +1445,7 @@ static std::string GenerateScreenshotName()
 
   const std::time_t cur_time = std::time(nullptr);
   const std::string base_name =
-      fmt::format("{}_{:%Y-%m-%d_%H-%M-%S}", path_prefix, fmt::localtime(cur_time));
+      fmt::format("{}_{:%Y-%m-%d_%H-%M-%S}", path_prefix, Common::LocalTime(cur_time).value_or(std::tm{}));
 
   // First try a filename without any suffixes, if already exists then append increasing numbers
   std::string name = fmt::format("{}.png", base_name);

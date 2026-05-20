@@ -132,6 +132,8 @@ add_library(common
   StringLiteral.h
   StringUtil.cpp
   StringUtil.h
+  TimeUtil.cpp
+  TimeUtil.h
   SymbolDB.cpp
   SymbolDB.h
   TagSet.h

@@ -23,6 +23,8 @@
 #include <QTableWidget>
 #include <QTextBrowser>
 
+#include <fmt/ranges.h>
+
 #include <algorithm>
 #include <sstream>
 

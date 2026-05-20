@@ -154,11 +154,17 @@ jobs:
       fail-fast: false
       matrix:
         build_type: [ Release ]
+        arch: [ arm64, x86_64 ]
         include:
+          - arch: arm64
+            artifact_name: ProjectRio-macOS-arm64
+          - arch: x86_64
+            artifact_name: ProjectRio-macOS-x86_64
           - build_type: Release
-            artifact_name: ProjectRio-macOS
             build_config: release
-    name: "macOS ${{ matrix.build_type }}"
+    name: "macOS ${{ matrix.build_type }} ${{ matrix.arch }}"
+    # Both arches build on macos-14 (Apple Silicon). The x86_64 slice is
+    # cross-built via Rosetta against an x86_64 Homebrew at /usr/local.
     runs-on: macos-14
     timeout-minutes: 90
     steps:
@@ -182,18 +188,33 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/Library/Caches/Homebrew
-          key: ${{ runner.os }}-brew-${{ hashFiles('.github/workflows/main.yml') }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-brew-${{ hashFiles('.github/workflows/main.yml') }}
           restore-keys: |
-            ${{ runner.os }}-brew-
+            ${{ runner.os }}-${{ matrix.arch }}-brew-
+      - name: "Cache x86_64 Homebrew prefix"
+        if: matrix.arch == 'x86_64'
+        uses: actions/cache@v3
+        with:
+          path: |
+            /usr/local/Homebrew
+            /usr/local/Cellar
+            /usr/local/opt
+            /usr/local/bin
+            /usr/local/lib
+            /usr/local/include
+            /usr/local/share
+          key: ${{ runner.os }}-brew-x86_64-prefix-${{ hashFiles('.github/workflows/main.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-brew-x86_64-prefix-
       - name: "Cache ccache"
         uses: actions/cache@v3
         with:
           path: ~/.ccache
-          key: ${{ runner.os }}-ccache-${{ github.sha }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-ccache-${{ github.sha }}
           restore-keys: |
-            ${{ runner.os }}-ccache-
-      - name: "Download and Install prerequisites"
-        if: success()
+            ${{ runner.os }}-${{ matrix.arch }}-ccache-
+      - name: "Install prerequisites (arm64)"
+        if: success() && matrix.arch == 'arm64'
         shell: bash
         run: |
           rm '/usr/local/bin/2to3' || true
@@ -212,12 +233,53 @@ jobs:
           # Homebrew's fmt (pulled in by ffmpeg) conflicts with the bundled Externals/fmt.
           # Unlink it so CMake uses the vendored version.
           brew unlink fmt || true
-      - name: "Build ${{ matrix.build_type }} Project Rio"
-        if: success()
+      - name: "Install prerequisites (x86_64 via Rosetta)"
+        if: success() && matrix.arch == 'x86_64'
+        shell: bash
+        run: |
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          echo "HOMEBREW_NO_AUTO_UPDATE=1" >> $GITHUB_ENV
+          # Bootstrap an x86_64 Homebrew at /usr/local if the cache didn't restore one.
+          if [ ! -x /usr/local/bin/brew ]; then
+            echo "Installing x86_64 Homebrew under Rosetta..."
+            arch -x86_64 /bin/bash -c \
+              "NONINTERACTIVE=1 /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+          fi
+          # Make the x86_64 brew take precedence on PATH for subsequent steps.
+          echo "/usr/local/bin" >> $GITHUB_PATH
+          # Install deps through the x86_64 brew. `arch -x86_64` ensures any
+          # build-from-source fallback also targets x86_64.
+          arch -x86_64 /usr/local/bin/brew update-reset || true
+          arch -x86_64 /usr/local/bin/brew install \
+            cmake \
+            ccache \
+            ffmpeg \
+            libpng \
+            pkgconfig \
+            libao \
+            sound-touch \
+            hidapi \
+            icu4c \
+            qt@6
+          arch -x86_64 /usr/local/bin/brew unlink fmt || true
+      - name: "Build ${{ matrix.build_type }} Project Rio (arm64)"
+        if: success() && matrix.arch == 'arm64'
         shell: bash
         working-directory: ${{ github.workspace }}
         run: |
           git config core.fileMode false ; chmod +x ./build-mac.sh && ./build-mac.sh ${{ matrix.build_config }}
+      - name: "Build ${{ matrix.build_type }} Project Rio (x86_64 via Rosetta)"
+        if: success() && matrix.arch == 'x86_64'
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        env:
+          BUILD_ARCH: x86_64
+        run: |
+          git config core.fileMode false
+          chmod +x ./build-mac.sh
+          # Run the build under Rosetta so `brew --prefix ...` resolves to the
+          # x86_64 prefix (/usr/local) and any compiler invocations default to x86_64.
+          arch -x86_64 /bin/bash ./build-mac.sh ${{ matrix.build_config }}
       - name: Package ${{ matrix.build_type }}
         if: success()
         shell: bash
