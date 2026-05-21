@@ -1082,17 +1082,13 @@ void NetPlayDialog::OnMsgChangeGame(const NetPlay::SyncIdentifier& sync_identifi
                                     const std::string& netplay_name)
 {
   QString qname = QString::fromStdString(netplay_name);
-  //QueueOnObject(this, [this, qname, netplay_name, &sync_identifier] {
-  //  m_game_button->setText(qname);
-  //  m_current_game_identifier = sync_identifier;
-  //  m_current_game_name = netplay_name;
-  //  UpdateDiscordPresence();
-  //});
-  m_game_button->setText(qname);
-  m_current_game_identifier = sync_identifier;
-  m_current_game_name = netplay_name;
-  UpdateDiscordPresence();
-  UpdateLobbyLayout();
+  QueueOnObject(this, [this, qname, sync_identifier, netplay_name] {
+    m_game_button->setText(qname);
+    m_current_game_identifier = sync_identifier;
+    m_current_game_name = netplay_name;
+    UpdateDiscordPresence();
+    UpdateLobbyLayout();
+  });
 }
 
 void NetPlayDialog::UpdateLobbyLayout()
@@ -1202,38 +1198,30 @@ void NetPlayDialog::OnMsgStartGame()
       if (auto game = FindGameFile(m_current_game_identifier))
       {
         client->StartGame(game->GetFilePath());
-
-        // Commenting out - not desired to reset these stats between matches anymore.
-        // m_night_stadium->setChecked(false); 
-        // m_disable_replays->setChecked(false);
-        // m_fast_reset_from_HUD->setChecked(false); 
-
-        // m_night_stadium->setEnabled(false);
-        // m_disable_replays->setEnabled(false);
-        // m_fast_reset_from_HUD->setEnabled(false);
       }
       else
         PanicAlertFmtT("Selected game doesn't exist in game list!");
     }
     UpdateDiscordPresence();
+
+    // perform widget updates on the GUI thread:
+    m_spectator_toggle->setEnabled(false);
   });
-  m_spectator_toggle->setEnabled(false);
 }
 
 void NetPlayDialog::OnMsgStopGame()
 {
   g_netplay_chat_ui.reset();
   g_netplay_golf_ui.reset();
-  QueueOnObject(this, [this] { UpdateDiscordPresence(); });
-
-  auto client = Settings::Instance().GetNetPlayClient();
-
-  const bool is_hosting = IsHosting();
-  m_night_stadium->setEnabled(is_hosting);
-  m_disable_replays->setEnabled(is_hosting);
-  m_fast_reset_from_HUD->setEnabled(is_hosting);
-  m_fast_reset_from_HUD->setChecked(false);
-  m_spectator_toggle->setEnabled(true);
+  QueueOnObject(this, [this] {
+    UpdateDiscordPresence();
+    const bool is_hosting = IsHosting();
+    m_night_stadium->setEnabled(is_hosting);
+    m_disable_replays->setEnabled(is_hosting);
+    m_fast_reset_from_HUD->setEnabled(is_hosting);
+    m_fast_reset_from_HUD->setChecked(false);
+    m_spectator_toggle->setEnabled(true);
+  });
 }
 
 bool NetPlayDialog::IsSpectating()
