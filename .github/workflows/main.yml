@@ -62,15 +62,18 @@ jobs:
           cd .\Binary\x64\
           fsutil file createnew FIX-VCRUNTIME140-ERROR.txt 0
           echo "Download and install this: https://aka.ms/vs/16/release/vc_redist.x64.exe" > .\FIX-VCRUNTIME140-ERROR.txt
-      - name: Package Artifact
+      - name: "Build Installer"
+        shell: cmd
         working-directory: ${{ github.workspace }}
         run: |
-          $FILE_NAME="${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-${{ matrix.artifact_name }}.zip"
+          makensis /DVERSION="${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}" Installer\Installer.nsi
+      - name: "Package Artifact"
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          FILE_NAME="${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-${{ matrix.artifact_name }}.exe"
           mkdir artifact
-          cd .\Binary\x64\
-          fsutil file createnew portable.txt 0
-          7z a $FILE_NAME .\*
-          move $FILE_NAME ..\..\artifact\
+          mv "Installer/Project Rio Windows Installer.exe" "artifact/$FILE_NAME"
       - name: "Publish"
         if: success()
         uses: actions/upload-artifact@v4
