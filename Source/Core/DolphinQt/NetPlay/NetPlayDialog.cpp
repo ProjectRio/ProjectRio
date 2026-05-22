@@ -48,6 +48,7 @@
 #include "Core/SyncIdentifier.h"
 
 #include "DolphinQt/NetPlay/ChunkedProgressDialog.h"
+#include "DolphinQt/NetPlay/MSBGameStateWidget.h"
 #include "DolphinQt/NetPlay/GameDigestDialog.h"
 #include "DolphinQt/NetPlay/GameListDialog.h"
 #include "DolphinQt/NetPlay/PadMappingDialog.h"
@@ -118,6 +119,18 @@ NetPlayDialog::NetPlayDialog(const GameListModel& game_list_model,
 
   restoreGeometry(settings.value(QStringLiteral("netplaydialog/geometry")).toByteArray());
   m_splitter->restoreState(settings.value(QStringLiteral("netplaydialog/splitter")).toByteArray());
+
+  // If the saved splitter state predates the game-state panel it will have restored
+  // the third widget to zero width. Give it a sensible default in that case.
+  {
+    const QList<int> sizes = m_splitter->sizes();
+    if (sizes.size() < 3 || sizes[2] == 0)
+    {
+      const int total = sizes.size() >= 2 ? sizes[0] + sizes[1] : 900;
+      m_splitter->setSizes({total * 2 / 5, total * 2 / 5, total * 1 / 5});
+    }
+  }
+
   srand(time(0));
 }
 
@@ -272,8 +285,12 @@ void NetPlayDialog::CreateMainLayout()
   m_main_layout->addWidget(m_game_button, 0, 0, 1, -1);
   m_main_layout->addWidget(m_splitter, 1, 0, 1, -1);
 
+  m_game_state_widget = new MSBGameStateWidget;
+  m_game_state_widget->setMinimumWidth(220);
+
   m_splitter->addWidget(m_chat_box);
   m_splitter->addWidget(m_players_box);
+  m_splitter->addWidget(m_game_state_widget);
 
   auto* options_widget = new QGridLayout;
 
@@ -805,6 +822,9 @@ void NetPlayDialog::show(bool use_traversal)
   m_fast_reset_from_HUD->setHidden(!is_hosting);
   m_fast_reset_from_HUD->setEnabled(is_hosting);
 
+  m_game_state_widget->SetHostMode(is_hosting);
+  m_game_state_widget->Clear();
+
   UpdateLobbyLayout();
   SetOptionsEnabled(true);
 
@@ -1102,7 +1122,8 @@ void NetPlayDialog::UpdateLobbyLayout()
       m_disable_replays->setVisible(true);
       m_fast_reset_from_HUD->setVisible(true);
     }
-    
+
+    m_game_state_widget->setVisible(true);
     m_random_stadium->setVisible(true);
     m_random_9->setVisible(false);
     m_random_18->setVisible(false);
@@ -1113,6 +1134,8 @@ void NetPlayDialog::UpdateLobbyLayout()
     m_disable_replays->setVisible(false);
     m_fast_reset_from_HUD->setVisible(false);
 
+    m_game_state_widget->setVisible(true);  // TODO: restore to false once layout confirmed working
+    m_game_state_widget->Clear();
     m_random_stadium->setVisible(false);
     m_random_9->setVisible(true);
     m_random_18->setVisible(true);
