@@ -76,9 +76,12 @@ bool LoadStateFromHud(const std::string& path, MSB_QuickMatchState& outState,
                         p1Username, p2Username, awayPlayer, homePlayer);
             return false;
         }
+
+        menuInputRestrictionEnabled = true; // if both players present, restrict menu inputs to prevent accidental desync.
     }
     else
     {
+        menuInputRestrictionEnabled = false; // solo game - P1 needs control on captain screen. Used for debugging.
         INFO_LOG_FMT(COMMON, "Solo game detected, skipping opponent validation.");
     }
 

@@ -885,7 +885,7 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
         if (captainP2 && captainP2->charID.has_value())
             codes.push_back(ToGeckoCode(0x04, CAPTAIN_CHARACTER_P2_ADDR, captainP2->charID.value()));
 
-        if (captainP1 != nullptr && captainP2 != nullptr)
+        if (captainP1 != nullptr && captainP2 != nullptr && menuInputRestrictionEnabled)
         {
             // if both captains provided, prevent P1 from selecting the CPU captain when spamming A to avoid an invalid read error.
             codes.push_back(ToGeckoCode(0x04, CAPTAIN_SCREEN_PREVENT_CPU_CAPTAIN_ADDR, CAPTAIN_SCREEN_PREVENT_CPU_CAPTAIN_NEW_INSTR));
@@ -910,7 +910,7 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
             codes);
 
         // if both rosters provided, prevent cursor movement by nop'ing function call.
-        if (state.GetP1().GetPlayer(0)->IsSet() && state.GetP2().GetPlayer(0)->IsSet())
+        if (state.GetP1().GetPlayer(0)->IsSet() && state.GetP2().GetPlayer(0)->IsSet() && menuInputRestrictionEnabled)
             codes.push_back(ToGeckoCode(0x04, CHARACTER_SELECT_PREVENT_CURSOR_MOVEMENT_ADDR, NOP_INSTR));
 
         // generate batting order codes.
@@ -922,8 +922,11 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
             codes.push_back(ToGeckoCode(0x00, STADIUM_ADDR, state.GetStadium().value()));
 
             // prevent cursor movement on stadium select screen
-            codes.push_back(ToGeckoCode(0x02, STADIUM_CURSOR_RIGHT_INSTR_ADDR, 0x0000));
-            codes.push_back(ToGeckoCode(0x02, STADIUM_CURSOR_LEFT_INSTR_ADDR, 0x0000));
+            if (menuInputRestrictionEnabled)
+            {
+                codes.push_back(ToGeckoCode(0x02, STADIUM_CURSOR_RIGHT_INSTR_ADDR, 0x0000));
+                codes.push_back(ToGeckoCode(0x02, STADIUM_CURSOR_LEFT_INSTR_ADDR, 0x0000));
+            }
         }
 
         if (state.GetFirstBatter().has_value())
@@ -949,7 +952,8 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
         if (state.GetFirstBatter().has_value() &&
             state.GetStarSkills().has_value() &&
             state.GetInningsSelected().has_value() &&
-            state.GetMercy().has_value())
+            state.GetMercy().has_value() &&
+            menuInputRestrictionEnabled)
         {
             codes.push_back(ToGeckoCode(0x02, GAME_SETTINGS_CURSOR_RIGHT_INSTR_ADDR, 0x0000));
             codes.push_back(ToGeckoCode(0x02, GAME_SETTINGS_CURSOR_LEFT_INSTR_ADDR, 0x0000));
