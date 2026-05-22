@@ -33,7 +33,7 @@ extern bool isDisableReplays;
 void setDisableReplays(bool disable);
 
 extern bool isLoadingFromHUD;
-extern MSBQuickMatchGameState HUDState;
+extern MSB_QuickMatchState HUDState;
 void setFastResetFromHUD(bool load_from_hud);
 
 const std::string MSSB_NightStadium = R"(

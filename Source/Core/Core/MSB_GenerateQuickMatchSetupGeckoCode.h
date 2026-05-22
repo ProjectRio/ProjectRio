@@ -266,7 +266,7 @@ struct MSBQuickMatchGameState
 class MSBQuickMatchCodeBuilder
 {
 public:
-    static std::vector<Gecko::GeckoCode> MSB_GenerateQuickMatchSetupGeckoCode(const MSBQuickMatchGameState& state);
+    static std::vector<Gecko::GeckoCode> MSB_GenerateQuickMatchSetupGeckoCode(const MSB_QuickMatchState& state);
 
     // Logical Constants
     static constexpr uint32_t REL_ADDR = 0x800e877c;

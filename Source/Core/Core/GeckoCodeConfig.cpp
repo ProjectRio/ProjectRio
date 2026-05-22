@@ -355,7 +355,7 @@ void setDisableReplays(bool disable)
 }
 
 bool isLoadingFromHUD = false;
-MSBQuickMatchGameState HUDState;
+MSB_QuickMatchState HUDState;
 
 void setFastResetFromHUD(bool load_from_hud)
 {

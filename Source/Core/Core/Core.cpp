@@ -711,10 +711,10 @@ void RunDraftTimer(const Core::CPUThreadGuard& guard)
   }
 }
 
-void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMatchGameState& state)
+void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSB_QuickMatchState& state)
 {
   // Validate state has been initialized
-  if (!state.firstBatter.has_value())
+  if (!state.GetFirstBatter().has_value())
   {
     INFO_LOG_FMT(COMMON, "State.firstBatter doesn't have value - no message");
     return;
