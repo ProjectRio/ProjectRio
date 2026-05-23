@@ -1,6 +1,7 @@
 #!/bin/bash -e
 # build-mac.sh
 
+
 DATA_SYS_PATH="./Data/Sys/"
 BINARY_PATH="./build/Binaries/ProjectRio.app/Contents/Resources/"
 
@@ -16,16 +17,17 @@ CMAKE_FLAGS="-DQt6_DIR=${QT_BREW_PATH}/lib/cmake/Qt6 -DENABLE_NOGUI=false"
 CMAKE_FLAGS+=' -DMACOS_CODE_SIGNING="OFF"'
 
 CMAKE_FLAGS+=' -DCMAKE_POLICY_VERSION_MINIMUM=3.5'
+CMAKE_FLAGS+=' -GNinja'
 
-# Use ccache if available
+# Use ccache if available (speeds up incremental CI builds significantly)
 if command -v ccache &> /dev/null; then
     CMAKE_FLAGS+=' -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
 fi
 
 mkdir -p build
 pushd build
-cmake ${CMAKE_FLAGS} ..
-cmake --build . --target dolphin-emu -- -j$(sysctl -n hw.logicalcpu)
+cmake .. ${CMAKE_FLAGS}
+ninja -j$(sysctl -n hw.logicalcpu)
 popd
 
 echo "Copying Sys files into the bundle"
