@@ -16,7 +16,6 @@ brew "lld"
 brew "mbedtls@2", link: true
 brew "miniupnpc"
 brew "zlib-ng"
-brew "molten-vk"
 brew "ninja"
 brew "pugixml"
 brew "qt@6"
