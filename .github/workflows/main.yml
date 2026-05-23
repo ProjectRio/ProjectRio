@@ -188,26 +188,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-brew-
       - name: "Cache ccache"
-        uses: actions/cache@v3
+        uses: hendrikmuhs/ccache-action@v1.2
         with:
-          path: ~/.ccache
-          key: ${{ runner.os }}-${{ matrix.arch }}-ccache-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.arch }}-ccache-
+          create-symlink: true
       - name: "Install prerequisites"
         shell: bash
         run: |
           export HOMEBREW_NO_AUTO_UPDATE=1
-          brew install \
-            ccache \
-            ffmpeg \
-            libpng \
-            pkgconfig \
-            libao \
-            sound-touch \
-            hidapi \
-            icu4c \
-            qt@6
+          brew bundle install --file ./Data/Brewfile
           brew unlink fmt || true
       - name: "Build ${{ matrix.arch }}"
         shell: bash
