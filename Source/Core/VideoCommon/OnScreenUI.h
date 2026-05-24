@@ -15,6 +15,7 @@
 class NativeVertexFormat;
 class AbstractTexture;
 class AbstractPipeline;
+class ImTextureData;
 
 namespace VideoCommon
 {
@@ -64,6 +65,7 @@ private:
 #ifdef USE_RETRO_ACHIEVEMENTS
   void DrawChallenges();
 #endif  // USE_RETRO_ACHIEVEMENTS
+  void UpdateImguiTexture(ImTextureData* tex);
 
   // ImGui resources.
   std::unique_ptr<NativeVertexFormat> m_imgui_vertex_format;

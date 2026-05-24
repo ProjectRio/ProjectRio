@@ -3,7 +3,9 @@
 
 #include "VideoCommon/OnScreenUI.h"
 
+#include "Common/CommonPaths.h"
 #include "Common/EnumMap.h"
+#include "Common/FileUtil.h"
 #include "Common/Profiler.h"
 #include "Common/Timer.h"
 
@@ -16,6 +18,7 @@
 #include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/AbstractPipeline.h"
 #include "VideoCommon/AbstractShader.h"
+#include "VideoCommon/AbstractStagingTexture.h"
 #include "VideoCommon/FramebufferShaderGen.h"
 #include "VideoCommon/NetPlayChatUI.h"
 #include "VideoCommon/NetPlayGolfUI.h"
@@ -70,30 +73,29 @@ bool OnScreenUI::Initialize(u32 width, u32 height, float scale)
     return false;
   }
 
-  // Font texture(s).
+  // Font defaults
+  ImGuiIO& io = ImGui::GetIO();
+  m_imgui_textures.clear();
+
+  // User supplied font
+  std::string file = File::GetUserPath(D_LOAD_IDX) + "OSD_Font.ttf";
+
+  bool font_exists = File::Exists(file);
+  if (!font_exists)
   {
-    ImGuiIO& io = ImGui::GetIO();
-    u8* font_tex_pixels;
-    int font_tex_width, font_tex_height;
-    io.Fonts->GetTexDataAsRGBA32(&font_tex_pixels, &font_tex_width, &font_tex_height);
-
-    TextureConfig font_tex_config(font_tex_width, font_tex_height, 1, 1, 1,
-                                  AbstractTextureFormat::RGBA8, 0,
-                                  AbstractTextureType::Texture_2DArray);
-    std::unique_ptr<AbstractTexture> font_tex =
-        g_gfx->CreateTexture(font_tex_config, "ImGui font texture");
-    if (!font_tex)
-    {
-      PanicAlertFmt("Failed to create ImGui texture");
-      return false;
-    }
-    font_tex->Load(0, font_tex_width, font_tex_height, font_tex_width, font_tex_pixels,
-                   sizeof(u32) * font_tex_width * font_tex_height);
-
-    io.Fonts->TexID = font_tex.get();
-
-    m_imgui_textures.push_back(std::move(font_tex));
+    // Default supplied font
+    file = File::GetSysDirectory() + DIR_SEP + RESOURCES_DIR + DIR_SEP + "OSD_Font.ttf";
+    font_exists = File::Exists(file);
   }
+
+  if (font_exists)
+  {
+    io.Fonts->Clear();
+    io.Fonts->AddFontFromFileTTF(file.c_str());
+  }
+
+  // Setup new font management behavior
+  io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures | ImGuiBackendFlags_RendererHasVtxOffset;
 
   if (!RecompileImGuiPipeline())
     return false;
@@ -112,6 +114,7 @@ OnScreenUI::~OnScreenUI()
   ImGui::EndFrame();
   ImPlot::DestroyContext();
   ImGui::DestroyContext();
+  m_imgui_textures.clear();
 }
 
 bool OnScreenUI::RecompileImGuiPipeline()
@@ -251,7 +254,7 @@ void OnScreenUI::DrawImGui()
               static_cast<int>(cmd.ClipRect.x), static_cast<int>(cmd.ClipRect.y),
               static_cast<int>(cmd.ClipRect.z), static_cast<int>(cmd.ClipRect.w)),
           g_gfx->GetCurrentFramebuffer()));
-      g_gfx->SetTexture(0, reinterpret_cast<const AbstractTexture*>(cmd.TextureId));
+      g_gfx->SetTexture(0, reinterpret_cast<const AbstractTexture*>(cmd.GetTexID()));
       g_gfx->DrawIndexed(base_index, cmd.ElemCount, base_vertex);
       base_index += cmd.ElemCount;
     }
@@ -382,8 +385,8 @@ void OnScreenUI::DrawChallenges()
       }
       if (texture)
       {
-        ImGui::Image(texture.get(), ImVec2(static_cast<float>(icon_itr->second->width),
-                                           static_cast<float>(icon_itr->second->height)));
+        ImGui::Image(*texture.get(), ImVec2(static_cast<float>(icon_itr->second->width),
+                                            static_cast<float>(icon_itr->second->height)));
       }
     }
   }
@@ -403,6 +406,75 @@ void OnScreenUI::Finalize()
   DrawChallenges();
 #endif  // USE_RETRO_ACHIEVEMENTS
   ImGui::Render();
+
+  // Create or update fonts.
+  ImDrawData* draw_data = ImGui::GetDrawData();
+  if (draw_data->Textures != nullptr)
+    for (ImTextureData* tex : *draw_data->Textures)
+      if (tex->Status != ImTextureStatus_OK)
+        UpdateImguiTexture(tex);
+}
+
+void OnScreenUI::UpdateImguiTexture(ImTextureData* tex)
+{
+  if (tex->Status == ImTextureStatus_WantCreate)
+  {
+    // Create new font texture.
+    IM_ASSERT(tex->TexID == ImTextureID_Invalid);
+    IM_ASSERT(tex->Format == ImTextureFormat_RGBA32);
+
+    TextureConfig font_tex_config(tex->Width, tex->Height, 1, 1, 1, AbstractTextureFormat::RGBA8, 0,
+                                  AbstractTextureType::Texture_2DArray);
+    std::unique_ptr<AbstractTexture> font_tex =
+        g_gfx->CreateTexture(font_tex_config, "ImGui font texture");
+
+    if (!font_tex)
+    {
+      PanicAlertFmt("Failed to create ImGui texture");
+      return;
+    }
+
+    font_tex->Load(0, tex->Width, tex->Height, tex->Width, tex->Pixels,
+                   sizeof(u32) * tex->Width * tex->Height);
+
+    tex->SetTexID(static_cast<ImTextureID>(*font_tex.get()));
+    // Keeps the texture alive.
+    m_imgui_textures.push_back(std::move(font_tex));
+
+    tex->SetStatus(ImTextureStatus_OK);
+  }
+  else if (tex->Status == ImTextureStatus_WantUpdates)
+  {
+    AbstractTexture* font_tex = reinterpret_cast<AbstractTexture*>(tex->GetTexID());
+
+    if (!font_tex || tex->TexID == ImTextureID_Invalid)
+    {
+      PanicAlertFmt("ImGui texture not created before update");
+      return;
+    }
+
+    // Re-upload the entire atlas instead of doing per-rect staging updates.
+    // The mainline-style per-ImTextureRect staging-texture path (CreateStagingTexture +
+    // WriteTexels + CopyToTexture for each Updates[] entry) corrupts the font atlas on
+    // macOS Metal — sampled glyphs ended up as random GPU memory contents. A full
+    // re-upload is cheap relative to the rendering cost and works on every backend.
+    font_tex->Load(0, tex->Width, tex->Height, tex->Width, tex->Pixels,
+                   sizeof(u32) * tex->Width * tex->Height);
+
+    tex->SetStatus(ImTextureStatus_OK);
+  }
+  else if (tex->Status == ImTextureStatus_WantDestroy && tex->UnusedFrames > 0)
+  {
+    AbstractTexture* font_tex = reinterpret_cast<AbstractTexture*>(tex->GetTexID());
+
+    tex->SetTexID(ImTextureID_Invalid);
+
+    m_imgui_textures.erase(
+        std::find_if(m_imgui_textures.begin(), m_imgui_textures.end(),
+                     [font_tex](auto& element) { return element.get() == font_tex; }));
+
+    tex->Status = ImTextureStatus_Destroyed;
+  }
 }
 
 std::unique_lock<std::mutex> OnScreenUI::GetImGuiLock()
@@ -414,12 +486,31 @@ void OnScreenUI::SetScale(float backbuffer_scale)
 {
   ImGui::GetIO().DisplayFramebufferScale.x = backbuffer_scale;
   ImGui::GetIO().DisplayFramebufferScale.y = backbuffer_scale;
-  ImGui::GetIO().FontGlobalScale = backbuffer_scale;
-  // ScaleAllSizes scales in-place, so calling it twice will double-apply the scale
-  // Reset the style first so that the scale is applied to the base style, not an already-scaled one
-  ImGui::GetStyle() = {};
-  ImGui::GetStyle().WindowRounding = 7.0f;
-  ImGui::GetStyle().ScaleAllSizes(backbuffer_scale);
+
+  // Rescue text legibility on non-Retina high-res displays. A 3440x1440 ultrawide
+  // typically reports backbuffer_scale = 1.0, which bakes VeraMono at only 13 physical
+  // pixels — small AND soft because there aren't enough pixels per glyph stroke. When
+  // DPI is clearly missing (< 1.5), derive scale from backbuffer height instead.
+  // Retina displays (scale >= 1.5) are left alone — their reported DPI already gives
+  // a comfortable OSD size, and boosting further at high resolutions would just make
+  // the text inappropriately large.
+  float effective_scale = backbuffer_scale;
+  if (backbuffer_scale < 1.5f && g_presenter)
+  {
+    const float reference_height = 720.0f;
+    const float height_factor =
+        static_cast<float>(g_presenter->GetBackbufferHeight()) / reference_height;
+    effective_scale = std::max(backbuffer_scale, height_factor);
+  }
+
+  // ScaleAllSizes scales in-place, so calling it twice will double-apply the scale.
+  // Reset the style first so that the scale is applied to the base style, not an already-scaled one.
+  ImGuiStyle& style = ImGui::GetStyle();
+  style = {};
+  style.FontSizeBase = 13.0f;
+  style.FontScaleMain = effective_scale;
+  style.WindowRounding = 7.0f;
+  style.ScaleAllSizes(effective_scale);
 
   m_backbuffer_scale = backbuffer_scale;
 }

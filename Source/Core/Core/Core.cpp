@@ -434,7 +434,7 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
       chargeUp == 100 ? totalCharge = chargeDown : totalCharge = chargeUp;
 
       OSD::AddTypedMessage(OSD::MessageType::TrainingModeBatting,
-                           fmt::format("Batting Data:                    \n"
+                           fmt::format("Batting Data:    \n"
                                        "Contact Frame:  {}\n"
                                        "Type of Contact:  {}\n"
                                        "Contact Quality: {}\n"
@@ -442,10 +442,14 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
                                        "Charge Percent:  {}%\n"
                                        "Ball Angle:  {}°\n\n"
                                        "Exit Velocities:  \n"
-                                       "X :  {} m/s  -->  {} mph\n"
-                                       "Y:  {} m/s  -->  {} mph\n"
-                                       "Z :  {} m/s  -->  {} mph\n"
-                                       "Net:  {} m/s  -->  {} mph",
+                                       "X:   {:6.2f} m/s\n"
+                                       "   ({:7.2f} mph)\n"
+                                       "Y:   {:6.2f} m/s\n"
+                                       "   ({:7.2f} mph)\n"
+                                       "Z:   {:6.2f} m/s\n"
+                                       "   ({:7.2f} mph)\n"
+                                       "Net: {:6.2f} m/s\n"
+                                       "   ({:7.2f} mph)",
                                        contactFrame, typeOfContact, contactQuality, inputDirection,
                                        totalCharge, angle, xVelocity, ms_to_mph(xVelocity),
                                        yVelocity, ms_to_mph(yVelocity), zVelocity,
@@ -502,30 +506,38 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
 
       OSD::AddTypedMessage(
           OSD::MessageType::TrainingModeBallCoordinates,
-          fmt::format("Ball Coordinates:                \n"
-                      "X:  {}\n"
-                      "Y:  {}\n"
-                      "Z:  {}\n\n"
-                      "Ball Velocity:  \n"
-                      "X:  {} m/s  -->  {} mph\n"
-                      "Y:  {} m/s  -->  {} mph\n"
-                      "Z:  {} m/s  -->  {} mph\n"
-                      "Net:  {} m/s  -->  {} mph\n",
+          fmt::format("Ball Coordinates:\n"
+                      "X:   {:6.2f}\n"
+                      "Y:   {:6.2f}\n"
+                      "Z:   {:6.2f}\n\n"
+                      "Ball Velocity:\n"
+                      "X:   {:6.2f} m/s\n"
+                      "   ({:7.2f} mph)\n"
+                      "Y:   {:6.2f} m/s\n"
+                      "   ({:7.2f} mph)\n"
+                      "Z:   {:6.2f} m/s\n"
+                      "   ({:7.2f} mph)\n"
+                      "Net: {:6.2f} m/s\n"
+                      "   ({:7.2f} mph)\n",
                       BallPos_X, BallPos_Y, BallPos_Z, BallVel_X, ms_to_mph(BallVel_X), BallVel_Y,
                       ms_to_mph(BallVel_Y), BallVel_Z, ms_to_mph(BallVel_Z), BallVel_Net,
                       ms_to_mph(BallVel_Net)),
           200, OSD::Color::CYAN);  // short time cause we don't want this info to linger
 
       OSD::AddTypedMessage(OSD::MessageType::TrainingModeFielderCoordinates,
-                           fmt::format("Fielder Coordinates:             \n"
-                                       "X:  {}\n"
-                                       "Y:  {}\n"
-                                       "Z:  {}\n\n"
-                                       "Fielder Velocity: \n"
-                                       "X:  {} m/s  -->  {} mph\n"
-                                       //"Y:  {} m/s  -->  {} mph\n"
-                                       "Z:  {} m/s  -->  {} mph\n"
-                                       "Net:  {} m/s  -->  {} mph",
+                           fmt::format("Fielder Coords:\n"
+                                       "X:   {:6.2f}\n"
+                                       "Y:   {:6.2f}\n"
+                                       "Z:   {:6.2f}\n\n"
+                                       "Fielder Velocity:\n"
+                                       "X:   {:6.2f} m/s\n"
+                                       "   ({:7.2f} mph)\n"
+                                       //"Y:   {:6.2f} m/s\n"
+                                       //"   ({:7.2f} mph)\n"
+                                       "Z:   {:6.2f} m/s\n"
+                                       "   ({:7.2f} mph)\n"
+                                       "Net: {:6.2f} m/s\n"
+                                       "   ({:7.2f} mph)",
                                        FielderPos_X, FielderPos_Y, FielderPos_Z, FielderVel_X,
                                        ms_to_mph(FielderVel_X),
                                        // FielderVel_Y, ms_to_mph(FielderVel_Y),
@@ -620,7 +632,7 @@ void DisplayPlayerNames(const Core::CPUThreadGuard& guard)
     // check for valid user
     if (batterName != "")
     {
-      OSD::AddTypedMessage(OSD::MessageType::CurrentBatter, fmt::format("Batter: {}", batterName),
+      OSD::AddTypedMessage(OSD::MessageType::CurrentBatter, fmt::format("B: {}", batterName),
                            OSD::Duration::SHORT, portColor[BatterPort]);
     }
 
@@ -628,7 +640,7 @@ void DisplayPlayerNames(const Core::CPUThreadGuard& guard)
     if (fielderName != "")
     {
       OSD::AddTypedMessage(OSD::MessageType::CurrentFielder,
-                           fmt::format("Fielder: {}", fielderName), OSD::Duration::SHORT,
+                           fmt::format("F: {}", fielderName), OSD::Duration::SHORT,
                            portColor[FielderPort]);
     }
 

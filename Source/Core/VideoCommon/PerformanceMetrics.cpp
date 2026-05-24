@@ -102,11 +102,12 @@ void PerformanceMetrics::DrawImGuiStats(const float backbuffer_scale)
   }
 
   const float window_padding = 8.f * backbuffer_scale;
-  const float window_width = 93.f * backbuffer_scale;
   float window_y = window_padding;
   float window_x = ImGui::GetIO().DisplaySize.x - window_padding;
 
-  const float graph_width = 50.f * backbuffer_scale + 3.f * window_width + 2.f * window_padding;
+  // Graph window keeps an explicit size; text overlays auto-resize to content (see below).
+  const float graph_width = 50.f * backbuffer_scale + 3.f * 93.f * backbuffer_scale +
+                            2.f * window_padding;
   const float graph_height =
       std::min(200.f * backbuffer_scale, ImGui::GetIO().DisplaySize.y - 85.f * backbuffer_scale);
 
@@ -189,41 +190,34 @@ void PerformanceMetrics::DrawImGuiStats(const float backbuffer_scale)
 
   if (g_ActiveConfig.bShowSpeed)
   {
-    // Position in the top-right corner of the screen.
-    float window_height = 47.f * backbuffer_scale;
-
+    // Position in the top-right corner of the screen, size auto-fits content.
     ImGui::SetNextWindowPos(ImVec2(window_x, window_y), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-    ImGui::SetNextWindowSize(ImVec2(window_width, window_height));
+    ImGui::SetNextWindowSize(ImVec2(0, 0));
     ImGui::SetNextWindowBgAlpha(bg_alpha);
 
-    if (stack_vertically)
-      window_y += window_height + window_padding;
-    else
-      window_x -= window_width + window_padding;
-
+    ImVec2 actual_size(0.0f, 0.0f);
     if (ImGui::Begin("SpeedStats", nullptr, imgui_flags))
     {
       ImGui::TextColored(ImVec4(r, g, b, 1.0f), "Speed:%4.0lf%%", 100.0 * speed);
       ImGui::TextColored(ImVec4(r, g, b, 1.0f), "Max:%6.0lf%%", 100.0 * GetMaxSpeed());
+      actual_size = ImGui::GetWindowSize();
       ImGui::End();
     }
+
+    if (stack_vertically)
+      window_y += actual_size.y + window_padding;
+    else
+      window_x -= actual_size.x + window_padding;
   }
 
   if (g_ActiveConfig.bShowFPS || g_ActiveConfig.bShowFTimes)
   {
-    int count = g_ActiveConfig.bShowFPS + 2 * g_ActiveConfig.bShowFTimes;
-    float window_height = (12.f + 17.f * count) * backbuffer_scale;
-
-    // Position in the top-right corner of the screen.
+    // Position in the top-right corner of the screen, size auto-fits content.
     ImGui::SetNextWindowPos(ImVec2(window_x, window_y), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-    ImGui::SetNextWindowSize(ImVec2(window_width, window_height));
+    ImGui::SetNextWindowSize(ImVec2(0, 0));
     ImGui::SetNextWindowBgAlpha(bg_alpha);
 
-    if (stack_vertically)
-      window_y += window_height + window_padding;
-    else
-      window_x -= window_width + window_padding;
-
+    ImVec2 actual_size(0.0f, 0.0f);
     if (ImGui::Begin("FPSStats", nullptr, imgui_flags))
     {
       if (g_ActiveConfig.bShowFPS)
@@ -235,25 +229,24 @@ void PerformanceMetrics::DrawImGuiStats(const float backbuffer_scale)
         ImGui::TextColored(ImVec4(r, g, b, 1.0f), " ±:%6.2lfms",
                            DT_ms(m_fps_counter.GetDtStd()).count());
       }
+      actual_size = ImGui::GetWindowSize();
       ImGui::End();
     }
+
+    if (stack_vertically)
+      window_y += actual_size.y + window_padding;
+    else
+      window_x -= actual_size.x + window_padding;
   }
 
   if (g_ActiveConfig.bShowVPS || g_ActiveConfig.bShowVTimes)
   {
-    int count = g_ActiveConfig.bShowVPS + 2 * g_ActiveConfig.bShowVTimes;
-    float window_height = (12.f + 17.f * count) * backbuffer_scale;
-
-    // Position in the top-right corner of the screen.
+    // Position in the top-right corner of the screen, size auto-fits content.
     ImGui::SetNextWindowPos(ImVec2(window_x, window_y), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-    ImGui::SetNextWindowSize(ImVec2(window_width, (12.f + 17.f * count) * backbuffer_scale));
+    ImGui::SetNextWindowSize(ImVec2(0, 0));
     ImGui::SetNextWindowBgAlpha(bg_alpha);
 
-    if (stack_vertically)
-      window_y += window_height + window_padding;
-    else
-      window_x -= window_width + window_padding;
-
+    ImVec2 actual_size(0.0f, 0.0f);
     if (ImGui::Begin("VPSStats", nullptr, imgui_flags))
     {
       if (g_ActiveConfig.bShowVPS)
@@ -265,8 +258,14 @@ void PerformanceMetrics::DrawImGuiStats(const float backbuffer_scale)
         ImGui::TextColored(ImVec4(r, g, b, 1.0f), " ±:%6.2lfms",
                            DT_ms(m_vps_counter.GetDtStd()).count());
       }
+      actual_size = ImGui::GetWindowSize();
       ImGui::End();
     }
+
+    if (stack_vertically)
+      window_y += actual_size.y + window_padding;
+    else
+      window_x -= actual_size.x + window_padding;
   }
 
   ImGui::PopStyleVar(2);
