@@ -18,7 +18,6 @@
 class BootSessionData;
 class ChunkedProgressDialog;
 class GameDigestDialog;
-class MSBGameStateWidget;
 class PadMappingDialog;
 class QCheckBox;
 class QComboBox;
@@ -193,8 +192,6 @@ private:
   QCheckBox* m_disable_replays;
   QCheckBox* m_fast_reset_from_HUD;
   QCheckBox* m_spectator_toggle;
-
-  MSBGameStateWidget* m_game_state_widget;
 
   QGridLayout* m_main_layout;
   GameDigestDialog* m_game_digest_dialog;
