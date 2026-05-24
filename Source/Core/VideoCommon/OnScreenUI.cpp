@@ -407,6 +407,12 @@ void OnScreenUI::Finalize()
 #endif  // USE_RETRO_ACHIEVEMENTS
   ImGui::Render();
 
+  // Check for font changes
+  ImGuiStyle& style = ImGui::GetStyle();
+  const int size = Config::Get(Config::MAIN_OSD_FONT_SIZE);
+  if (size != style.FontSizeBase)
+    style.FontSizeBase = static_cast<float>(size);
+
   // Create or update fonts.
   ImDrawData* draw_data = ImGui::GetDrawData();
   if (draw_data->Textures != nullptr)
@@ -453,13 +459,36 @@ void OnScreenUI::UpdateImguiTexture(ImTextureData* tex)
       return;
     }
 
-    // Re-upload the entire atlas instead of doing per-rect staging updates.
-    // The mainline-style per-ImTextureRect staging-texture path (CreateStagingTexture +
-    // WriteTexels + CopyToTexture for each Updates[] entry) corrupts the font atlas on
-    // macOS Metal — sampled glyphs ended up as random GPU memory contents. A full
-    // re-upload is cheap relative to the rendering cost and works on every backend.
-    font_tex->Load(0, tex->Width, tex->Height, tex->Width, tex->Pixels,
-                   sizeof(u32) * tex->Width * tex->Height);
+    for (const ImTextureRect& r : tex->Updates)
+    {
+      // Rect of texture that will be updated.
+      const int x_offset = static_cast<int>(r.x);
+      const int y_offset = static_cast<int>(r.y);
+      const int width = static_cast<int>(r.w);
+      const int height = static_cast<int>(r.h);
+
+      // Create a staging texture to update the font texture with.
+      TextureConfig font_tex_config(width, height, 1, 1, 1, AbstractTextureFormat::RGBA8, 0,
+                                    AbstractTextureType::Texture_2DArray);
+      std::unique_ptr<AbstractStagingTexture> stage =
+          g_gfx->CreateStagingTexture(StagingTextureType::Upload, font_tex_config);
+
+      const int src_pitch = width * tex->BytesPerPixel;
+
+      // Write to staging texture.
+      for (int y = 0; y < height; y++)
+      {
+        const MathUtil::Rectangle<int> rect_line = {0, y, width, y + 1};
+        stage->WriteTexels(rect_line, tex->GetPixelsAt(x_offset, y_offset + y), src_pitch);
+      }
+
+      // Copy to font texture.
+      const MathUtil::Rectangle<int> rect_staging = {0, 0, width, height};
+      const MathUtil::Rectangle<int> rect_target = {x_offset, y_offset, width + x_offset,
+                                                    height + y_offset};
+
+      stage->CopyToTexture(rect_staging, font_tex, rect_target, 0, 0);
+    }
 
     tex->SetStatus(ImTextureStatus_OK);
   }
@@ -487,30 +516,13 @@ void OnScreenUI::SetScale(float backbuffer_scale)
   ImGui::GetIO().DisplayFramebufferScale.x = backbuffer_scale;
   ImGui::GetIO().DisplayFramebufferScale.y = backbuffer_scale;
 
-  // Rescue text legibility on non-Retina high-res displays. A 3440x1440 ultrawide
-  // typically reports backbuffer_scale = 1.0, which bakes VeraMono at only 13 physical
-  // pixels — small AND soft because there aren't enough pixels per glyph stroke. When
-  // DPI is clearly missing (< 1.5), derive scale from backbuffer height instead.
-  // Retina displays (scale >= 1.5) are left alone — their reported DPI already gives
-  // a comfortable OSD size, and boosting further at high resolutions would just make
-  // the text inappropriately large.
-  float effective_scale = backbuffer_scale;
-  if (backbuffer_scale < 1.5f && g_presenter)
-  {
-    const float reference_height = 720.0f;
-    const float height_factor =
-        static_cast<float>(g_presenter->GetBackbufferHeight()) / reference_height;
-    effective_scale = std::max(backbuffer_scale, height_factor);
-  }
-
-  // ScaleAllSizes scales in-place, so calling it twice will double-apply the scale.
-  // Reset the style first so that the scale is applied to the base style, not an already-scaled one.
+  // ScaleAllSizes scales in-place, so calling it twice will double-apply the scale
+  // Reset the style first so that the scale is applied to the base style, not an already-scaled one
   ImGuiStyle& style = ImGui::GetStyle();
   style = {};
-  style.FontSizeBase = 13.0f;
-  style.FontScaleMain = effective_scale;
+  style.FontScaleMain = backbuffer_scale;
   style.WindowRounding = 7.0f;
-  style.ScaleAllSizes(effective_scale);
+  style.ScaleAllSizes(backbuffer_scale);
 
   m_backbuffer_scale = backbuffer_scale;
 }

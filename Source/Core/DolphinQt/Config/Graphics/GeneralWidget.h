@@ -60,4 +60,5 @@ private:
   ConfigBool* m_show_player_names;
   ConfigBool* m_training_mode;
   ConfigBool* m_draft_timer;
+  ConfigInteger* m_osd_font_size;
 };

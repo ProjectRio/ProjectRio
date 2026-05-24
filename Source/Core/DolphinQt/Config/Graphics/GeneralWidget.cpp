@@ -105,6 +105,7 @@ void GeneralWidget::CreateWidgets()
   m_show_player_names = new ConfigBool(tr("Show Player Names"), Config::GFX_SHOW_PLAYER_NAMES);
   m_training_mode = new ConfigBool(tr("Training Mode v1.0"), Config::GFX_TRAINING_MODE);
   m_draft_timer = new ConfigBool(tr("Draft Timer"), Config::GFX_DRAFT_TIMER);
+  m_osd_font_size = new ConfigInteger(8, 40, Config::MAIN_OSD_FONT_SIZE);
 
   m_autoadjust_window_size =
       new ConfigBool(tr("Auto-Adjust Window Size"), Config::MAIN_RENDER_WINDOW_AUTOSIZE);
@@ -123,6 +124,9 @@ void GeneralWidget::CreateWidgets()
   m_options_layout->addWidget(m_training_mode, 3, 1);
 
   m_options_layout->addWidget(m_draft_timer, 4, 0);
+
+  m_options_layout->addWidget(new QLabel(tr("OSD Font Size:")), 5, 0);
+  m_options_layout->addWidget(m_osd_font_size, 5, 1);
 
   // Other
   auto* shader_compilation_box = new QGroupBox(tr("Shader Compilation"));

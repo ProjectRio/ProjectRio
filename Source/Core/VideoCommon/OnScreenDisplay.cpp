@@ -125,9 +125,9 @@ static ImVec4 ARGBToImVec4(const u32 argb)
                 static_cast<float>((argb >> 24) & 0xFF) / 255.0f);
 }
 
-// Smallest fraction of the normal font size we'll shrink to in order to fit a message
-// inside a narrow black bar. Anything below this is unreadable so we let it spill instead.
-constexpr float MIN_FIT_SCALE = 0.55f;
+// Smallest pixel font size we'll shrink to in order to fit a message inside a narrow
+// black bar. Below this glyphs are unreadable so we let the text spill instead.
+constexpr float MIN_FIT_PX = 10.0f;
 
 // Parameters passed to DrawMessage. Bundled into a struct to keep the call site readable
 // — there are a lot of inputs that vary per box.
@@ -173,8 +173,8 @@ static float DrawMessage(const DrawParams& p)
     const ImVec2 text_size = ImGui::CalcTextSize(p.text->c_str());
     if (text_size.x > p.max_content_width)
     {
-      const float fit_scale = std::max(p.max_content_width / text_size.x, MIN_FIT_SCALE);
-      const float new_base = ImGui::GetStyle().FontSizeBase * fit_scale;
+      const float fit_scale = p.max_content_width / text_size.x;
+      const float new_base = std::max(ImGui::GetStyle().FontSizeBase * fit_scale, MIN_FIT_PX);
       ImGui::PushFont(nullptr, new_base);
       font_pushed = true;
     }
@@ -312,10 +312,10 @@ void DrawMessages()
   // Default Dolphin OSD positioning: top-left of the window, stacking downward.
   // We give each message a max text width derived from the left pillar (the black
   // bar between the window edge and the game image). DrawMessage uses this to
-  // shrink-to-fit, clamped at MIN_FIT_SCALE so text never becomes unreadable.
+  // shrink-to-fit, clamped at MIN_FIT_PX so text never becomes unreadable.
   // - Wide pillar: text fits at full size, no shrink.
   // - Tight pillar: text shrinks to fit exactly.
-  // - Narrower than MIN_FIT_SCALE allows: text shrinks to MIN_FIT_SCALE and spills
+  // - Narrower than MIN_FIT_PX allows: text shrinks to MIN_FIT_PX and spills
   //   leftward off-screen (better than not shrinking at all, since at least the
   //   right portion of each line is visible inside the pillar).
   // - No pillar (target.left == 0): max_content_width = 0, no shrink, box overlays
