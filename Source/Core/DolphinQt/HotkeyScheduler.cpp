@@ -245,6 +245,12 @@ void HotkeyScheduler::Run()
       if (IsHotkey(HK_ACTIVATE_CHAT))
         emit ActivateChat();
 
+      if (IsHotkey(HK_CHAT_SNAP_LEFT))
+        emit ChatSnapLeft();
+
+      if (IsHotkey(HK_CHAT_SNAP_RIGHT))
+        emit ChatSnapRight();
+
       if (IsHotkey(HK_REQUEST_GOLF_CONTROL))
         emit RequestGolfControl();
 
