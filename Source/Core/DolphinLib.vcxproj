@@ -27,7 +27,7 @@
     <ClCompile />
     <ClCompile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <DisableSpecificWarnings>%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4459;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>

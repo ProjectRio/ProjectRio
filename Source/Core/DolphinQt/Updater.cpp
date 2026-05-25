@@ -44,22 +44,112 @@ void Updater::CheckForUpdate()
 
 std::string Updater::MarkDownToRichText(std::string str)
 {
-  std::string markdownNewLine = "\r\n";
-  std::string RichTextNewLine = "<br/>";
+  std::istringstream stream(str);
+  std::ostringstream result;
+  std::string line;
+  bool inList = false;
+  int currentLevel = 1;
 
-  size_t start_pos = 0;
-  while ((start_pos = str.find(markdownNewLine, start_pos)) != std::string::npos)
+  auto closeList = [&]() {
+    if (inList)
+    {
+      if (currentLevel == 2)
+        result << "</ul>";
+      result << "</ul>";
+      inList = false;
+      currentLevel = 1;
+    }
+  };
+
+  while (std::getline(stream, line))
   {
-    str.replace(start_pos, markdownNewLine.length(), RichTextNewLine);
-    start_pos += RichTextNewLine.length();
+    // Strip trailing \r
+    if (!line.empty() && line.back() == '\r')
+      line.pop_back();
+
+    // Detect indent before stripping for bullet handling
+    size_t firstChar = line.find_first_not_of(" \t");
+
+    // Headings
+    if (firstChar == 0 && line.substr(0, 4) == "### ")
+    {
+      closeList();
+      result << "<h3>" << line.substr(4) << "</h3>";
+    }
+    else if (firstChar == 0 && line.substr(0, 3) == "## ")
+    {
+      closeList();
+      result << "<h2>" << line.substr(3) << "</h2>";
+    }
+    else if (firstChar == 0 && line.substr(0, 2) == "# ")
+    {
+      closeList();
+      result << "<h1>" << line.substr(2) << "</h1>";
+    }
+    // Bullet points
+    else if (firstChar != std::string::npos && (line[firstChar] == '-' || line[firstChar] == '*') &&
+             line.size() > firstChar + 1 && line[firstChar + 1] == ' ')
+    {
+      int level = (firstChar == 0) ? 1 : 2;
+      std::string content = line.substr(firstChar + 2);
+
+      if (!inList)
+      {
+        result << "<ul>";
+        inList = true;
+        currentLevel = 1;
+      }
+
+      if (level > currentLevel)
+      {
+        result << "<ul>";
+        currentLevel = level;
+      }
+      else if (level < currentLevel)
+      {
+        result << "</ul>";
+        currentLevel = level;
+      }
+
+      result << "<li>" << content << "</li>";
+    }
+    // Empty line
+    else if (line.empty() || firstChar == std::string::npos)
+    {
+      if (!inList)
+        result << "<br/>";
+    }
+    // Normal line
+    else
+    {
+      closeList();
+      result << line << "<br/>";
+    }
   }
 
-  start_pos = 0;
-  while ((start_pos = str.find("*", start_pos)) != std::string::npos)
-  {
-    str.erase(start_pos, 1);
-  }
-  return str;
+  closeList();
+
+  // Inline formatting
+  std::string out = result.str();
+  auto replaceInline = [](std::string& s, const std::string& mdOpen, const std::string& mdClose,
+                          const std::string& htmlOpen, const std::string& htmlClose) {
+    size_t pos = 0;
+    while ((pos = s.find(mdOpen, pos)) != std::string::npos)
+    {
+      s.replace(pos, mdOpen.length(), htmlOpen);
+      size_t end = s.find(mdClose, pos + htmlOpen.length());
+      if (end == std::string::npos)
+        break;
+      s.replace(end, mdClose.length(), htmlClose);
+      pos = end + htmlClose.length();
+    }
+  };
+
+  replaceInline(out, "**", "**", "<strong>", "</strong>");
+  replaceInline(out, "*", "*", "<em>", "</em>");
+  replaceInline(out, "`", "`", "<code>", "</code>");
+
+  return out;
 }
 
 void Updater::OnUpdateAvailable(const NewVersionInformation& info)
@@ -69,29 +159,36 @@ void Updater::OnUpdateAvailable(const NewVersionInformation& info)
     QDialog* dialog = new QDialog(m_parent);
     dialog->setWindowTitle(tr("Update available"));
     dialog->setWindowFlags(dialog->windowFlags() & ~Qt::WindowContextHelpButtonHint);
-    auto* label = new QLabel(tr("<h2>A new version of Rio is available!</h2>"
-                                "<h4>Head to the Project Rio website to download the latest update!</h4>"
-                                "<u>New Version:</u><strong> %1</strong><br/>"
-                                "<u>Your Version:</u><strong> %2</strong><br/>"
-                                "<h3>Changelog</h3>%3")
-                                .arg(QString::fromStdString(info.new_shortrev))
-                                .arg(QString::fromStdString(Common::GetRioRevStr()))
-                                .arg(QString::fromStdString(changes)));
+
+    auto* label =
+        new QLabel(tr("<h2>A new version of Rio is available!</h2>"
+                      "<h4>Head to the Project Rio website to download the latest update!</h4>"
+                      "<u>New Version:</u><strong> %1</strong><br/>"
+                      "<u>Your Version:</u><strong> %2</strong><br/>"
+                      "<h3>Changelog</h3>")
+                       .arg(QString::fromStdString(info.new_shortrev))
+                       .arg(QString::fromStdString(Common::GetRioRevStr())));
     label->setTextFormat(Qt::RichText);
 
-    auto* buttons = new QDialogButtonBox;
-    auto* projectrio = buttons->addButton(tr("Go to Project Rio website"), QDialogButtonBox::AcceptRole);
+    auto* changelog = new QTextEdit;
+    changelog->setHtml(QString::fromStdString(changes));
+    changelog->setReadOnly(true);
 
+    auto* buttons = new QDialogButtonBox;
+    auto* projectrio =
+        buttons->addButton(tr("Go to Project Rio website"), QDialogButtonBox::AcceptRole);
     connect(projectrio, &QPushButton::clicked, this, []() {
       QDesktopServices::openUrl(QUrl(QStringLiteral("https://www.projectrio.online/")));
     });
 
     auto* layout = new QVBoxLayout;
     layout->addWidget(label);
-    dialog->setLayout(layout);
+    layout->addWidget(changelog);
     layout->addWidget(buttons);
-
+    dialog->setLayout(layout);
     SetQWidgetWindowDecorations(dialog);
+    dialog->resize(500, 600);
+    changelog->setMinimumHeight(350);
     return dialog->exec();
   });
 
