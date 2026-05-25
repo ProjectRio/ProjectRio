@@ -164,7 +164,7 @@ jobs:
           - build_type: Release
             build_config: release
     name: "macOS ${{ matrix.build_type }} ${{ matrix.arch }}"
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 90
     steps:
       - name: "Checkout"
@@ -217,8 +217,7 @@ jobs:
         shell: bash
         run: |
           rm '/usr/local/bin/2to3' || true
-          echo "HOMEBREW_NO_AUTO_UPDATE=1" >> $GITHUB_ENV
-          brew upgrade cmake
+          export HOMEBREW_NO_AUTO_UPDATE=1
           brew install \
           ccache \
           ffmpeg \
@@ -242,7 +241,6 @@ jobs:
               "NONINTERACTIVE=1 /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
           fi
           echo "/usr/local/bin" >> $GITHUB_PATH
-          arch -x86_64 /usr/local/bin/brew update-reset || true
           arch -x86_64 /usr/local/bin/brew install \
             cmake \
             ccache \
