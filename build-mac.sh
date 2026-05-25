@@ -25,46 +25,6 @@ if command -v ccache &> /dev/null; then
     CMAKE_FLAGS+=' -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
 fi
 
-# Normalize Homebrew dylib hard links to proper symlinks before cmake runs.
-# CI Homebrew sometimes installs versioned dylib aliases (e.g. libavcodec.62.dylib
-# and libavcodec.62.28.101.dylib) as hard links rather than symlinks. CMake's
-# fixup_bundle copies both. Converting aliases to symlinks means fixup_bundle
-# sees only one canonical copy per library.
-echo "Normalizing Homebrew dylib symlinks in ${BREW_PREFIX}/lib..."
-python3 - "${BREW_PREFIX}/lib" <<'PYEOF'
-import os, sys
-
-lib_dir = sys.argv[1]
-if not os.path.isdir(lib_dir):
-    sys.exit(0)
-
-inodes = {}
-for name in os.listdir(lib_dir):
-    if not name.endswith('.dylib'):
-        continue
-    path = os.path.join(lib_dir, name)
-    if os.path.islink(path):
-        continue
-    try:
-        inodes.setdefault(os.stat(path).st_ino, []).append(path)
-    except OSError:
-        pass
-
-normalized = 0
-for paths in inodes.values():
-    if len(paths) < 2:
-        continue
-    paths.sort(key=lambda p: len(os.path.basename(p)), reverse=True)
-    canonical = paths[0]
-    for alias in paths[1:]:
-        os.remove(alias)
-        os.symlink(os.path.basename(canonical), alias)
-        print(f"  {os.path.basename(alias)} -> {os.path.basename(canonical)}")
-        normalized += 1
-
-print(f"Normalized {normalized} dylib alias(es).")
-PYEOF
-
 mkdir -p build
 pushd build
 cmake ${CMAKE_FLAGS} ..
@@ -73,3 +33,64 @@ popd
 
 echo "Copying Sys files into the bundle"
 cp -Rfn "${DATA_SYS_PATH}" "${BINARY_PATH}"
+
+# fixup_bundle copies versioned dylib aliases (e.g. libavcodec.62.dylib and
+# libavcodec.62.28.101.dylib) as separate full-size files, and copies Qt framework
+# binaries to multiple locations (Versions/A/, Versions/Current/, and the top-level
+# framework directory) instead of keeping symlinks. Deduplicate by content after the
+# bundle is fully assembled: for each set of identical files, keep the most canonical
+# copy and delete the rest. Nothing in the bundle references the deleted paths because
+# fixup_bundle already rewrote all install names to point at the canonical copies.
+echo "Deduplicating bundle frameworks..."
+python3 - "./build/Binaries/ProjectRio.app/Contents/Frameworks" <<'PYEOF'
+import os, sys, hashlib
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        while True:
+            chunk = f.read(65536)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+frameworks = sys.argv[1]
+if not os.path.isdir(frameworks):
+    sys.exit(0)
+
+file_hashes = {}
+for dirpath, dirnames, filenames in os.walk(frameworks):
+    for fname in filenames:
+        fpath = os.path.join(dirpath, fname)
+        if os.path.islink(fpath):
+            continue
+        try:
+            file_hashes.setdefault(sha256(fpath), []).append(fpath)
+        except OSError:
+            pass
+
+def priority(p):
+    rel = os.path.relpath(p, frameworks)
+    name = os.path.basename(p)
+    if 'Versions/A' in rel:
+        return (2, len(name))
+    if 'Versions/Current' in rel:
+        return (0, len(name))
+    return (1, len(name))
+
+deleted = 0
+freed = 0
+for paths in file_hashes.values():
+    if len(paths) < 2:
+        continue
+    paths.sort(key=priority, reverse=True)
+    for dup in paths[1:]:
+        size = os.path.getsize(dup)
+        os.remove(dup)
+        freed += size
+        deleted += 1
+        print(f"  Removed: {os.path.relpath(dup, frameworks)}")
+
+print(f"Removed {deleted} duplicate file(s), freed {freed / 1024 / 1024:.1f} MB")
+PYEOF
