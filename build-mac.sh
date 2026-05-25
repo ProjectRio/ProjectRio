@@ -34,6 +34,15 @@ popd
 echo "Copying Sys files into the bundle"
 cp -Rfn "${DATA_SYS_PATH}" "${BINARY_PATH}"
 
+# When no real certificate is present, ad-hoc sign the bundle so macOS does not
+# reject it as "damaged" due to Homebrew dylibs that fixup_bundle modified after
+# they were originally signed. Ad-hoc signing replaces the broken signatures and
+# allows users to open the app via right-click -> Open or Settings > Privacy.
+if [[ -z "${CERTIFICATE_MACOS_APPLICATION}" ]]; then
+    echo "Ad-hoc signing bundle..."
+    codesign --force --deep --sign - "./build/Binaries/ProjectRio.app"
+fi
+
 # fixup_bundle copies versioned dylib aliases (e.g. libavcodec.62.dylib and
 # libavcodec.62.28.101.dylib) as separate full-size files, and copies Qt framework
 # binaries to multiple locations (Versions/A/, Versions/Current/, and the top-level
