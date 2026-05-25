@@ -287,3 +287,29 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}
           path: "./artifact/"
+
+  steamOS:
+    name: "Steam Deck (Flatpak)"
+    runs-on: ubuntu-latest
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:kde-6.7
+      options: --privileged
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [ Release ]
+        include:
+          - build_type: Release
+            artifact_name: ProjectRio-steamOS
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@bf5cafdfd97dcf5a89c7475bbc86a616e1f86acb # v6.7
+        with:
+          manifest-path: Tools/flatpak.yml
+          bundle: ${{ matrix.artifact_name }}.flatpak
+          cache-key: flatpak-builder-${{ github.sha }}
