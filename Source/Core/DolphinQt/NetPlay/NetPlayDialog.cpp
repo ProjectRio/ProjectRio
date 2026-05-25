@@ -695,9 +695,10 @@ void NetPlayDialog::OnGameMode(std::string mode, std::string description,
     if (tag != mode)
       tags_string.append(" " + tag + ",");
   }
-  tags_string.pop_back(); // remove final delimiter
+  if (!tags_string.empty())
+    tags_string.pop_back();
 
-  DisplayMessage(tr("Game Mode: %1").arg(QString::fromStdString(mode)),"darkgoldenrod");
+  DisplayMessage(tr("Game Mode: %1").arg(QString::fromStdString(mode)), "darkgoldenrod");
   DisplayMessage(tr("%1").arg(QString::fromStdString(description)), "goldenrod");
   DisplayMessage(tr("Tags:%1").arg(QString::fromStdString(tags_string)), "goldenrod");
 }
