@@ -10,15 +10,10 @@ export LIBRARY_PATH=$LIBRARY_PATH:${BREW_PREFIX}/lib:/usr/local/lib:/usr/lib/
 QT_BREW_PATH=$(brew --prefix qt@6)
 CMAKE_FLAGS="-DQt6_DIR=${QT_BREW_PATH}/lib/cmake/Qt6 -DENABLE_NOGUI=false"
 
-# Always disable CMake's POST_BUILD codesign step. Any signature produced there
-# would be invalidated by the framework layout pass below, so we sign once at
-# the end of this script instead.
+# Disable CMake's POST_BUILD codesign step. Any signature it produced would be
+# invalidated by the framework layout pass below, so we ad-hoc sign once at the
+# end of this script instead.
 CMAKE_FLAGS+=' -DMACOS_CODE_SIGNING="OFF"'
-if [[ -z "${CERTIFICATE_MACOS_APPLICATION}" ]]; then
-    echo "Building without release code signing (will ad-hoc sign at end)"
-else
-    echo "Building with release code signing (signed at end of script)"
-fi
 
 CMAKE_FLAGS+=' -DCMAKE_POLICY_VERSION_MINIMUM=3.5'
 
@@ -87,7 +82,8 @@ frameworks = sys.argv[1]
 if not os.path.isdir(frameworks):
     sys.exit(0)
 
-freed = 0
+layout_freed = 0
+dedup_freed = 0
 
 # Pass 1: rebuild proper framework layout (Versions/Current symlink + top-level symlinks).
 for entry in sorted(os.listdir(frameworks)):
@@ -114,7 +110,7 @@ for entry in sorted(os.listdir(frameworks)):
     # Replace Versions/Current with a symlink to the real version directory.
     current = os.path.join(versions_dir, 'Current')
     if os.path.lexists(current):
-        freed += tree_size(current)
+        layout_freed += tree_size(current)
         remove(current)
     os.symlink(real_version, current)
 
@@ -125,7 +121,7 @@ for entry in sorted(os.listdir(frameworks)):
         if os.path.islink(top):
             continue
         if os.path.lexists(top):
-            freed += tree_size(top)
+            layout_freed += tree_size(top)
             remove(top)
         os.symlink(os.path.join('Versions', 'Current', child), top)
 
@@ -160,58 +156,42 @@ for paths in file_hashes.values():
     keep = paths[0]
     for dup in paths[1:]:
         rel_target = os.path.relpath(keep, os.path.dirname(dup))
-        freed += os.path.getsize(dup)
+        dedup_freed += os.path.getsize(dup)
         os.unlink(dup)
         os.symlink(rel_target, dup)
         linked += 1
         print(f"  Linked: {os.path.relpath(dup, frameworks)} -> {rel_target}")
 
-print(f"Replaced duplicates with {linked} symlink(s), freed {freed / 1024 / 1024:.1f} MB")
+total_freed = layout_freed + dedup_freed
+print(f"Framework layout fix freed {layout_freed / 1024 / 1024:.1f} MB; "
+      f"deduped {linked} file(s) freed {dedup_freed / 1024 / 1024:.1f} MB "
+      f"(total {total_freed / 1024 / 1024:.1f} MB)")
 PYEOF
 
-# Sign the bundle AFTER the layout fix so the signature covers the final state.
-# fixup_bundle rewrites install names on Homebrew dylibs, which invalidates their
-# original signatures; the layout pass above further modifies the bundle. Without
-# a fresh signature macOS marks the app as "damaged".
+# Ad-hoc sign the bundle AFTER the layout fix so the signature covers the final
+# state. fixup_bundle rewrites install names on Homebrew dylibs (invalidating
+# their original signatures) and the layout pass above further modifies the
+# bundle, so without a fresh signature macOS marks the app as "damaged".
 #
 # Signing is done inside-out (Apple's recommended pattern, replacing the now-
 # deprecated --deep flag): every nested .dylib and .framework is signed first
 # (deepest paths first, via `find -depth`), then the outer .app is signed last
 # so its signature seals over the already-signed nested code.
+#
+# This script only ad-hoc signs; release signing + notarization is not wired up
+# yet. When it is, add the cert import, identity, hardened-runtime opts, and
+# entitlements as one cohesive change rather than half-scaffolded here.
 APP="./build/Binaries/ProjectRio.app"
-if [[ -z "${CERTIFICATE_MACOS_APPLICATION}" ]]; then
-    echo "Ad-hoc signing bundle (inside-out)..."
-    SIGN_IDENTITY="-"
-    RUNTIME_OPTS=()
-    ENTITLEMENT_OPTS=()
-else
-    echo "Release signing bundle (inside-out)..."
-    SIGN_IDENTITY="${MACOS_CODE_SIGNING_IDENTITY}"
-    RUNTIME_OPTS=(--options=runtime)
-    ENTITLEMENT_OPTS=(--entitlements "Source/Core/DolphinQt/DolphinEmu.entitlements")
-fi
+echo "Ad-hoc signing bundle (inside-out)..."
 
-# Sign nested Mach-O code first (dylibs and frameworks), deepest first.
 while IFS= read -r -d '' item; do
-    codesign --force "${RUNTIME_OPTS[@]}" --sign "${SIGN_IDENTITY}" "${item}"
+    codesign --force --sign - "${item}"
 done < <(find "${APP}/Contents" -depth \( -name "*.dylib" -o -name "*.framework" \) -print0)
 
-# Sign the outer app last, sealing over the nested signatures. Entitlements are
-# applied only to the main bundle (hardened runtime opts propagate via the
-# nested signatures above).
-codesign --force "${RUNTIME_OPTS[@]}" "${ENTITLEMENT_OPTS[@]}" --sign "${SIGN_IDENTITY}" "${APP}"
+codesign --force --sign - "${APP}"
 
-# Verify the result so a broken bundle fails the build instead of shipping.
-# --deep is deprecated for signing but is still the recommended form for
-# verification: it walks every nested signature instead of relying solely on
-# the outer seal's CodeResources hashes.
+# Verify so a broken bundle fails the build instead of shipping. --deep is
+# deprecated for signing but is still the recommended form for verification:
+# it walks every nested signature instead of relying solely on the outer
+# seal's CodeResources hashes.
 codesign --verify --deep --strict --verbose=2 "${APP}"
-
-# On release builds, also run the full Gatekeeper assessment — the same check
-# the user's Mac performs at first launch. This will fail until the bundle is
-# notarized, so it is informational only (|| true) and skipped on ad-hoc builds
-# where it would always fail.
-if [[ -n "${CERTIFICATE_MACOS_APPLICATION}" ]]; then
-    echo "Running Gatekeeper assessment (informational, pre-notarization):"
-    spctl --assess --type execute --verbose=2 "${APP}" || true
-fi

@@ -214,7 +214,6 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
           git config core.fileMode false
-          chmod +x ./build-mac.sh
           ./build-mac.sh release
       - name: "Package"
         shell: bash
