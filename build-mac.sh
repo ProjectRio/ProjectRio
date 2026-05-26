@@ -10,12 +10,14 @@ export LIBRARY_PATH=$LIBRARY_PATH:${BREW_PREFIX}/lib:/usr/local/lib:/usr/lib/
 QT_BREW_PATH=$(brew --prefix qt@6)
 CMAKE_FLAGS="-DQt6_DIR=${QT_BREW_PATH}/lib/cmake/Qt6 -DENABLE_NOGUI=false"
 
+# Always disable CMake's POST_BUILD codesign step. Any signature produced there
+# would be invalidated by the framework layout pass below, so we sign once at
+# the end of this script instead.
+CMAKE_FLAGS+=' -DMACOS_CODE_SIGNING="OFF"'
 if [[ -z "${CERTIFICATE_MACOS_APPLICATION}" ]]; then
-    echo "Building without code signing"
-    CMAKE_FLAGS+=' -DMACOS_CODE_SIGNING="OFF"'
+    echo "Building without release code signing (will ad-hoc sign at end)"
 else
-    echo "Building with code signing"
-    CMAKE_FLAGS+=' -DMACOS_CODE_SIGNING="ON"'
+    echo "Building with release code signing (signed at end of script)"
 fi
 
 CMAKE_FLAGS+=' -DCMAKE_POLICY_VERSION_MINIMUM=3.5'
@@ -167,13 +169,37 @@ for paths in file_hashes.values():
 print(f"Replaced duplicates with {linked} symlink(s), freed {freed / 1024 / 1024:.1f} MB")
 PYEOF
 
-# Ad-hoc sign AFTER the layout fix so the signature covers the final bundle
-# state. fixup_bundle modifies Homebrew dylibs (rewriting install names), which
-# invalidates their original signatures; without a fresh signature macOS marks
-# the app as "damaged". A real certificate is used when CERTIFICATE_MACOS_APPLICATION
-# is set; otherwise an ad-hoc signature is enough to satisfy Gatekeeper after a
-# right-click -> Open or via Settings > Privacy.
+# Sign the bundle AFTER the layout fix so the signature covers the final state.
+# fixup_bundle rewrites install names on Homebrew dylibs, which invalidates their
+# original signatures; the layout pass above further modifies the bundle. Without
+# a fresh signature macOS marks the app as "damaged".
+#
+# Signing is done inside-out (Apple's recommended pattern, replacing the now-
+# deprecated --deep flag): every nested .dylib and .framework is signed first
+# (deepest paths first, via `find -depth`), then the outer .app is signed last
+# so its signature seals over the already-signed nested code.
+APP="./build/Binaries/ProjectRio.app"
 if [[ -z "${CERTIFICATE_MACOS_APPLICATION}" ]]; then
-    echo "Ad-hoc signing bundle..."
-    codesign --force --deep --sign - "./build/Binaries/ProjectRio.app"
+    echo "Ad-hoc signing bundle (inside-out)..."
+    SIGN_IDENTITY="-"
+    RUNTIME_OPTS=()
+    ENTITLEMENT_OPTS=()
+else
+    echo "Release signing bundle (inside-out)..."
+    SIGN_IDENTITY="${MACOS_CODE_SIGNING_IDENTITY}"
+    RUNTIME_OPTS=(--options=runtime)
+    ENTITLEMENT_OPTS=(--entitlements "Source/Core/DolphinQt/DolphinEmu.entitlements")
 fi
+
+# Sign nested Mach-O code first (dylibs and frameworks), deepest first.
+while IFS= read -r -d '' item; do
+    codesign --force "${RUNTIME_OPTS[@]}" --sign "${SIGN_IDENTITY}" "${item}"
+done < <(find "${APP}/Contents" -depth \( -name "*.dylib" -o -name "*.framework" \) -print0)
+
+# Sign the outer app last, sealing over the nested signatures. Entitlements are
+# applied only to the main bundle (hardened runtime opts propagate via the
+# nested signatures above).
+codesign --force "${RUNTIME_OPTS[@]}" "${ENTITLEMENT_OPTS[@]}" --sign "${SIGN_IDENTITY}" "${APP}"
+
+# Verify the result so a broken bundle fails the build instead of shipping.
+codesign --verify --strict --verbose=2 "${APP}"
