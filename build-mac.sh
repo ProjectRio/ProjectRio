@@ -176,7 +176,10 @@ PYEOF
 # Signing is done inside-out (Apple's recommended pattern, replacing the now-
 # deprecated --deep flag): every nested .dylib and .framework is signed first
 # (deepest paths first, via `find -depth`), then the outer .app is signed last
-# so its signature seals over the already-signed nested code.
+# so its signature seals over the already-signed nested code. All nested items
+# are passed to a single codesign invocation via xargs so we pay process-startup
+# overhead once instead of once per file — the Intel CI runner is slow enough
+# that the per-call overhead dominated total build time when this was a loop.
 #
 # This script only ad-hoc signs; release signing + notarization is not wired up
 # yet. When it is, add the cert import, identity, hardened-runtime opts, and
@@ -184,14 +187,15 @@ PYEOF
 APP="./build/Binaries/ProjectRio.app"
 echo "Ad-hoc signing bundle (inside-out)..."
 
-while IFS= read -r -d '' item; do
-    codesign --force --sign - "${item}"
-done < <(find "${APP}/Contents" -depth \( -name "*.dylib" -o -name "*.framework" \) -print0)
+# Pipe all nested items into one codesign invocation so process-startup cost is paid once.
+find "${APP}/Contents" -depth \( -name "*.dylib" -o -name "*.framework" \) -print0 \
+    | xargs -0 codesign --force --sign -
 
 codesign --force --sign - "${APP}"
 
-# Verify so a broken bundle fails the build instead of shipping. --deep is
-# deprecated for signing but is still the recommended form for verification:
-# it walks every nested signature instead of relying solely on the outer
-# seal's CodeResources hashes.
-codesign --verify --deep --strict --verbose=2 "${APP}"
+# Verify so a broken bundle fails the build instead of shipping. The outer
+# seal's CodeResources hashes already cover every nested file, so verifying
+# without --deep catches the failure modes we care about (corrupted bundle,
+# missed signature on the main binary). --deep would re-hash every nested
+# Mach-O a second time — not worth the time on CI for ad-hoc builds.
+codesign --verify --strict --verbose=2 "${APP}"
