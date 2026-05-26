@@ -34,72 +34,146 @@ popd
 echo "Copying Sys files into the bundle"
 cp -Rfn "${DATA_SYS_PATH}" "${BINARY_PATH}"
 
-# When no real certificate is present, ad-hoc sign the bundle so macOS does not
-# reject it as "damaged" due to Homebrew dylibs that fixup_bundle modified after
-# they were originally signed. Ad-hoc signing replaces the broken signatures and
-# allows users to open the app via right-click -> Open or Settings > Privacy.
-if [[ -z "${CERTIFICATE_MACOS_APPLICATION}" ]]; then
-    echo "Ad-hoc signing bundle..."
-    codesign --force --deep --sign - "./build/Binaries/ProjectRio.app"
-fi
-
-# fixup_bundle copies versioned dylib aliases (e.g. libavcodec.62.dylib and
-# libavcodec.62.28.101.dylib) as separate full-size files, and copies Qt framework
-# binaries to multiple locations (Versions/A/, Versions/Current/, and the top-level
-# framework directory) instead of keeping symlinks. Deduplicate by content after the
-# bundle is fully assembled: for each set of identical files, keep the most canonical
-# copy and delete the rest. Nothing in the bundle references the deleted paths because
-# fixup_bundle already rewrote all install names to point at the canonical copies.
-echo "Deduplicating bundle frameworks..."
+# fixup_bundle expands every framework/dylib symlink into a full file copy:
+#   - Versioned dylib aliases (libfoo.62.dylib + libfoo.62.28.101.dylib) become
+#     two identical full-size files instead of one file + one symlink.
+#   - Qt frameworks end up with the binary duplicated at Versions/A/Foo,
+#     Versions/Current/Foo, and Foo.framework/Foo, and Versions/Current is a
+#     real directory instead of a symlink to A. That layout is structurally
+#     invalid for a macOS framework and Gatekeeper rejects it as "damaged",
+#     regardless of code signing.
+#
+# Restore the canonical layout: for each framework, keep Versions/<X> as the
+# only real copy and replace Versions/Current and the top-level entries with
+# the symlinks Apple's framework spec requires. For loose dylib aliases,
+# keep the most-specific version as the real file and symlink the shorter
+# aliases to it (mirroring Homebrew's own layout).
+echo "Restoring framework symlinks and deduplicating..."
 python3 - "./build/Binaries/ProjectRio.app/Contents/Frameworks" <<'PYEOF'
-import os, sys, hashlib
+import os, sys, shutil, hashlib
 
 def sha256(path):
     h = hashlib.sha256()
     with open(path, 'rb') as f:
-        while True:
-            chunk = f.read(65536)
-            if not chunk:
-                break
+        for chunk in iter(lambda: f.read(65536), b''):
             h.update(chunk)
     return h.hexdigest()
+
+def tree_size(path):
+    if os.path.islink(path) or not os.path.exists(path):
+        return 0
+    if os.path.isfile(path):
+        return os.path.getsize(path)
+    total = 0
+    for dp, _, fns in os.walk(path):
+        for f in fns:
+            fp = os.path.join(dp, f)
+            if not os.path.islink(fp):
+                try:
+                    total += os.path.getsize(fp)
+                except OSError:
+                    pass
+    return total
+
+def remove(path):
+    if os.path.islink(path) or os.path.isfile(path):
+        os.unlink(path)
+    elif os.path.isdir(path):
+        shutil.rmtree(path)
 
 frameworks = sys.argv[1]
 if not os.path.isdir(frameworks):
     sys.exit(0)
 
+freed = 0
+
+# Pass 1: rebuild proper framework layout (Versions/Current symlink + top-level symlinks).
+for entry in sorted(os.listdir(frameworks)):
+    if not entry.endswith('.framework'):
+        continue
+    fw = os.path.join(frameworks, entry)
+    versions_dir = os.path.join(fw, 'Versions')
+    if not os.path.isdir(versions_dir) or os.path.islink(versions_dir):
+        continue
+
+    # Find the actual version directory (anything that isn't "Current" and is a real dir).
+    real_version = None
+    for v in sorted(os.listdir(versions_dir)):
+        if v == 'Current':
+            continue
+        vp = os.path.join(versions_dir, v)
+        if os.path.isdir(vp) and not os.path.islink(vp):
+            real_version = v
+            break
+    if real_version is None:
+        continue
+    real_version_path = os.path.join(versions_dir, real_version)
+
+    # Replace Versions/Current with a symlink to the real version directory.
+    current = os.path.join(versions_dir, 'Current')
+    if os.path.lexists(current):
+        freed += tree_size(current)
+        remove(current)
+    os.symlink(real_version, current)
+
+    # For each top-level entry inside Versions/<X>, ensure a matching symlink at
+    # the framework root pointing at Versions/Current/<entry>.
+    for child in os.listdir(real_version_path):
+        top = os.path.join(fw, child)
+        if os.path.islink(top):
+            continue
+        if os.path.lexists(top):
+            freed += tree_size(top)
+            remove(top)
+        os.symlink(os.path.join('Versions', 'Current', child), top)
+
+# Pass 2: dedup any remaining content-identical real files (mostly versioned
+# dylib aliases at the top of Frameworks/). os.walk does not follow symlinks
+# by default, so framework internals are visited exactly once via Versions/<X>.
 file_hashes = {}
-for dirpath, dirnames, filenames in os.walk(frameworks):
-    for fname in filenames:
-        fpath = os.path.join(dirpath, fname)
-        if os.path.islink(fpath):
+for dp, _, fns in os.walk(frameworks):
+    for fn in fns:
+        fp = os.path.join(dp, fn)
+        if os.path.islink(fp):
             continue
         try:
-            file_hashes.setdefault(sha256(fpath), []).append(fpath)
+            file_hashes.setdefault(sha256(fp), []).append(fp)
         except OSError:
             pass
 
-def priority(p):
+def canonical_score(p):
+    # Prefer files living inside a Versions/<X>/ directory (the proper home for
+    # a framework binary). Otherwise prefer the longest filename, which for
+    # dylib aliases is the most-specific version (libfoo.62.28.101.dylib over
+    # libfoo.62.dylib).
     rel = os.path.relpath(p, frameworks)
-    name = os.path.basename(p)
-    if 'Versions/A' in rel:
-        return (2, len(name))
-    if 'Versions/Current' in rel:
-        return (0, len(name))
-    return (1, len(name))
+    in_version = '/Versions/' in rel and '/Versions/Current/' not in rel
+    return (in_version, len(os.path.basename(p)))
 
-deleted = 0
-freed = 0
+linked = 0
 for paths in file_hashes.values():
     if len(paths) < 2:
         continue
-    paths.sort(key=priority, reverse=True)
+    paths.sort(key=canonical_score, reverse=True)
+    keep = paths[0]
     for dup in paths[1:]:
-        size = os.path.getsize(dup)
-        os.remove(dup)
-        freed += size
-        deleted += 1
-        print(f"  Removed: {os.path.relpath(dup, frameworks)}")
+        rel_target = os.path.relpath(keep, os.path.dirname(dup))
+        freed += os.path.getsize(dup)
+        os.unlink(dup)
+        os.symlink(rel_target, dup)
+        linked += 1
+        print(f"  Linked: {os.path.relpath(dup, frameworks)} -> {rel_target}")
 
-print(f"Removed {deleted} duplicate file(s), freed {freed / 1024 / 1024:.1f} MB")
+print(f"Replaced duplicates with {linked} symlink(s), freed {freed / 1024 / 1024:.1f} MB")
 PYEOF
+
+# Ad-hoc sign AFTER the layout fix so the signature covers the final bundle
+# state. fixup_bundle modifies Homebrew dylibs (rewriting install names), which
+# invalidates their original signatures; without a fresh signature macOS marks
+# the app as "damaged". A real certificate is used when CERTIFICATE_MACOS_APPLICATION
+# is set; otherwise an ad-hoc signature is enough to satisfy Gatekeeper after a
+# right-click -> Open or via Settings > Privacy.
+if [[ -z "${CERTIFICATE_MACOS_APPLICATION}" ]]; then
+    echo "Ad-hoc signing bundle..."
+    codesign --force --deep --sign - "./build/Binaries/ProjectRio.app"
+fi
