@@ -202,4 +202,16 @@ done < <(find "${APP}/Contents" -depth \( -name "*.dylib" -o -name "*.framework"
 codesign --force "${RUNTIME_OPTS[@]}" "${ENTITLEMENT_OPTS[@]}" --sign "${SIGN_IDENTITY}" "${APP}"
 
 # Verify the result so a broken bundle fails the build instead of shipping.
-codesign --verify --strict --verbose=2 "${APP}"
+# --deep is deprecated for signing but is still the recommended form for
+# verification: it walks every nested signature instead of relying solely on
+# the outer seal's CodeResources hashes.
+codesign --verify --deep --strict --verbose=2 "${APP}"
+
+# On release builds, also run the full Gatekeeper assessment — the same check
+# the user's Mac performs at first launch. This will fail until the bundle is
+# notarized, so it is informational only (|| true) and skipped on ad-hoc builds
+# where it would always fail.
+if [[ -n "${CERTIFICATE_MACOS_APPLICATION}" ]]; then
+    echo "Running Gatekeeper assessment (informational, pre-notarization):"
+    spctl --assess --type execute --verbose=2 "${APP}" || true
+fi
