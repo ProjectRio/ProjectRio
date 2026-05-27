@@ -230,8 +230,8 @@ void RunRioFunctions(const Core::CPUThreadGuard& guard)
   {
     s_stat_tracker->Run(guard);
 
-    // Boot to main menu always for mssb
-    if (PowerPC::MMU::HostRead_U16(guard, aRelState) == 0)
+    // Boot to main menu if no tagset active
+    if (PowerPC::MMU::HostRead_U16(guard, aRelState) == 0 && !isTagSetActive())
     {
       PowerPC::MMU::HostWrite_U32(guard, 0x38600005, 0x8063F964);
     }
