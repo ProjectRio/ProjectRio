@@ -186,16 +186,19 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
   u32 codelist_base_address = INSTALLER_BASE_ADDRESS + static_cast<u32>(data.size()) - CODE_SIZE;
   u32 codelist_end_address = INSTALLER_END_ADDRESS;
 
-  auto free_memory_base_address = Core::getGameFreeMemory();
-  bool use_free_memory = free_memory_base_address.has_value();
-  if (use_free_memory)
-  {
-    // Move Gecko code handler to the free mem region
-    codelist_base_address = free_memory_base_address.value().first;
-    codelist_end_address = free_memory_base_address.value().second;
-    PowerPC::MMU::HostWrite_U32(guard, ((codelist_base_address & 0xFFFF0000) >> 16 ) + 0x3DE00000, 0x80001904);
-    PowerPC::MMU::HostWrite_U32(guard, (codelist_base_address & 0x0000FFFF) + 0x61EF0000, 0x80001908);
-  }
+  u32 gecko_end = PowerPC::MMU::HostRead_U32(guard, 0x80000034);
+  u32 total_bytes = 0;
+  for (const GeckoCode& code : s_active_codes)
+    total_bytes += static_cast<u32>(code.codes.size()) * CODE_SIZE;
+  codelist_base_address = gecko_end - total_bytes - 0x10; // 0x10 padding is required. if you remove it the last code in the list won't be added. don't ask questions
+  codelist_end_address = gecko_end;
+  PowerPC::MMU::HostWrite_U32(guard, codelist_base_address, 0x80000034);
+  NOTICE_LOG_FMT(ACTIONREPLAY, "Codelist size: {:08x}", total_bytes);
+  NOTICE_LOG_FMT(ACTIONREPLAY, "Codelist base: {:08x}", codelist_base_address);
+  NOTICE_LOG_FMT(ACTIONREPLAY, "Codelist end:  {:08x}", codelist_end_address);
+
+  PowerPC::MMU::HostWrite_U32(guard, ((codelist_base_address & 0xFFFF0000) >> 16 ) + 0x3DE00000, 0x80001904);
+  PowerPC::MMU::HostWrite_U32(guard, (codelist_base_address & 0x0000FFFF) + 0x61EF0000, 0x80001908);
 
   // Write a magic value to 'gameid' (codehandleronly does not actually read this).
   // This value will be read back and modified over time by HLE_Misc::GeckoCodeHandlerICacheFlush.
@@ -249,6 +252,10 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
   {
     ppc_state.iCache.Invalidate(INSTALLER_BASE_ADDRESS + j);
   }
+  for (u32 j = 0; j < (codelist_end_address - codelist_base_address); j += 32)
+  {
+    ppc_state.iCache.Invalidate(codelist_base_address + j);
+  }
   return Installation::Installed;
 }
 
@@ -273,7 +280,6 @@ void Shutdown()
 
 void RunCodeHandler(const Core::CPUThreadGuard& guard)
 {
-
   // NOTE: Need to release the lock because of GUI deadlocks with PanicAlert in HostWrite_*
   {
     std::lock_guard codes_lock(s_active_codes_lock);

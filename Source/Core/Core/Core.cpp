@@ -233,6 +233,11 @@ void RunRioFunctions(const Core::CPUThreadGuard& guard)
   {
     s_stat_tracker->Run(guard);
 
+    // Boot to main menu if no tagset active
+    if (PowerPC::MMU::HostRead_U16(guard, aRelState) == 0 && !isTagSetActive())
+    {
+      PowerPC::MMU::HostWrite_U32(guard, 0x38600005, 0x8063F964);
+    }
     if (PowerPC::MMU::HostRead_U32(guard, aGameId) == 0)
     {
       runNetplayGameFunctions = true;
@@ -1863,21 +1868,6 @@ bool GameSupportsTagSets()
     return true;
   else
     return false;
-}
-
-std::optional<std::pair<u32,u32>> getGameFreeMemory()
-{
-  switch (mGameBeingPlayed) {
-  case GameName::MarioBaseball:
-    //return std::make_pair(0x802ED200, 0x802EE764);
-    return std::make_pair(0x802D5100, 0x802D9500);
-  case GameName::ToadstoolTour:
-    return std::nullopt;
-  case GameName::UnknownGame:
-    return std::nullopt;
-  default:
-    return std::nullopt;
-  }
 }
 
 int GetNextGolferID()
