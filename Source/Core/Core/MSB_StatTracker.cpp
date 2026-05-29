@@ -2131,6 +2131,8 @@ void StatTracker::postOngoingGame(Event& in_curr_event){
     json_stream << "  \"TagSetID\": " << tag_set_id_str << ",\n";
     json_stream << "  \"Loaded from HUD\": " << std::to_string(m_game_info.fastResetFromHUD) << ",\n";
     json_stream << "  \"StadiumID\": " << decode("Stadium", m_game_info.stadium, false) << ",\n";
+    json_stream << "  \"Away Logo\": "  << decode("Logo", m_game_info.away_logo, false) << ",\n";
+    json_stream << "  \"Home Logo\": "  << decode("Logo", m_game_info.home_logo, false) << ",\n";
     json_stream << "  \"Away Player\": \""           << m_game_info.getAwayTeamPlayer().GetUserID() << "\",\n";
     json_stream << "  \"Home Player\": \""           << m_game_info.getHomeTeamPlayer().GetUserID() << "\",\n";
 
@@ -2140,27 +2142,51 @@ void StatTracker::postOngoingGame(Event& in_curr_event){
     json_stream << "  \"Away Captain\": "            << std::to_string(away_captain_roster_loc) << ",\n";
     json_stream << "  \"Home Captain\": "            << std::to_string(home_captain_roster_loc) << ",\n";
 
-    json_stream << "  \"Away Roster 0 CharID\": "            << std::to_string(m_game_info.character_summaries[0][0].char_id) << ",\n";
-    json_stream << "  \"Away Roster 1 CharID\": "            << std::to_string(m_game_info.character_summaries[0][1].char_id) << ",\n";
-    json_stream << "  \"Away Roster 2 CharID\": "            << std::to_string(m_game_info.character_summaries[0][2].char_id) << ",\n";
-    json_stream << "  \"Away Roster 3 CharID\": "            << std::to_string(m_game_info.character_summaries[0][3].char_id) << ",\n";
-    json_stream << "  \"Away Roster 4 CharID\": "            << std::to_string(m_game_info.character_summaries[0][4].char_id) << ",\n";
-    json_stream << "  \"Away Roster 5 CharID\": "            << std::to_string(m_game_info.character_summaries[0][5].char_id) << ",\n";
-    json_stream << "  \"Away Roster 6 CharID\": "            << std::to_string(m_game_info.character_summaries[0][6].char_id) << ",\n";
-    json_stream << "  \"Away Roster 7 CharID\": "            << std::to_string(m_game_info.character_summaries[0][7].char_id) << ",\n";
-    json_stream << "  \"Away Roster 8 CharID\": "            << std::to_string(m_game_info.character_summaries[0][8].char_id) << ",\n";
-    json_stream << "  \"Home Roster 0 CharID\": "            << std::to_string(m_game_info.character_summaries[1][0].char_id) << ",\n";
-    json_stream << "  \"Home Roster 1 CharID\": "            << std::to_string(m_game_info.character_summaries[1][1].char_id) << ",\n";
-    json_stream << "  \"Home Roster 2 CharID\": "            << std::to_string(m_game_info.character_summaries[1][2].char_id) << ",\n";
-    json_stream << "  \"Home Roster 3 CharID\": "            << std::to_string(m_game_info.character_summaries[1][3].char_id) << ",\n";
-    json_stream << "  \"Home Roster 4 CharID\": "            << std::to_string(m_game_info.character_summaries[1][4].char_id) << ",\n";
-    json_stream << "  \"Home Roster 5 CharID\": "            << std::to_string(m_game_info.character_summaries[1][5].char_id) << ",\n";
-    json_stream << "  \"Home Roster 6 CharID\": "            << std::to_string(m_game_info.character_summaries[1][6].char_id) << ",\n";
-    json_stream << "  \"Home Roster 7 CharID\": "            << std::to_string(m_game_info.character_summaries[1][7].char_id) << ",\n";
-    json_stream << "  \"Home Roster 8 CharID\": "            << std::to_string(m_game_info.character_summaries[1][8].char_id) << ",\n";
+    for (int team = 0; team < 2; ++team) {
+        std::string team_str = (team == 0) ? "Away" : "Home";
+
+        json_stream << "  \"" << team_str << " CharIDs\": [";
+        for (int roster = 0; roster < 9; ++roster) {
+            json_stream << std::to_string(m_game_info.character_summaries[team][roster].char_id);
+            if (roster < 8) json_stream << ", ";
+        }
+        json_stream << "],\n";
+
+        json_stream << "  \"" << team_str << " Fielding Positions\": [";
+        for (int roster = 0; roster < 9; ++roster) {
+            json_stream << decode("Position", m_fielder_tracker[team].fielder_map[roster].current_pos, false);
+            if (roster < 8) json_stream << ", ";
+        }
+        json_stream << "],\n";
+
+        json_stream << "  \"" << team_str << " Superstars\": [";
+        for (int roster = 0; roster < 9; ++roster) {
+            json_stream << std::to_string(m_game_info.character_summaries[team][roster].is_starred);
+            if (roster < 8) json_stream << ", ";
+        }
+        json_stream << "],\n";
+    }
 
     json_stream << "  \"Away Stars\": "              << std::to_string(in_curr_event.away_stars) << ",\n";
     json_stream << "  \"Home Stars\": "              << std::to_string(in_curr_event.home_stars) << ",\n";
+
+    json_stream << "  \"Away Inning Scores\": [";
+    for (u8 i = 0; i < in_curr_event.inning && i < 18; ++i) {
+        json_stream << in_curr_event.away_inning_scores[i];
+        if (i < in_curr_event.inning - 1) json_stream << ", ";
+    }
+    json_stream << "],\n";
+
+    u8 home_inning_limit = (in_curr_event.half_inning == 0) ? in_curr_event.inning - 1 : in_curr_event.inning;
+    json_stream << "  \"Home Inning Scores\": [";
+    for (u8 i = 0; i < home_inning_limit && i < 18; ++i) {
+        json_stream << in_curr_event.home_inning_scores[i];
+        if (i < home_inning_limit - 1) json_stream << ", ";
+    }
+    json_stream << "],\n";
+
+    json_stream << "  \"Innings Selected\": "        << std::to_string(m_game_info.innings_selected) << ",\n";
+    json_stream << "  \"Star Chance\": "             << std::to_string(in_curr_event.is_star_chance) << ",\n";
     json_stream << "  \"Pitcher\": "                 << std::to_string(in_curr_event.pitcher_roster_loc) << "\n";
     json_stream << "}\n";
 
@@ -2185,18 +2211,88 @@ void StatTracker::updateOngoingGame(Event& in_curr_event){
     json_stream << "  \"Outs\": "                    << std::to_string(in_curr_event.outs) << ",\n";
     json_stream << "  \"Away Stars\": "              << std::to_string(in_curr_event.away_stars) << ",\n";
     json_stream << "  \"Home Stars\": "              << std::to_string(in_curr_event.home_stars) << ",\n";
-    //json_stream << "  \"Chemistry Links on Base\": " << std::to_string(in_curr_event.chem_links_ob) << ",\n";
+    json_stream << "  \"Chemistry Links on Base\": " << std::to_string(in_curr_event.chem_links_ob) << ",\n";
     json_stream << "  \"Pitcher\": "      << std::to_string(in_curr_event.pitcher_roster_loc) << ",\n";
     json_stream << "  \"Batter\": "       << std::to_string(in_curr_event.batter_roster_loc) << ",\n";
+
+    int batter_team_for_hand = (in_curr_event.half_inning == 0) ? 0 : 1;
+    u8 batter_hand = m_game_info.character_summaries[batter_team_for_hand][in_curr_event.batter_roster_loc].batting_hand;
+    json_stream << "  \"Batter Hand\": "  << decode("Hand", batter_hand, false) << ",\n";
 
     bool runner_1, runner_2, runner_3;
     runner_1 = (in_curr_event.runner_1.has_value());
     runner_2 = (in_curr_event.runner_2.has_value());
     runner_3 = (in_curr_event.runner_3.has_value());
+    
+    json_stream << "  \"Runner 1B Roster\": "   << (runner_1 ? std::to_string(in_curr_event.runner_1.value().roster_loc) : "-1") << ",\n";
+    json_stream << "  \"Runner 2B Roster\": "   << (runner_2 ? std::to_string(in_curr_event.runner_2.value().roster_loc) : "-1") << ",\n";
+    json_stream << "  \"Runner 3B Roster\": "   << (runner_3 ? std::to_string(in_curr_event.runner_3.value().roster_loc) : "-1") << ",\n";
 
-    json_stream << "  \"Runner 1B\": "       << std::to_string(runner_1) << ",\n";
-    json_stream << "  \"Runner 2B\": "       << std::to_string(runner_2) << ",\n";
-    json_stream << "  \"Runner 3B\": "       << std::to_string(runner_3) << "\n";
+    json_stream << "  \"Away Inning Scores\": [";
+    for (u8 i = 0; i < in_curr_event.inning && i < 18; ++i) {
+        json_stream << in_curr_event.away_inning_scores[i];
+        if (i < in_curr_event.inning - 1) json_stream << ", ";
+    }
+    json_stream << "],\n";
+
+    u8 home_inning_limit = (in_curr_event.half_inning == 0) ? in_curr_event.inning - 1 : in_curr_event.inning;
+    json_stream << "  \"Home Inning Scores\": [";
+    for (u8 i = 0; i < home_inning_limit && i < 18; ++i) {
+        json_stream << in_curr_event.home_inning_scores[i];
+        if (i < home_inning_limit - 1) json_stream << ", ";
+    }
+    json_stream << "],\n";
+
+    json_stream << "  \"Star Chance\": "     << std::to_string(in_curr_event.is_star_chance) << ",\n";
+
+    for (int team = 0; team < 2; ++team) {
+        std::string team_str = (team == 0) ? "Away" : "Home";
+
+        json_stream << "  \"" << team_str << " Fielding Positions\": [";
+        for (int roster = 0; roster < 9; ++roster) {
+            json_stream << decode("Position", m_fielder_tracker[team].fielder_map[roster].current_pos, false);
+            if (roster < 8) json_stream << ", ";
+        }
+        json_stream << "],\n";
+    }
+
+    // Pitcher is on the team NOT batting: half_inning 0 = away bats, home pitches
+    int pitcher_team = (in_curr_event.half_inning == 0) ? 1 : 0;
+    int batter_team  = (in_curr_event.half_inning == 0) ? 0 : 1;
+
+    EndGameRosterDefensiveStats& p_stat = m_game_info.character_summaries[pitcher_team][in_curr_event.pitcher_roster_loc].end_game_defensive_stats;
+    json_stream << "  \"Pitcher Stats\": {\n";
+    json_stream << "    \"Batters Faced\": "       << std::to_string(p_stat.batters_faced) << ",\n";
+    json_stream << "    \"Runs Allowed\": "        << std::dec << p_stat.runs_allowed << ",\n";
+    json_stream << "    \"Earned Runs\": "         << std::dec << p_stat.earned_runs << ",\n";
+    json_stream << "    \"Batters Walked\": "      << p_stat.batters_walked << ",\n";
+    json_stream << "    \"Batters Hit\": "         << p_stat.batters_hit << ",\n";
+    json_stream << "    \"Hits Allowed\": "        << p_stat.hits_allowed << ",\n";
+    json_stream << "    \"HRs Allowed\": "         << p_stat.homeruns_allowed << ",\n";
+    json_stream << "    \"Pitches Thrown\": "      << p_stat.pitches_thrown << ",\n";
+    json_stream << "    \"Stamina\": "             << p_stat.stamina << ",\n";
+    json_stream << "    \"Strikeouts\": "          << std::to_string(p_stat.strike_outs) << ",\n";
+    json_stream << "    \"Star Pitches Thrown\": " << std::to_string(p_stat.star_pitches_thrown) << ",\n";
+    json_stream << "    \"Outs Pitched\": "        << std::to_string(p_stat.outs_pitched) << "\n";
+    json_stream << "  },\n";
+
+    EndGameRosterOffensiveStats& b_stat = m_game_info.character_summaries[batter_team][in_curr_event.batter_roster_loc].end_game_offensive_stats;
+    json_stream << "  \"Batter Stats\": {\n";
+    json_stream << "    \"At Bats\": "          << std::to_string(b_stat.at_bats) << ",\n";
+    json_stream << "    \"Hits\": "             << std::to_string(b_stat.hits) << ",\n";
+    json_stream << "    \"Singles\": "          << std::to_string(b_stat.singles) << ",\n";
+    json_stream << "    \"Doubles\": "          << std::to_string(b_stat.doubles) << ",\n";
+    json_stream << "    \"Triples\": "          << std::to_string(b_stat.triples) << ",\n";
+    json_stream << "    \"Homeruns\": "         << std::to_string(b_stat.homeruns) << ",\n";
+    json_stream << "    \"Successful Bunts\": " << std::to_string(b_stat.successful_bunts) << ",\n";
+    json_stream << "    \"Sac Flys\": "         << std::to_string(b_stat.sac_flys) << ",\n";
+    json_stream << "    \"Strikeouts\": "       << std::to_string(b_stat.strikouts) << ",\n";
+    json_stream << "    \"Walks (4 Balls)\": "  << std::to_string(b_stat.walks_4balls) << ",\n";
+    json_stream << "    \"Walks (Hit)\": "      << std::to_string(b_stat.walks_hit) << ",\n";
+    json_stream << "    \"RBI\": "              << std::to_string(b_stat.rbi) << ",\n";
+    json_stream << "    \"Bases Stolen\": "     << std::to_string(b_stat.bases_stolen) << ",\n";
+    json_stream << "    \"Star Hits\": "        << std::to_string(b_stat.star_hits) << "\n";
+    json_stream << "  }\n";
     json_stream << "}\n";
 
     const Common::HttpRequest::Response response =
