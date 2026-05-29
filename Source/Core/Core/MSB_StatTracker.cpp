@@ -2177,10 +2177,11 @@ void StatTracker::postOngoingGame(Event& in_curr_event){
     }
     json_stream << "],\n";
 
+    u8 home_inning_limit = (in_curr_event.half_inning == 0) ? in_curr_event.inning - 1 : in_curr_event.inning;
     json_stream << "  \"Home Inning Scores\": [";
-    for (u8 i = 0; i < in_curr_event.inning && i < 18; ++i) {
+    for (u8 i = 0; i < home_inning_limit && i < 18; ++i) {
         json_stream << in_curr_event.home_inning_scores[i];
-        if (i < in_curr_event.inning - 1) json_stream << ", ";
+        if (i < home_inning_limit - 1) json_stream << ", ";
     }
     json_stream << "],\n";
 
