@@ -2,7 +2,7 @@
 [Desktop Entry]
 Version=1.0
 Icon=ProjectRio
-Exec=sh -c "env QT_QPA_PLATFORM=xcb ~/.local/share/project-rio/dolphin-emu"
+Exec=dolphin-emu
 Terminal=false
 Type=Application
 Categories=Game;Emulator;

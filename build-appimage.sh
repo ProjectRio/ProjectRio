@@ -12,6 +12,10 @@ UPDATEPLUG_PATH="https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/rele
 UPDATEPLUG_FILE="linuxdeploy-plugin-appimage-x86_64.AppImage"
 UPDATEPLUG_URL="${UPDATEPLUG_PATH}/${UPDATEPLUG_FILE}"
 
+QTPLUG_PATH="https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous"
+QTPLUG_FILE="linuxdeploy-plugin-qt-x86_64.AppImage"
+QTPLUG_URL="${QTPLUG_PATH}/${QTPLUG_FILE}"
+
 UPDATETOOL_PATH="https://github.com/AppImage/AppImageUpdate/releases/download/continuous"
 UPDATETOOL_FILE="appimageupdatetool-x86_64.AppImage"
 UPDATETOOL_URL="${UPDATETOOL_PATH}/${UPDATETOOL_FILE}"
@@ -26,12 +30,16 @@ fi
 if [ ! -e ./Tools/linuxdeploy-update-plugin ]; then
 	wget ${UPDATEPLUG_URL} -O ./Tools/linuxdeploy-update-plugin
 fi
+if [ ! -e ./Tools/linuxdeploy-plugin-qt ]; then
+	wget ${QTPLUG_URL} -O ./Tools/linuxdeploy-plugin-qt
+fi
 if [ ! -e ./Tools/appimageupdatetool ]; then
 	wget ${UPDATETOOL_URL} -O ./Tools/appimageupdatetool
 fi
 
 chmod +x ./Tools/linuxdeploy
 chmod +x ./Tools/linuxdeploy-update-plugin
+chmod +x ./Tools/linuxdeploy-plugin-qt
 chmod +x ./Tools/appimageupdatetool
 
 # Delete the AppDir folder to prevent build issues
@@ -47,10 +55,13 @@ mkdir -p AppDir
 	--appdir=./AppDir \
 	-e ./build/Binaries/dolphin-emu \
 	-d ./Data/ProjectRio.desktop \
-	-i ./Data/ProjectRio.png
+	-i ./Data/ProjectRio.png \
+	-p qt
 
 # Add the Sys dir to the AppDir for packaging
 cp -r Data/Sys ${APPDIR_BIN}
+
+cp Data/AppRun ${APPDIR_BIN}
 
 # Build type
 echo "Using Netplay build config"
@@ -64,3 +75,7 @@ cp ./Tools/appimageupdatetool ./AppDir/usr/bin/
 # Bake an AppImage with the update metadata
 UPDATE_INFORMATION="${ZSYNC_STRING}" \
   ./Tools/linuxdeploy-update-plugin --appdir=./AppDir/
+
+# Remove underscore from created AppImages and relocate to `./build/Binaries/`
+mv ./Project_Rio-x86_64.AppImage ./build/Binaries/ProjectRio-Linux.AppImage
+mv ./Project_Rio-x86_64.AppImage.zsync ./build/Binaries/ProjectRio-Linux.AppImage.zsync

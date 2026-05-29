@@ -42,3 +42,7 @@ CMakeLists.txt.user
 # Ignore Visual Studio Code's working dir
 /.vscode/
 Installer/ProjectRioInstaller.exe
+# Ignore AppDir & LinuxDeploy Tools
+/AppDir/
+/Tools/linuxdeploy*
+/Tools/appimageupdatetool

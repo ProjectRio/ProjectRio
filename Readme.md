@@ -89,9 +89,12 @@ Doing this is more complex as it requires installation of library dependencies f
 equivalents) and may require specifying additional arguments to point to relevant library locations. 
 Execute BuildMacOSUniversalBinary.py --help for more details.  
 
-### Linux Automatic Build Script
+### Linux AppImage Creation
 
-`build-linux.sh` is a script that will automatically build the project for you.  After pulling the required submodules, you can simply run this script, run `./build-linux.sh`.  A launcher shortcut named `ProjectRio.desktop` will be placed in `~/.local/share/applications/` if you would like to open it through your launcher, otherwise the binary can be found at `~/.local/share/project-rio/dolphin-emu`
+To create an AppImage
+
+1. `bash ./build-linux.sh`
+2. `bash ./build-appimage.sh`S
 
 ### Linux Global Build Steps:
 
