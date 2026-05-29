@@ -2144,13 +2144,27 @@ void StatTracker::postOngoingGame(Event& in_curr_event){
 
     for (int team = 0; team < 2; ++team) {
         std::string team_str = (team == 0) ? "Away" : "Home";
+
+        json_stream << "  \"" << team_str << " CharIDs\": [";
         for (int roster = 0; roster < 9; ++roster) {
-            CharacterSummary& cs = m_game_info.character_summaries[team][roster];
-            std::string prefix = "  \"" + team_str + " Roster " + std::to_string(roster);
-            json_stream << prefix << " CharID\": "           << std::to_string(cs.char_id) << ",\n";
-            json_stream << prefix << " Superstar\": "        << std::to_string(cs.is_starred) << ",\n";
-            json_stream << prefix << " Fielding Position\": "<< decode("Position", m_fielder_tracker[team].fielder_map[roster].current_pos, false) << ",\n";
+            json_stream << std::to_string(m_game_info.character_summaries[team][roster].char_id);
+            if (roster < 8) json_stream << ", ";
         }
+        json_stream << "],\n";
+
+        json_stream << "  \"" << team_str << " Fielding Positions\": [";
+        for (int roster = 0; roster < 9; ++roster) {
+            json_stream << decode("Position", m_fielder_tracker[team].fielder_map[roster].current_pos, false);
+            if (roster < 8) json_stream << ", ";
+        }
+        json_stream << "],\n";
+
+        json_stream << "  \"" << team_str << " Superstars\": [";
+        for (int roster = 0; roster < 9; ++roster) {
+            json_stream << std::to_string(m_game_info.character_summaries[team][roster].is_starred);
+            if (roster < 8) json_stream << ", ";
+        }
+        json_stream << "],\n";
     }
 
     json_stream << "  \"Away Stars\": "              << std::to_string(in_curr_event.away_stars) << ",\n";
@@ -2170,6 +2184,7 @@ void StatTracker::postOngoingGame(Event& in_curr_event){
     }
     json_stream << "],\n";
 
+    json_stream << "  \"Innings Selected\": "        << std::to_string(m_game_info.innings_selected) << ",\n";
     json_stream << "  \"Star Chance\": "             << std::to_string(in_curr_event.is_star_chance) << ",\n";
     json_stream << "  \"Pitcher\": "                 << std::to_string(in_curr_event.pitcher_roster_loc) << "\n";
     json_stream << "}\n";
@@ -2195,18 +2210,22 @@ void StatTracker::updateOngoingGame(Event& in_curr_event){
     json_stream << "  \"Outs\": "                    << std::to_string(in_curr_event.outs) << ",\n";
     json_stream << "  \"Away Stars\": "              << std::to_string(in_curr_event.away_stars) << ",\n";
     json_stream << "  \"Home Stars\": "              << std::to_string(in_curr_event.home_stars) << ",\n";
-    //json_stream << "  \"Chemistry Links on Base\": " << std::to_string(in_curr_event.chem_links_ob) << ",\n";
+    json_stream << "  \"Chemistry Links on Base\": " << std::to_string(in_curr_event.chem_links_ob) << ",\n";
     json_stream << "  \"Pitcher\": "      << std::to_string(in_curr_event.pitcher_roster_loc) << ",\n";
     json_stream << "  \"Batter\": "       << std::to_string(in_curr_event.batter_roster_loc) << ",\n";
+
+    int batter_team_for_hand = (in_curr_event.half_inning == 0) ? 0 : 1;
+    u8 batter_hand = m_game_info.character_summaries[batter_team_for_hand][in_curr_event.batter_roster_loc].batting_hand;
+    json_stream << "  \"Batter Hand\": "  << decode("Hand", batter_hand, false) << ",\n";
 
     bool runner_1, runner_2, runner_3;
     runner_1 = (in_curr_event.runner_1.has_value());
     runner_2 = (in_curr_event.runner_2.has_value());
     runner_3 = (in_curr_event.runner_3.has_value());
-
-    json_stream << "  \"Runner 1B\": "       << std::to_string(runner_1) << ",\n";
-    json_stream << "  \"Runner 2B\": "       << std::to_string(runner_2) << ",\n";
-    json_stream << "  \"Runner 3B\": "       << std::to_string(runner_3) << ",\n";
+    
+    json_stream << "  \"Runner 1B Roster\": "   << (runner_1 ? std::to_string(in_curr_event.runner_1.value().roster_loc) : "-1") << ",\n";
+    json_stream << "  \"Runner 2B Roster\": "   << (runner_2 ? std::to_string(in_curr_event.runner_2.value().roster_loc) : "-1") << ",\n";
+    json_stream << "  \"Runner 3B Roster\": "   << (runner_3 ? std::to_string(in_curr_event.runner_3.value().roster_loc) : "-1") << ",\n";
 
     json_stream << "  \"Away Inning Scores\": [";
     for (u8 i = 0; i < in_curr_event.inning && i < 18; ++i) {
@@ -2215,14 +2234,26 @@ void StatTracker::updateOngoingGame(Event& in_curr_event){
     }
     json_stream << "],\n";
 
+    u8 home_inning_limit = (in_curr_event.half_inning == 0) ? in_curr_event.inning - 1 : in_curr_event.inning;
     json_stream << "  \"Home Inning Scores\": [";
-    for (u8 i = 0; i < in_curr_event.inning && i < 18; ++i) {
+    for (u8 i = 0; i < home_inning_limit && i < 18; ++i) {
         json_stream << in_curr_event.home_inning_scores[i];
-        if (i < in_curr_event.inning - 1) json_stream << ", ";
+        if (i < home_inning_limit - 1) json_stream << ", ";
     }
     json_stream << "],\n";
 
     json_stream << "  \"Star Chance\": "     << std::to_string(in_curr_event.is_star_chance) << ",\n";
+
+    for (int team = 0; team < 2; ++team) {
+        std::string team_str = (team == 0) ? "Away" : "Home";
+
+        json_stream << "  \"" << team_str << " Fielding Positions\": [";
+        for (int roster = 0; roster < 9; ++roster) {
+            json_stream << decode("Position", m_fielder_tracker[team].fielder_map[roster].current_pos, false);
+            if (roster < 8) json_stream << ", ";
+        }
+        json_stream << "],\n";
+    }
 
     // Pitcher is on the team NOT batting: half_inning 0 = away bats, home pitches
     int pitcher_team = (in_curr_event.half_inning == 0) ? 1 : 0;
