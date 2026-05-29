@@ -163,7 +163,7 @@ jobs:
             artifact_name: ProjectRio-macOS-x86_64
     name: "macOS ${{ matrix.arch }}"
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    timeout-minutes: 90
     steps:
       - name: "Checkout"
         uses: actions/checkout@v2
