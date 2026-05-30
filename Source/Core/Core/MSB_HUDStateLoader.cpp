@@ -510,9 +510,14 @@ int allowLoadFromHUD(const std::string& path,
         }
         else
         {
-            // HUD has a tagset but lobby does not
-             ERROR_LOG_FMT(COMMON, "HUD has TagSet ID={} but no game mode is active in lobby.", hudTagSetId);
-            // return 3; Actually allowing this situation so no game mode can be used for anything to allow for better customization.
+            // HUD has a tagset but nothing is active — always a mismatch.
+            ERROR_LOG_FMT(COMMON, "HUD has TagSet ID={} but no game mode is active.", hudTagSetId);
+            if (outDetails)
+            {
+                outDetails->hudTagSetId = hudTagSetId;
+                outDetails->activeTagSetName = "";
+            }
+            return 3;
         }
     }
     else if (activeTagSet.has_value())

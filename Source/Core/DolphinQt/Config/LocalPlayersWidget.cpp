@@ -271,7 +271,7 @@ void LocalPlayersWidget::SetPortInfo()
   LocalPlayers::SaveLocalPorts();
   SavePlayers();
   PopulateTagsetCombobox();
-  ValidateAndApplyFastReset();
+  SetTagSet();  // syncs Core tagset to current combobox state before validation
 }
 
 void LocalPlayersWidget::PopulateTagsetCombobox()
@@ -369,6 +369,7 @@ void LocalPlayersWidget::SetTagSet()
   if (!selected_tagset.has_value())
   {
     m_game_mode_description->append(tr("No Game Mode Selected."));
+    ValidateAndApplyFastReset();
     return;
   }
 
@@ -419,17 +420,35 @@ void LocalPlayersWidget::ValidateAndApplyFastReset()
       m_fast_reset_status->setText(tr("Error: HUD file not found or could not be parsed."));
       break;
     case 3:
+    {
+      QString hudTagSetLabel = QString::number(details.hudTagSetId);
+      if (details.hudTagSetId >= 0)
+      {
+        for (const auto& [idx, tagset] : m_tagset_combobox_map)
+        {
+          if (tagset.has_value() && tagset.value().id == details.hudTagSetId)
+          {
+            hudTagSetLabel = QString::fromStdString(tagset.value().name);
+            break;
+          }
+        }
+      }
       if (details.hudTagSetId == -1)
         m_fast_reset_status->setText(
             tr("Error: Game Mode mismatch. HUD has no Game Mode, but '%1' is active. "
                "Deselect the Game Mode or use a HUD from a '%1' match.")
                 .arg(QString::fromStdString(details.activeTagSetName)));
+      else if (details.activeTagSetName.empty())
+        m_fast_reset_status->setText(
+            tr("Error: Game Mode mismatch. HUD expects '%1', but no Game Mode is selected.")
+                .arg(hudTagSetLabel));
       else
         m_fast_reset_status->setText(
-            tr("Error: Game Mode mismatch. HUD expects Game Mode ID %1, but '%2' is active.")
-                .arg(details.hudTagSetId)
+            tr("Error: Game Mode mismatch. HUD expects '%1', but '%2' is active.")
+                .arg(hudTagSetLabel)
                 .arg(QString::fromStdString(details.activeTagSetName)));
       break;
+    }
     case 4:
       m_fast_reset_status->setText(
           tr("Error: Player mismatch. HUD expects Away='%1', Home='%2'. "

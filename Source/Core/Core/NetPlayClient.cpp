@@ -1703,14 +1703,22 @@ void NetPlayClient::OnFastResetFromHUDMsg(sf::Packet& packet)
 
   if (resultCode == 3)
   {
+    std::string hudTagSetLabel = std::to_string(details.hudTagSetId);
+    if (details.hudTagSetId >= 0 && TagSetMap && TagSetMap->count(details.hudTagSetId))
+      hudTagSetLabel = TagSetMap->at(details.hudTagSetId).name;
+
     if (details.hudTagSetId == -1)
       m_dialog->AppendChat(fmt::format(
           "HUD has no Game Mode, but '{}' is active in the lobby.",
           details.activeTagSetName));
+    else if (details.activeTagSetName.empty())
+      m_dialog->AppendChat(fmt::format(
+          "HUD expects '{}', but no Game Mode is active in the lobby.",
+          hudTagSetLabel));
     else
       m_dialog->AppendChat(fmt::format(
-          "HUD expects Game Mode ID {}, but '{}' is active in the lobby.",
-          details.hudTagSetId, details.activeTagSetName));
+          "HUD expects '{}', but '{}' is active in the lobby.",
+          hudTagSetLabel, details.activeTagSetName));
   }
   else if (resultCode == 4)
   {
