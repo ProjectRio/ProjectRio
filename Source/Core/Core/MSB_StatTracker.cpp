@@ -12,6 +12,7 @@
 #include "Common/Version.h"
 
 #include "Common/Swap.h"
+#include "Common/Thread.h"
 
 // Package for rendering info on screen
 #include "VideoCommon/OnScreenDisplay.h"
@@ -2190,12 +2191,10 @@ void StatTracker::postOngoingGame(Event& in_curr_event){
     json_stream << "  \"Pitcher\": "                 << std::to_string(in_curr_event.pitcher_roster_loc) << "\n";
     json_stream << "}\n";
 
-    const Common::HttpRequest::Response response =
-        m_http.Post("https://api.projectrio.app/populate_db/ongoing_game/", json_stream.str(),
-            {
-                {"Content-Type", "application/json"},
-            }
-        );
+    // Hand the finished payload off to the background worker so the blocking POST
+    // does not stall the emulation thread. The string is passed by value, so the
+    // worker never touches game state the emulation thread is still mutating.
+    m_ongoing_game_submitter.QueuePost(json_stream.str());
 }
 void StatTracker::updateOngoingGame(Event& in_curr_event){
     if (!shouldSubmitGame()){ return; }
@@ -2295,12 +2294,93 @@ void StatTracker::updateOngoingGame(Event& in_curr_event){
     json_stream << "  }\n";
     json_stream << "}\n";
 
-    const Common::HttpRequest::Response response =
-        m_http.Post("https://api.projectrio.app/populate_db/ongoing_game/", json_stream.str(),
-            {
-                {"Content-Type", "application/json"},
-            }
-        );
+    // Hand the finished payload off to the background worker (see postOngoingGame).
+    m_ongoing_game_submitter.QueueUpdate(json_stream.str());
+}
+
+StatTracker::OngoingGameSubmitter::~OngoingGameSubmitter()
+{
+    {
+        std::lock_guard lg(m_lock);
+        m_shutdown = true;
+    }
+    m_cv.notify_one();
+    if (m_thread.joinable())
+        m_thread.join();
+}
+
+void StatTracker::OngoingGameSubmitter::QueuePost(std::string payload)
+{
+    Enqueue(Item{Kind::Post, std::move(payload)});
+}
+
+void StatTracker::OngoingGameSubmitter::QueueUpdate(std::string payload)
+{
+    Enqueue(Item{Kind::Update, std::move(payload)});
+}
+
+void StatTracker::OngoingGameSubmitter::EnsureThreadStarted()
+{
+    // Lazily start the worker on first use so games that never submit (and the
+    // brief windows where a StatTracker is constructed and torn down) pay nothing.
+    // Caller must hold m_lock.
+    if (!m_thread_started)
+    {
+        m_thread_started = true;
+        m_thread = std::thread(&OngoingGameSubmitter::ThreadLoop, this);
+    }
+}
+
+void StatTracker::OngoingGameSubmitter::Enqueue(Item&& item)
+{
+    std::lock_guard lg(m_lock);
+    if (m_shutdown)
+        return;
+
+    // Coalesce: an update only supersedes an update that is still waiting at the
+    // tail of the queue. The item the worker is currently sending has already been
+    // popped, so it is never affected; a post at the tail is never overwritten or
+    // reordered. This keeps a backlog from a slow request bounded to one pending
+    // update while preserving post-before-update ordering.
+    if (item.kind == Kind::Update && !m_items.empty() && m_items.back().kind == Kind::Update)
+    {
+        m_items.back().payload = std::move(item.payload);
+    }
+    else
+    {
+        m_items.push(std::move(item));
+    }
+
+    EnsureThreadStarted();
+    m_cv.notify_one();
+}
+
+void StatTracker::OngoingGameSubmitter::ThreadLoop()
+{
+    Common::SetCurrentThreadName("RioOngoingGameQueue");
+
+    while (true)
+    {
+        Item item;
+        {
+            std::unique_lock lg(m_lock);
+            m_cv.wait(lg, [&] { return !m_items.empty() || m_shutdown; });
+
+            // On shutdown, stop promptly: discard whatever is still queued instead of
+            // draining it. A request already in flight (popped before m_shutdown was
+            // set) finishes on its own, so teardown is bounded by a single request's
+            // timeout rather than the whole backlog.
+            if (m_shutdown)
+                return;
+
+            item = std::move(m_items.front());
+            m_items.pop();
+        }
+
+        // Blocking POST happens here, off the emulation thread. m_http is owned and
+        // touched only by this thread, so it is never used concurrently.
+        m_http.Post(s_url, item.payload, {{"Content-Type", "application/json"}});
+    }
 }
 
 bool StatTracker::hasEnoughStarsForStarSwing(const Core::CPUThreadGuard& guard, Event& in_event)

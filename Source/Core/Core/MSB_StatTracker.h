@@ -7,6 +7,10 @@
 #include <set>
 #include <tuple>
 #include <iostream>
+#include <queue>
+#include <mutex>
+#include <thread>
+#include <condition_variable>
 #include "Core/HW/Memmap.h"
 #include <picojson.h>
 
@@ -1187,6 +1191,54 @@ public:
     }
 
     Common::HttpRequest m_http{std::chrono::minutes{3}};
+
+    // Sends ongoing-game submissions to the web server on a dedicated background
+    // thread so the blocking HTTP round-trip never stalls the emulation thread.
+    //
+    // The emulation thread builds the JSON payload (cheap) and hands it off via
+    // QueuePost()/QueueUpdate(); the worker owns its own HttpRequest and performs
+    // the blocking POST. "Post" submissions establish the ongoing-game record and
+    // are always sent in order, never dropped. "Update" submissions are full state
+    // snapshots, so if several pile up behind a slow request the worker coalesces
+    // consecutive pending updates down to the newest one. A post is never dropped
+    // or reordered relative to the updates around it.
+    class OngoingGameSubmitter
+    {
+    public:
+        OngoingGameSubmitter() = default;
+        ~OngoingGameSubmitter();
+
+        // Non-blocking. Safe to call from the emulation thread.
+        void QueuePost(std::string payload);
+        void QueueUpdate(std::string payload);
+
+    private:
+        enum class Kind { Post, Update };
+        struct Item
+        {
+            Kind kind = Kind::Update;
+            std::string payload;
+        };
+
+        void EnsureThreadStarted();
+        void Enqueue(Item&& item);
+        void ThreadLoop();
+
+        static constexpr char s_url[] = "https://api.projectrio.app/populate_db/ongoing_game/";
+
+        // Short timeout: these are fire-and-forget telemetry, so a stalled request
+        // should be abandoned quickly rather than holding up later submissions.
+        Common::HttpRequest m_http{std::chrono::seconds{10}};
+
+        std::thread m_thread;
+        std::mutex m_lock;
+        std::condition_variable m_cv;
+        std::queue<Item> m_items;
+        bool m_thread_started = false;
+        bool m_shutdown = false;
+    };
+
+    OngoingGameSubmitter m_ongoing_game_submitter;
 
     //The type of value to decode, the value to be decoded, bool for decode if true or original value if false
     std::string decode(std::string type, u8 value, bool decode);
