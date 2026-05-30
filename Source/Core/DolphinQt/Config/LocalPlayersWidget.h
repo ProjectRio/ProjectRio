@@ -44,6 +44,8 @@ private:
   void ConnectWidgets();
   void ValidateAndApplyFastReset();
   void OnEmulationStateChanged(Core::State state);
+  void LoadLocalGameOptions();
+  void SaveLocalGameOptions();
 
   QGroupBox* m_player_box;
   QGroupBox* m_options_box;
@@ -68,6 +70,9 @@ private:
 
   QCheckBox* m_fast_reset_checkbox;
   QLabel* m_fast_reset_status;
+
+  QCheckBox* m_night_stadium;
+  QCheckBox* m_disable_replays;
 
   std::vector<LocalPlayers::LocalPlayers::Player> m_local_players; // vector of player objects
   std::map<std::string, std::string> m_player_map; // maps player key to username

@@ -50,6 +50,7 @@ LocalPlayersWidget::LocalPlayersWidget(QWidget* parent) : QWidget(parent)
   PopulateTagsetCombobox();
   ConnectWidgets();
   SetTagSet();
+  LoadLocalGameOptions();
 }
 
 // create the basic UI elements for the local players widget
@@ -130,12 +131,17 @@ void LocalPlayersWidget::CreateLayout()
   player_layout->addWidget(m_remove_button, 1);
   m_player_box->setLayout(player_layout);
 
+  m_night_stadium = new QCheckBox(tr("Night Mario Stadium"));
+  m_disable_replays = new QCheckBox(tr("Disable Replays"));
+
   auto* options_layout = new QGridLayout;
   options_layout->setAlignment(Qt::AlignTop);
   options_layout->addWidget(new QLabel(tr("Game Mode:")), 0, 0);
   options_layout->addWidget(m_local_tagset, 0, 1, 1, -1, Qt::AlignLeft);
   options_layout->addWidget(tagset_description, 1, 0, 1, -1);
   options_layout->addWidget(m_game_mode_description, 2, 0, 1, -1);
+  options_layout->addWidget(m_night_stadium, 3, 0, 1, -1);
+  options_layout->addWidget(m_disable_replays, 4, 0, 1, -1);
   m_options_box->setLayout(options_layout);
 
   m_fast_reset_box = new QGroupBox(tr("Local Fast Reset"));
@@ -459,7 +465,47 @@ void LocalPlayersWidget::OnEmulationStateChanged(Core::State state)
     m_fast_reset_checkbox->setChecked(false);
     Gecko::setFastResetFromHUD(false);
     m_fast_reset_status->setText(tr("Fast Reset was cleared after emulation stopped."));
+
+    // Re-apply local game options in case netplay overwrote the flags during the session.
+    Gecko::setNightStadium(m_night_stadium->isChecked());
+    Gecko::setDisableReplays(m_disable_replays->isChecked());
   }
+}
+
+void LocalPlayersWidget::LoadLocalGameOptions()
+{
+  Common::IniFile ini;
+  ini.Load(File::GetUserPath(F_LOCALPLAYERSCONFIG_IDX));
+
+  bool nightStadium = false;
+  bool disableReplays = false;
+  ini.GetOrCreateSection("Local Game Options")->Get("NightStadium", &nightStadium, false);
+  ini.GetOrCreateSection("Local Game Options")->Get("DisableReplays", &disableReplays, false);
+
+  // Block signals so the stateChanged handlers don't fire redundant saves during load.
+  m_night_stadium->blockSignals(true);
+  m_disable_replays->blockSignals(true);
+
+  m_night_stadium->setChecked(nightStadium);
+  m_disable_replays->setChecked(disableReplays);
+
+  m_night_stadium->blockSignals(false);
+  m_disable_replays->blockSignals(false);
+
+  Gecko::setNightStadium(nightStadium);
+  Gecko::setDisableReplays(disableReplays);
+}
+
+void LocalPlayersWidget::SaveLocalGameOptions()
+{
+  const auto ini_path = std::string(File::GetUserPath(F_LOCALPLAYERSCONFIG_IDX));
+  Common::IniFile ini;
+  ini.Load(ini_path);
+
+  ini.GetOrCreateSection("Local Game Options")->Set("NightStadium", m_night_stadium->isChecked());
+  ini.GetOrCreateSection("Local Game Options")->Set("DisableReplays", m_disable_replays->isChecked());
+
+  ini.Save(ini_path);
 }
 
 bool LocalPlayersWidget::IsValidUser(LocalPlayers::LocalPlayers::Player player)
@@ -499,6 +545,16 @@ void LocalPlayersWidget::ConnectWidgets()
 
   connect(m_fast_reset_checkbox, &QCheckBox::stateChanged, this,
           &LocalPlayersWidget::ValidateAndApplyFastReset);
+
+  connect(m_night_stadium, &QCheckBox::stateChanged, this, [this]() {
+    Gecko::setNightStadium(m_night_stadium->isChecked());
+    SaveLocalGameOptions();
+  });
+
+  connect(m_disable_replays, &QCheckBox::stateChanged, this, [this]() {
+    Gecko::setDisableReplays(m_disable_replays->isChecked());
+    SaveLocalGameOptions();
+  });
 
   connect(&Settings::Instance(), &Settings::EmulationStateChanged, this,
           &LocalPlayersWidget::OnEmulationStateChanged);
