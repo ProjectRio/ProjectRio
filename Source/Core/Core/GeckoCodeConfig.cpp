@@ -147,13 +147,10 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
     if (gameId == "GYQE01")
     {
       BuiltInGeckoCodes = MSSB_BuiltInGeckoCodes;
-      if (is_netplay)
-      {
-        if (isNightStadium)
-          BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_NightStadium;
-        if (isDisableReplays)
-          BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_DisableReplays;
-      }
+      if (isNightStadium)
+        BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_NightStadium;
+      if (isDisableReplays)
+        BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_DisableReplays;
     }
     // else if (gameId == "GFTE01")
     //   BuiltInGeckoCodes = MGTT_BuiltInGeckoCodes;
