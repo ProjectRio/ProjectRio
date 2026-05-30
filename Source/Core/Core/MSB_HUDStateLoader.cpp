@@ -445,7 +445,9 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
 }
 
 int allowLoadFromHUD(const std::string& path,
-                     const std::string& p1Username, const std::string& p2Username)
+                     const std::string& p1Username, const std::string& p2Username,
+                     bool isNetplay,
+                     HUDValidationDetails* outDetails)
 {
     INFO_LOG_FMT(COMMON, "Starting to check if HUD state load is allowed");
 
@@ -481,7 +483,7 @@ int allowLoadFromHUD(const std::string& path,
 
     // ===== check lobby gamemode matches HUD =====
     // Get the active tagset from the current netplay session
-    std::optional<Tag::TagSet> activeTagSet = Core::GetActiveTagSet(true);
+    std::optional<Tag::TagSet> activeTagSet = Core::GetActiveTagSet(isNetplay);
 
     // Check if HUD file has a TagSetID
     if (j.count("TagSetID"))
@@ -495,6 +497,11 @@ int allowLoadFromHUD(const std::string& path,
             {
                 ERROR_LOG_FMT(COMMON, "TagSet mismatch. Lobby TagSet ID={}, HUD TagSet ID={}",
                             activeTagSet.value().id, hudTagSetId);
+                if (outDetails)
+                {
+                    outDetails->hudTagSetId = hudTagSetId;
+                    outDetails->activeTagSetName = activeTagSet.value().name;
+                }
                 return 3;
             }
             INFO_LOG_FMT(COMMON, "TagSet match confirmed: ID={}", hudTagSetId);
@@ -511,6 +518,11 @@ int allowLoadFromHUD(const std::string& path,
         // Lobby has a tagset but HUD does not record one
         ERROR_LOG_FMT(COMMON, "Lobby has TagSet ID={} but HUD file has no TagSetID field.",
                     activeTagSet.value().id);
+        if (outDetails)
+        {
+            outDetails->hudTagSetId = -1;
+            outDetails->activeTagSetName = activeTagSet.value().name;
+        }
         return 3;
     }
 
@@ -529,6 +541,12 @@ int allowLoadFromHUD(const std::string& path,
         std::string(StripWhitespace(j.at("Away Player").get<std::string>())) : "";
     std::string homePlayer = j.count("Home Player") ?
         std::string(StripWhitespace(j.at("Home Player").get<std::string>())) : "";
+
+    if (outDetails)
+    {
+        outDetails->hudAwayPlayer = awayPlayer;
+        outDetails->hudHomePlayer = homePlayer;
+    }
 
     // Validate players match the HUD file
     bool p1IsAway = (p1Username == awayPlayer);

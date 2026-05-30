@@ -1690,7 +1690,8 @@ void NetPlayClient::OnFastResetFromHUDMsg(sf::Packet& packet)
   INFO_LOG_FMT(COMMON, "HUD reset check: P1='{}', P2='{}'", p1Username, p2Username.empty() ? "none" : p2Username);
 
   std::string hudPath = File::GetUserPath(D_HUDFILES_IDX) + "hud.json";
-  int resultCode = allowLoadFromHUD(hudPath, p1Username, p2Username);
+  HUDValidationDetails details;
+  int resultCode = allowLoadFromHUD(hudPath, p1Username, p2Username, true, &details);
 
   if (resultCode == 0)
   {
@@ -1699,6 +1700,27 @@ void NetPlayClient::OnFastResetFromHUDMsg(sf::Packet& packet)
   }
 
   m_dialog->OnFastResetFromHUDResult(resultCode);
+
+  if (resultCode == 3)
+  {
+    if (details.hudTagSetId == -1)
+      m_dialog->AppendChat(fmt::format(
+          "HUD has no Game Mode, but '{}' is active in the lobby.",
+          details.activeTagSetName));
+    else
+      m_dialog->AppendChat(fmt::format(
+          "HUD expects Game Mode ID {}, but '{}' is active in the lobby.",
+          details.hudTagSetId, details.activeTagSetName));
+  }
+  else if (resultCode == 4)
+  {
+    m_dialog->AppendChat(fmt::format(
+        "HUD expects Away='{}', Home='{}'. Lobby has P1='{}', P2='{}'.",
+        details.hudAwayPlayer, details.hudHomePlayer,
+        p1Username.empty() ? "None" : p1Username,
+        p2Username.empty() ? "None" : p2Username));
+  }
+
   Gecko::setFastResetFromHUD(resultCode == 0);
 }
 

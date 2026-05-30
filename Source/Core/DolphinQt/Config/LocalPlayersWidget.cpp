@@ -4,6 +4,7 @@
 #include <iosfwd>
 #include "DolphinQt/Config/LocalPlayersWidget.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -32,6 +33,9 @@
 #include "Core/HW/SI/SI_Device.h"
 
 #include "Common/TagSet.h"
+
+#include "Core/GeckoCodeConfig.h"
+#include "Core/MSB_HUDStateLoader.h"
 
 #include "DolphinQt/Settings.h"
 #include "DolphinQt/QtUtils/ModalMessageBox.h"
@@ -134,9 +138,23 @@ void LocalPlayersWidget::CreateLayout()
   options_layout->addWidget(m_game_mode_description, 2, 0, 1, -1);
   m_options_box->setLayout(options_layout);
 
+  m_fast_reset_box = new QGroupBox(tr("Local Fast Reset"));
+  m_fast_reset_checkbox = new QCheckBox(tr("Enable Fast Reset from HUD"));
+  m_fast_reset_status = new QLabel(tr("Fast Reset is disabled."));
+  m_fast_reset_status->setWordWrap(true);
+  m_fast_reset_status->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+
+  auto* fast_reset_layout = new QVBoxLayout;
+  fast_reset_layout->setAlignment(Qt::AlignTop);
+  fast_reset_layout->addWidget(m_fast_reset_checkbox);
+  fast_reset_layout->addSpacing(8);
+  fast_reset_layout->addWidget(m_fast_reset_status);
+  m_fast_reset_box->setLayout(fast_reset_layout);
+
   auto* layout = new QHBoxLayout;
   layout->addWidget(m_player_box, 1);
   layout->addWidget(m_options_box);
+  layout->addWidget(m_fast_reset_box);
   layout->addSpacing(20);
 
   setLayout(layout);
@@ -247,6 +265,7 @@ void LocalPlayersWidget::SetPortInfo()
   LocalPlayers::SaveLocalPorts();
   SavePlayers();
   PopulateTagsetCombobox();
+  ValidateAndApplyFastReset();
 }
 
 void LocalPlayersWidget::PopulateTagsetCombobox()
@@ -361,6 +380,86 @@ void LocalPlayersWidget::SetTagSet()
 
   QScrollBar* scrollBar = m_game_mode_description->verticalScrollBar();
   scrollBar->setValue(scrollBar->minimum());  // set scroll bar to the top
+
+  ValidateAndApplyFastReset();
+}
+
+void LocalPlayersWidget::ValidateAndApplyFastReset()
+{
+  if (!m_fast_reset_checkbox->isChecked())
+  {
+    Gecko::setFastResetFromHUD(false);
+    m_fast_reset_status->setText(tr("Fast Reset is disabled."));
+    return;
+  }
+
+  std::string p1Username = LocalPlayers::m_local_player_1.GetUsername();
+  std::string p2Username = LocalPlayers::m_local_player_2.GetUsername();
+
+  if (p1Username == "No Player Selected") p1Username = "";
+  if (p2Username == "No Player Selected") p2Username = "";
+
+  const std::string hudPath = File::GetUserPath(D_HUDFILES_IDX) + "hud.json";
+
+  HUDValidationDetails details;
+  int resultCode = allowLoadFromHUD(hudPath, p1Username, p2Username, false, &details);
+
+  if (resultCode != 0)
+  {
+    Gecko::setFastResetFromHUD(false);
+    switch (resultCode)
+    {
+    case 2:
+      m_fast_reset_status->setText(tr("Error: HUD file not found or could not be parsed."));
+      break;
+    case 3:
+      if (details.hudTagSetId == -1)
+        m_fast_reset_status->setText(
+            tr("Error: Game Mode mismatch. HUD has no Game Mode, but '%1' is active. "
+               "Deselect the Game Mode or use a HUD from a '%1' match.")
+                .arg(QString::fromStdString(details.activeTagSetName)));
+      else
+        m_fast_reset_status->setText(
+            tr("Error: Game Mode mismatch. HUD expects Game Mode ID %1, but '%2' is active.")
+                .arg(details.hudTagSetId)
+                .arg(QString::fromStdString(details.activeTagSetName)));
+      break;
+    case 4:
+      m_fast_reset_status->setText(
+          tr("Error: Player mismatch. HUD expects Away='%1', Home='%2'. "
+             "Player 1 is '%3', Player 2 is '%4'.")
+              .arg(QString::fromStdString(details.hudAwayPlayer))
+              .arg(QString::fromStdString(details.hudHomePlayer))
+              .arg(QString::fromStdString(p1Username.empty() ? "None" : p1Username))
+              .arg(QString::fromStdString(p2Username.empty() ? "None" : p2Username)));
+      break;
+    default:
+      m_fast_reset_status->setText(tr("Error: Unknown validation failure."));
+      break;
+    }
+    return;
+  }
+
+  if (!LoadStateFromHud(hudPath, Gecko::HUDState, p1Username, p2Username))
+  {
+    Gecko::setFastResetFromHUD(false);
+    m_fast_reset_status->setText(tr("Error: Failed to parse game state from HUD file."));
+    return;
+  }
+
+  Gecko::setFastResetFromHUD(true);
+  m_fast_reset_status->setText(tr("Fast Reset is enabled. Game state loaded successfully.\n"
+                                  "Start the game to apply."));
+}
+
+void LocalPlayersWidget::OnEmulationStateChanged(Core::State state)
+{
+  if (state == Core::State::Uninitialized)
+  {
+    m_fast_reset_checkbox->setChecked(false);
+    Gecko::setFastResetFromHUD(false);
+    m_fast_reset_status->setText(tr("Fast Reset was cleared after emulation stopped."));
+  }
 }
 
 bool LocalPlayersWidget::IsValidUser(LocalPlayers::LocalPlayers::Player player)
@@ -397,4 +496,10 @@ void LocalPlayersWidget::ConnectWidgets()
 
   connect(m_add_button, &QPushButton::clicked, this, &LocalPlayersWidget::OnAddPlayers);
   connect(m_remove_button, &QPushButton::clicked, this, &LocalPlayersWidget::OnRemovePlayers);
+
+  connect(m_fast_reset_checkbox, &QCheckBox::stateChanged, this,
+          &LocalPlayersWidget::ValidateAndApplyFastReset);
+
+  connect(&Settings::Instance(), &Settings::EmulationStateChanged, this,
+          &LocalPlayersWidget::OnEmulationStateChanged);
 }

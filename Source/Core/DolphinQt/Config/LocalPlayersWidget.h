@@ -8,12 +8,15 @@
 #include <array>
 
 #include "Common/HttpRequest.h"
+#include "Core/Core.h"
 #include "Core/LocalPlayers.h"
 
+class QCheckBox;
 class QComboBox;
 class QHBoxLayout;
 class QGridLayout;
 class QGroupBox;
+class QLabel;
 class QPushButton;
 class QListWidget;
 class QTextEdit;
@@ -39,9 +42,12 @@ private:
   bool IsValidUser(LocalPlayers::LocalPlayers::Player player);
 
   void ConnectWidgets();
+  void ValidateAndApplyFastReset();
+  void OnEmulationStateChanged(Core::State state);
 
   QGroupBox* m_player_box;
   QGroupBox* m_options_box;
+  QGroupBox* m_fast_reset_box;
   QGridLayout* m_player_layout;
   QListWidget* m_player_list;
 
@@ -59,6 +65,9 @@ private:
   QPushButton* m_add_button;
   QPushButton* m_remove_button;
   std::array<QHBoxLayout*, 4> m_player_groups;
+
+  QCheckBox* m_fast_reset_checkbox;
+  QLabel* m_fast_reset_status;
 
   std::vector<LocalPlayers::LocalPlayers::Player> m_local_players; // vector of player objects
   std::map<std::string, std::string> m_player_map; // maps player key to username
