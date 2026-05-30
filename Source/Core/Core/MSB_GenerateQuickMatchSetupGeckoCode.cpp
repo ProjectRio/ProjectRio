@@ -615,6 +615,24 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
             // if both captains provided, prevent P1 from selecting the CPU captain when spamming A to avoid an invalid read error.
             codes.push_back(ToGeckoCode(0x04, CAPTAIN_SCREEN_PREVENT_CPU_CAPTAIN_ADDR, CAPTAIN_SCREEN_PREVENT_CPU_CAPTAIN_NEW_INSTR));
         }
+
+        if (state.logoP1.has_value())
+        {
+            uint32_t val = state.logoP1.value();
+            if (val > 0x2F)
+                WARN_LOG_FMT(COMMON, "P1 logo ID not valid: {}. No gecko code produced.", val);
+            else
+                codes.push_back(ToGeckoCode(0x00, LOGO_P1_ADDR, val));
+        }
+
+        if (state.logoP2.has_value())
+        {
+            uint32_t val = state.logoP2.value();
+            if (val > 0x2F)
+                WARN_LOG_FMT(COMMON, "P2 logo ID not valid: {}. No gecko code produced.", val);
+            else
+                codes.push_back(ToGeckoCode(0x00, LOGO_P2_ADDR, val));
+        }
         
         GenerateRosterGeckoCodes(
             state.charactersP1ByPosition, 
@@ -822,25 +840,6 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
                     codes.push_back(ToGeckoCode(0x00, IS_STAR_CHANCE_ADDR, val));
             }        
             
-            if (state.logoAway.has_value())
-            {
-                uint32_t val = state.logoAway.value();
-                if (val > 0x2F)
-                    WARN_LOG_FMT(COMMON, "Away logo ID not valid: {}. No gecko code produced.", val);
-                else
-                    codes.push_back(ToGeckoCode(0x04, LOGO_AWAY_ADDR, val));
-            }
-
-            if (state.logoHome.has_value())
-            {
-                uint32_t val = state.logoHome.value();
-                if (val > 0x2F)
-                    WARN_LOG_FMT(COMMON, "Home logo ID not valid: {}. No gecko code produced.", val);
-                else
-                    codes.push_back(ToGeckoCode(0x04, LOGO_HOME_ADDR, val));
-            }
-
-
             // batting order and position struct
             GenerateOrderAndPositionGeckoCodes(
                 state.awayPositionByBattingOrder, 

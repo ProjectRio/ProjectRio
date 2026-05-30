@@ -67,8 +67,8 @@ struct MSBQuickMatchGameState
 
     std::optional<uint8_t> isStarChance; // 0=off, 1=on
 
-    std::optional<uint32_t> logoAway; // 0-47
-    std::optional<uint32_t> logoHome; // 0-47
+    std::optional<uint32_t> logoP1; // 0-47
+    std::optional<uint32_t> logoP2; // 0-47
 
     // for each spot in the batting order, enter the batters position
     std::optional<uint32_t> awayPositionByBattingOrder[9];
@@ -107,6 +107,8 @@ public:
 
     static constexpr uint32_t CAPTAIN_BATTING_ORDER_LOCATION_P1_ADDR = 0x803530a9;
     static constexpr uint32_t CAPTAIN_BATTING_ORDER_LOCATION_P2_ADDR = 0x803530aa;
+    static constexpr uint32_t LOGO_P1_ADDR = 0x803530ad;
+    static constexpr uint32_t LOGO_P2_ADDR = 0x803530ae;
 
     static constexpr uint32_t CAPTAIN_SCREEN_PREVENT_CPU_CAPTAIN_ADDR = 0x806548dc;
     static constexpr uint32_t CAPTAIN_SCREEN_PREVENT_CPU_CAPTAIN_NEW_INSTR = 0x48000234;
@@ -170,9 +172,6 @@ public:
     static constexpr uint32_t TEAM_STARS_P2_ADDR = 0x80892ad7;
 
     static constexpr uint32_t IS_STAR_CHANCE_ADDR = 0x80892ad8;
-
-    static constexpr uint32_t LOGO_AWAY_ADDR = 0x808929b0;
-    static constexpr uint32_t LOGO_HOME_ADDR = 0x808929bc;
 
     static constexpr uint32_t ORDER_AND_POSITION_STRUCT_AWAY_BASE = 0x808929c8;
     static constexpr uint32_t ORDER_AND_POSITION_STRUCT_HOME_BASE = 0x80892a18;
