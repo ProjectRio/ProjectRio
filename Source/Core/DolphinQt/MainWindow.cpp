@@ -618,6 +618,8 @@ void MainWindow::ConnectHotkeys()
   connect(m_hotkey_scheduler, &HotkeyScheduler::UnlockCursor, this, &MainWindow::UnlockCursor);
   connect(m_hotkey_scheduler, &HotkeyScheduler::TogglePauseHotkey, this, &MainWindow::TogglePause);
   connect(m_hotkey_scheduler, &HotkeyScheduler::ActivateChat, this, &MainWindow::OnActivateChat);
+  connect(m_hotkey_scheduler, &HotkeyScheduler::ChatSnapLeft, this, &MainWindow::OnChatSnapLeft);
+  connect(m_hotkey_scheduler, &HotkeyScheduler::ChatSnapRight, this, &MainWindow::OnChatSnapRight);
   connect(m_hotkey_scheduler, &HotkeyScheduler::RequestGolfControl, this,
           &MainWindow::OnRequestGolfControl);
   connect(m_hotkey_scheduler, &HotkeyScheduler::RefreshGameListHotkey, this,
@@ -2037,6 +2039,18 @@ void MainWindow::OnActivateChat()
 {
   if (g_netplay_chat_ui)
     g_netplay_chat_ui->Activate();
+}
+
+void MainWindow::OnChatSnapLeft()
+{
+  if (g_netplay_chat_ui)
+    g_netplay_chat_ui->RequestSnapLeftPillar();
+}
+
+void MainWindow::OnChatSnapRight()
+{
+  if (g_netplay_chat_ui)
+    g_netplay_chat_ui->RequestSnapRightPillar();
 }
 
 void MainWindow::OnRequestGolfControl()

@@ -58,6 +58,7 @@ private:
   ConfigBool* m_wait_for_shaders;
   
   ConfigBool* m_show_player_names;
+  ConfigBool* m_clip_player_names_to_pillar;
   ConfigBool* m_training_mode;
   ConfigBool* m_draft_timer;
 };

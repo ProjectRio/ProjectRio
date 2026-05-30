@@ -629,7 +629,7 @@ void DisplayPlayerNames(const Core::CPUThreadGuard& guard)
     // check for valid user
     if (batterName != "")
     {
-      OSD::AddTypedMessage(OSD::MessageType::CurrentBatter, fmt::format("Batter: {}", batterName),
+      OSD::AddTypedMessage(OSD::MessageType::CurrentBatter, fmt::format("B: {}", batterName),
                            OSD::Duration::SHORT, portColor[BatterPort]);
     }
 
@@ -637,7 +637,7 @@ void DisplayPlayerNames(const Core::CPUThreadGuard& guard)
     if (fielderName != "")
     {
       OSD::AddTypedMessage(OSD::MessageType::CurrentFielder,
-                           fmt::format("Fielder: {}", fielderName), OSD::Duration::SHORT,
+                           fmt::format("F: {}", fielderName), OSD::Duration::SHORT,
                            portColor[FielderPort]);
     }
 

@@ -20,6 +20,7 @@
 
 #include "VideoCommon/AbstractGfx.h"
 #include "VideoCommon/AbstractTexture.h"
+#include "VideoCommon/Present.h"
 #include "VideoCommon/TextureConfig.h"
 
 namespace OSD
@@ -62,11 +63,52 @@ static ImVec4 ARGBToImVec4(const u32 argb)
                 static_cast<float>((argb >> 24) & 0xFF) / 255.0f);
 }
 
-static float DrawMessage(int index, Message& msg, const ImVec2& position, int time_left)
+// Truncate `text` so its rendered width is <= max_width, appending an ellipsis if any
+// characters were dropped. Operates on byte indices — fine for our ASCII-only OSD labels
+// (e.g. "B: PlayerName"); player names should not contain multi-byte UTF-8.
+static std::string TruncateToWidth(const std::string& text, float max_width)
+{
+  if (max_width <= 0.0f)
+    return text;  // no pillar info — render unmodified
+  if (ImGui::CalcTextSize(text.c_str()).x <= max_width)
+    return text;
+
+  static constexpr const char* ELLIPSIS = "...";
+  const float ellipsis_w = ImGui::CalcTextSize(ELLIPSIS).x;
+  if (ellipsis_w > max_width)
+    return {};  // not even the ellipsis fits — drop the message text
+
+  // Linear shrink from the end. OSD player-name strings are short, so O(n) is fine.
+  size_t n = text.size();
+  while (n > 0)
+  {
+    const std::string candidate = text.substr(0, n) + ELLIPSIS;
+    if (ImGui::CalcTextSize(candidate.c_str()).x <= max_width)
+      return candidate;
+    --n;
+  }
+  return ELLIPSIS;
+}
+
+static float DrawMessage(int index, MessageType type, Message& msg, const ImVec2& position,
+                         int time_left)
 {
   // We have to provide a window name, and these shouldn't be duplicated.
   // So instead, we generate a name based on the number of messages drawn.
   const std::string window_name = fmt::format("osd_{}", index);
+
+  // Optional: clip player-name labels to the left pillar's width with an ellipsis overflow.
+  // Only applies to CurrentBatter/CurrentFielder so other typed messages aren't affected.
+  std::string display_text = msg.text;
+  if ((type == MessageType::CurrentBatter || type == MessageType::CurrentFielder) &&
+      Config::Get(Config::MAIN_OSD_CLIP_PLAYER_NAMES) && g_presenter)
+  {
+    const auto& target = g_presenter->GetTargetRectangle();
+    // Max width inside the pillar, accounting for ImGui's default window padding on both sides.
+    const float max_text_w = static_cast<float>(target.left) - position.x -
+                             ImGui::GetStyle().WindowPadding.x * 2.0f;
+    display_text = TruncateToWidth(msg.text, max_text_w);
+  }
 
   // The size must be reset, otherwise the length of old messages could influence new ones.
   ImGui::SetNextWindowPos(position);
@@ -113,7 +155,7 @@ static float DrawMessage(int index, Message& msg, const ImVec2& position, int ti
     }
 
     // Use %s in case message contains %.
-    ImGui::TextColored(ARGBToImVec4(msg.color), "%s", msg.text.c_str());
+    ImGui::TextColored(ARGBToImVec4(msg.color), "%s", display_text.c_str());
     window_height =
         ImGui::GetWindowSize().y + (WINDOW_PADDING * ImGui::GetIO().DisplayFramebufferScale.y);
   }
@@ -175,13 +217,13 @@ void DrawMessages()
       it = s_messages.erase(it);
       continue;
     }
-    else
-    {
-      ++it;
-    }
+
+    // Capture the type before advancing the iterator; DrawMessage() needs it.
+    const MessageType type = it->first;
+    ++it;
 
     if (draw_messages)
-      current_y += DrawMessage(index++, msg, ImVec2(current_x, current_y), time_left);
+      current_y += DrawMessage(index++, type, msg, ImVec2(current_x, current_y), time_left);
   }
 }
 
