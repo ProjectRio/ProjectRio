@@ -33,6 +33,7 @@ class GameList;
 class GBATASInputWindow;
 class GCTASInputWindow;
 class GeckoDialog;
+class TexturePackManagerDialog;
 class GraphicsWindow;
 class HotkeyScheduler;
 class InfinityBaseWindow;
@@ -182,6 +183,7 @@ private:
   void ShowCheatsManager();
   void ShowRiivolutionBootWidget(const UICommon::GameFile& game);
   void ShowGeckoCodes();
+  void ShowTexturePackManager();
   void ShowDiscordMenu();
 
 #ifdef USE_RETRO_ACHIEVEMENTS
@@ -257,6 +259,7 @@ private:
   InfinityBaseWindow* m_infinity_window = nullptr;
   MappingWindow* m_hotkey_window = nullptr;
   GeckoDialog* m_gecko_dialog = nullptr;
+  TexturePackManagerDialog* m_texture_pack_dialog = nullptr;
   LocalPlayersWindow* m_local_players_window = nullptr;
   FreeLookWindow* m_freelook_window = nullptr;
   QMenu* discord_menu = nullptr;

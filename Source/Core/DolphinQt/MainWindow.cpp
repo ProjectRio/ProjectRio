@@ -114,6 +114,7 @@
 #include "DolphinQt/QtUtils/SetWindowDecorations.h"
 #include "DolphinQt/QtUtils/WindowActivationEventFilter.h"
 #include "DolphinQt/RenderWidget.h"
+#include "DolphinQt/Config/TexturePackManagerDialog.h"
 #include "DolphinQt/ResourcePackManager.h"
 #include "DolphinQt/Resources.h"
 #include "DolphinQt/RiivolutionBootWidget.h"
@@ -698,6 +699,7 @@ void MainWindow::ConnectToolBar()
 
   connect(m_tool_bar, &ToolBar::StartNetPlayPressed, this, &MainWindow::ShowNetPlaySetupDialog);
   connect(m_tool_bar, &ToolBar::ViewGeckoCodes, this, &MainWindow::ShowGeckoCodes);
+  connect(m_tool_bar, &ToolBar::ViewTexturePacks, this, &MainWindow::ShowTexturePackManager);
   connect(m_tool_bar, &ToolBar::ViewLocalPlayers, this, &MainWindow::ShowLocalPlayersWindow);
   connect(m_tool_bar, &ToolBar::DiscordPressed, this, &MainWindow::ShowDiscordMenu);
 
@@ -1440,6 +1442,19 @@ void MainWindow::ShowGeckoCodes()
   m_gecko_dialog->show();
   m_gecko_dialog->raise();
   m_gecko_dialog->activateWindow();
+}
+
+void MainWindow::ShowTexturePackManager()
+{
+  if (!m_texture_pack_dialog)
+  {
+    m_texture_pack_dialog = new TexturePackManagerDialog(this);
+    InstallHotkeyFilter(m_texture_pack_dialog);
+  }
+
+  m_texture_pack_dialog->show();
+  m_texture_pack_dialog->raise();
+  m_texture_pack_dialog->activateWindow();
 }
 
 
