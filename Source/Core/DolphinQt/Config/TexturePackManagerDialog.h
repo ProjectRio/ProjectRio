@@ -9,6 +9,7 @@
 
 class ConfigBool;
 class QLabel;
+class QLineEdit;
 class QListWidget;
 class QPushButton;
 class QTabWidget;
@@ -66,7 +67,9 @@ private:
   struct Tab
   {
     GameTag game = GameTag::Baseball;
+    QLineEdit* available_search = nullptr;
     QTreeWidget* available_tree = nullptr;
+    QLineEdit* active_search = nullptr;
     QListWidget* active_list = nullptr;
     QPushButton* add_button = nullptr;
     QPushButton* remove_button = nullptr;
@@ -87,6 +90,8 @@ private:
   // Dialog-level: refreshes the single inline notice based on both tabs' state.
   void UpdateInlineNotice();
 
+  void FilterAvailableTree(Tab& tab, const QString& text);
+  void FilterActiveList(Tab& tab, const QString& text);
   void OnAddSelected(Tab& tab);
   void OnRemoveSelected(Tab& tab);
   void OnMoveUp(Tab& tab);
