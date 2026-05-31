@@ -613,8 +613,10 @@ static const u32 aFielder_ManualSelectArg = 0x802EBF97; //Pitcher
 static const u32 cFielder_Offset = 0x268;
 
 
-static const u32 aBattingOrderAndPosition_Team0 = 0x808929D0;
-static const u32 aBattingOrderAndPosition_Team1 = 0x80892A20;
+// This table is laid out by away/home (block 0 = away, block 1 = home), NOT by the
+// controller-port team0/team1 ordering used by the pitcher/character stat tables.
+static const u32 aBattingOrderAndPosition_Away = 0x808929D0;
+static const u32 aBattingOrderAndPosition_Home = 0x80892A20;
 static const u8 cBattingOrderAndPosition_Offset = 0x4;
 static const u8 cRoster_Offset = 0x8;
 
@@ -1003,7 +1005,7 @@ public:
             team_id = inTeamId;
             initialized = true;
             for (u8 pos=0; pos < cRosterSize; ++pos){
-                u32 aFielderRosterLoc_calc = aBattingOrderAndPosition_Team0 + (pos * cRoster_Offset) + (10 * cRoster_Offset * team_id) + cBattingOrderAndPosition_Offset;
+                u32 aFielderRosterLoc_calc = aBattingOrderAndPosition_Away + (pos * cRoster_Offset) + (10 * cRoster_Offset * team_id) + cBattingOrderAndPosition_Offset;
 
                 u8 fielder_loc = static_cast<u8>(PowerPC::MMU::HostRead_U32(guard, aFielderRosterLoc_calc));
 
@@ -1024,7 +1026,7 @@ public:
         //Scans field to see who is playing which position and increments counts for positions
         void evaluateFielders(const Core::CPUThreadGuard& guard) {
             for (u8 pos=0; pos < cRosterSize; ++pos){
-                u32 aFielderRosterLoc_calc = aBattingOrderAndPosition_Team0 + (pos * cRoster_Offset) + (10 * cRoster_Offset * team_id) + cBattingOrderAndPosition_Offset;
+                u32 aFielderRosterLoc_calc = aBattingOrderAndPosition_Away + (pos * cRoster_Offset) + (10 * cRoster_Offset * team_id) + cBattingOrderAndPosition_Offset;
 
                 u8 fielder_loc = static_cast<u8>(PowerPC::MMU::HostRead_U32(guard, aFielderRosterLoc_calc));
 

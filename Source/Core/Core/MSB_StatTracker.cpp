@@ -200,12 +200,16 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                     // batting team too. Without this, the batting team's fielder_map.current_pos
                     // retains stale data from the previous game (e.g. across a fast reset), which
                     // leaks the prior game's fielding layout into this game's first HUD write.
+                    // The aBattingOrderAndPosition table is laid out by away/home (block 0 =
+                    // away, block 1 = home), NOT by controller-port team0/team1. So the tracker
+                    // index and the team_id passed to initTracker are the same away/home value.
+                    // (Do not apply the team0/team1 port remap here that the pitcher/character
+                    // stat tables require -- that swaps the two teams' fielder maps whenever the
+                    // away player is on the team1 port.)
                     for (u8 away_home = 0; away_home < 2; ++away_home){
                         if (!m_fielder_tracker[away_home].initialized){
                             std::cout << " Initializing fielders for team: " << std::to_string(away_home) << "\n";
-                            u8 port = (away_home == 0) ? m_game_info.away_port : m_game_info.home_port;
-                            u8 mem_team_id = (port == m_game_info.team0_port) ? 0 : 1;
-                            m_fielder_tracker[away_home].initTracker(guard, mem_team_id);
+                            m_fielder_tracker[away_home].initTracker(guard, away_home);
                         }
                     }
 
@@ -1858,13 +1862,6 @@ void StatTracker::initPlayerInfo(const Core::CPUThreadGuard& guard){
         std::cout << "Info:  Team0 Port=" << std::to_string(m_game_info.team0_port) << ", Team1 Port=" << std::to_string(m_game_info.team1_port) << "\n";
         std::cout << "Info:  Away Port=" << std::to_string(m_game_info.away_port) << ", Home Port=" << std::to_string(m_game_info.home_port) << "\n";
         std::cout << "Info:  Away Player=" << (away_player_name) << ", Home Player=" << (home_player_name) << "\n";
-
-        // Initialize fielder trackers for both teams at game start so the batting
-        // team's tracker is ready from the first pitch, not just the fielding team's.
-        u8 away_mem_team_id = (m_game_info.away_port == m_game_info.team0_port) ? 0 : 1;
-        u8 home_mem_team_id = (m_game_info.home_port == m_game_info.team0_port) ? 0 : 1;
-        m_fielder_tracker[0].initTracker(guard, away_mem_team_id);
-        m_fielder_tracker[1].initTracker(guard, home_mem_team_id);
 
         initCaptains(guard);
     }
