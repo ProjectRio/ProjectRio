@@ -36,6 +36,7 @@
 
 #include "Core/GeckoCodeConfig.h"
 #include "Core/MSB_HUDStateLoader.h"
+#include "Core/NetPlayProto.h"
 
 #include "DolphinQt/Settings.h"
 #include "DolphinQt/QtUtils/ModalMessageBox.h"
@@ -487,9 +488,12 @@ void LocalPlayersWidget::OnEmulationStateChanged(Core::State state)
     Gecko::setFastResetFromHUD(false);
     m_fast_reset_status->setText(tr("Fast Reset was cleared after emulation stopped."));
 
-    // Re-apply local game options in case netplay overwrote the flags during the session.
-    Gecko::setNightStadium(m_night_stadium->isChecked());
-    Gecko::setDisableReplays(m_disable_replays->isChecked());
+    // Re-apply local game options only after the netplay session ends, not between games.
+    if (!NetPlay::IsNetPlayRunning())
+    {
+      Gecko::setNightStadium(m_night_stadium->isChecked());
+      Gecko::setDisableReplays(m_disable_replays->isChecked());
+    }
   }
 }
 
