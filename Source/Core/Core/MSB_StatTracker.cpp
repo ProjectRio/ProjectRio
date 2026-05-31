@@ -2194,8 +2194,8 @@ void StatTracker::postOngoingGame(Event& in_curr_event){
     json_stream << "  \"Innings Selected\": " << std::to_string(m_game_info.innings_selected) << ",\n";
     json_stream << "  \"Star Chance\": "      << std::to_string(in_curr_event.is_star_chance) << ",\n";
     json_stream << "  \"Chemistry Links on Base\": " << std::to_string(in_curr_event.chem_links_ob) << ",\n";
-    json_stream << "  \"Pitcher\": "  << std::to_string(in_curr_event.pitcher_roster_loc) << ",\n";
-    json_stream << "  \"Batter\": "   << std::to_string(in_curr_event.batter_roster_loc) << ",\n";
+    json_stream << "  \"Pitcher Roster Loc\": "  << std::to_string(in_curr_event.pitcher_roster_loc) << ",\n";
+    json_stream << "  \"Batter Roster Loc\": "   << std::to_string(in_curr_event.batter_roster_loc) << ",\n";
 
     int pitcher_team = (in_curr_event.half_inning == 0) ? 1 : 0;
     int batter_team  = (in_curr_event.half_inning == 0) ? 0 : 1;
@@ -2265,8 +2265,8 @@ void StatTracker::updateOngoingGame(Event& in_curr_event){
     json_stream << "  \"Away Stars\": "              << std::to_string(in_curr_event.away_stars) << ",\n";
     json_stream << "  \"Home Stars\": "              << std::to_string(in_curr_event.home_stars) << ",\n";
     json_stream << "  \"Chemistry Links on Base\": " << std::to_string(in_curr_event.chem_links_ob) << ",\n";
-    json_stream << "  \"Pitcher\": "      << std::to_string(in_curr_event.pitcher_roster_loc) << ",\n";
-    json_stream << "  \"Batter\": "       << std::to_string(in_curr_event.batter_roster_loc) << ",\n";
+    json_stream << "  \"Pitcher Roster Loc\": "      << std::to_string(in_curr_event.pitcher_roster_loc) << ",\n";
+    json_stream << "  \"Batter Roster Loc\": "       << std::to_string(in_curr_event.batter_roster_loc) << ",\n";
 
     int batter_team_for_hand = (in_curr_event.half_inning == 0) ? 0 : 1;
     u8 batter_hand = m_game_info.character_summaries[batter_team_for_hand][in_curr_event.batter_roster_loc].batting_hand;
