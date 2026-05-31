@@ -194,12 +194,19 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                     m_game_info.getCurrentEvent().runner_2 = logRunnerInfo(guard, 2);
                     m_game_info.getCurrentEvent().runner_3 = logRunnerInfo(guard, 3);
 
-                    if (!m_fielder_tracker[!m_game_info.getCurrentEvent().half_inning].initialized){
-                        std::cout << " Initializing fielders for team: " << std::to_string(!m_game_info.getCurrentEvent().half_inning) << "\n";
-                        u8 fielding_away_home = !m_game_info.getCurrentEvent().half_inning;
-                        u8 fielding_port = (fielding_away_home == 0) ? m_game_info.away_port : m_game_info.home_port;
-                        u8 fielding_mem_team_id = (fielding_port == m_game_info.team0_port) ? 0 : 1;
-                        m_fielder_tracker[fielding_away_home].initTracker(guard, fielding_mem_team_id);
+                    // Initialize BOTH teams' fielder trackers up front (not just the fielding team).
+                    // The batting/order/position struct is already populated in memory for both
+                    // teams at game setup, so initTracker reads valid current positions for the
+                    // batting team too. Without this, the batting team's fielder_map.current_pos
+                    // retains stale data from the previous game (e.g. across a fast reset), which
+                    // leaks the prior game's fielding layout into this game's first HUD write.
+                    for (u8 away_home = 0; away_home < 2; ++away_home){
+                        if (!m_fielder_tracker[away_home].initialized){
+                            std::cout << " Initializing fielders for team: " << std::to_string(away_home) << "\n";
+                            u8 port = (away_home == 0) ? m_game_info.away_port : m_game_info.home_port;
+                            u8 mem_team_id = (port == m_game_info.team0_port) ? 0 : 1;
+                            m_fielder_tracker[away_home].initTracker(guard, mem_team_id);
+                        }
                     }
 
                     m_event_state = EVENT_STATE::WAITING_FOR_EVENT;
