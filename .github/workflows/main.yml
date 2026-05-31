@@ -216,6 +216,28 @@ jobs:
         shell: bash
         run: |
           export HOMEBREW_NO_AUTO_UPDATE=1
+
+          # Pin qtbase to 6.11.0. qtbase 6.11.1 regressed macOS fullscreen handling:
+          # the render window no longer snaps back to the forced 4:3 aspect ratio on a
+          # fullscreen toggle until the window is manually nudged. Homebrew's `qt`
+          # formula is just an umbrella of symlinks; QtGui (where the regression lives)
+          # ships in the separate `qtbase` formula, so we pin qtbase, not qt. `qt`
+          # depends on `qtbase` without a version constraint, so installing 6.11.0 first
+          # satisfies the `qt@6` install below and it won't upgrade qtbase. Other Qt
+          # modules (qtsvg, etc.) stay current — a 6.11.0 qtbase against 6.11.1 modules
+          # builds and runs fine (validated locally). Drop this pin once a qtbase past
+          # 6.11.1 restores the fullscreen behaviour.
+          # homebrew-core commit for qtbase 6.11.0 (bottled): arm64_tahoe + sonoma cover
+          # the macos-26 (arm64) and macos-26-intel (x86_64, via the sonoma fallback) runners.
+          QTBASE_REF="56729e9a19c74be24ba16e2bef7dfa9ab6e07a76"
+          PIN_TAP_DIR="$(brew --repository)/Library/Taps/local/homebrew-qtpin/Formula"
+          mkdir -p "$PIN_TAP_DIR"
+          curl -fsSL "https://raw.githubusercontent.com/Homebrew/homebrew-core/${QTBASE_REF}/Formula/q/qtbase.rb" \
+            -o "$PIN_TAP_DIR/qtbase.rb"
+          brew uninstall --ignore-dependencies qtbase 2>/dev/null || true
+          brew install local/qtpin/qtbase
+          brew pin qtbase
+
           brew install \
             ccache \
             ffmpeg \
