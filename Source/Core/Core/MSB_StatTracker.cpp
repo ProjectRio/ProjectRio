@@ -196,7 +196,10 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                     if (!m_fielder_tracker[!m_game_info.getCurrentEvent().half_inning].initialized){
                         std::cout << " Initializing fielders for team: " << std::to_string(!m_game_info.getCurrentEvent().half_inning) << "\n";
-                        m_fielder_tracker[!m_game_info.getCurrentEvent().half_inning].initTracker(guard, !m_game_info.getCurrentEvent().half_inning);
+                        u8 fielding_away_home = !m_game_info.getCurrentEvent().half_inning;
+                        u8 fielding_port = (fielding_away_home == 0) ? m_game_info.away_port : m_game_info.home_port;
+                        u8 fielding_mem_team_id = (fielding_port == m_game_info.team0_port) ? 0 : 1;
+                        m_fielder_tracker[fielding_away_home].initTracker(guard, fielding_mem_team_id);
                     }
 
                     m_event_state = EVENT_STATE::WAITING_FOR_EVENT;
@@ -1808,10 +1811,10 @@ void StatTracker::initPlayerInfo(const Core::CPUThreadGuard& guard){
     //Collect port info for players
     if (m_game_info.team0_port == 0xFF && m_game_info.team1_port == 0xFF){
         //From Roeming
-        std::array<u8, 2> ports = {PowerPC::MMU::HostRead_U8(guard, 0x800e874c), PowerPC::MMU::HostRead_U8(guard, 0x800e874d)};
+        std::array<u8, 2> ports = {PowerPC::MMU::HostRead_U8(guard, aPlayer1Port), PowerPC::MMU::HostRead_U8(guard, aPlayer2Port)};
         
-        u8 BattingPort = ports[PowerPC::MMU::HostRead_U32(guard, 0x80892990)];
-        u8 FieldingPort = ports[PowerPC::MMU::HostRead_U32(guard, 0x80892994)];
+        u8 BattingPort = ports[PowerPC::MMU::HostRead_U32(guard, aBattingTeam_P1P2)];
+        u8 FieldingPort = ports[PowerPC::MMU::HostRead_U32(guard, aFieldingTeam_P1P2)];
         
         m_game_info.team0_port = ports[0];
         m_game_info.team1_port = ports[1];
@@ -1841,8 +1844,8 @@ void StatTracker::initPlayerInfo(const Core::CPUThreadGuard& guard){
             home_player_name = m_game_info.team0_player.GetUsername();
         }
 
-        std::cout << "ports[0]=" << std::to_string(PowerPC::MMU::HostRead_U8(guard, 0x800e874c)) << " ports[1]=" << std::to_string(PowerPC::MMU::HostRead_U8(guard, 0x800e874d)) << "\n";
-        std::cout << "BattingPort=" << std::to_string(PowerPC::MMU::HostRead_U32(guard, 0x80892990)) << " FieldingPort=" << std::to_string(PowerPC::MMU::HostRead_U32(guard, 0x80892994)) << "\n";
+        std::cout << "ports[0]=" << std::to_string(PowerPC::MMU::HostRead_U8(guard, aPlayer1Port)) << " ports[1]=" << std::to_string(PowerPC::MMU::HostRead_U8(guard, aPlayer2Port)) << "\n";
+        std::cout << "BattingPort=" << std::to_string(PowerPC::MMU::HostRead_U32(guard, aBattingTeam_P1P2)) << " FieldingPort=" << std::to_string(PowerPC::MMU::HostRead_U32(guard, aFieldingTeam_P1P2)) << "\n";
 
         std::cout << "Info:  Fielder Port=" << std::to_string(FieldingPort) << ", Batter Port=" << std::to_string(BattingPort) << "\n";
         std::cout << "Info:  Team0 Port=" << std::to_string(m_game_info.team0_port) << ", Team1 Port=" << std::to_string(m_game_info.team1_port) << "\n";
@@ -1851,8 +1854,10 @@ void StatTracker::initPlayerInfo(const Core::CPUThreadGuard& guard){
 
         // Initialize fielder trackers for both teams at game start so the batting
         // team's tracker is ready from the first pitch, not just the fielding team's.
-        m_fielder_tracker[0].initTracker(guard, 0);
-        m_fielder_tracker[1].initTracker(guard, 1);
+        u8 away_mem_team_id = (m_game_info.away_port == m_game_info.team0_port) ? 0 : 1;
+        u8 home_mem_team_id = (m_game_info.home_port == m_game_info.team0_port) ? 0 : 1;
+        m_fielder_tracker[0].initTracker(guard, away_mem_team_id);
+        m_fielder_tracker[1].initTracker(guard, home_mem_team_id);
 
         initCaptains(guard);
     }

@@ -446,6 +446,11 @@ static const u32 aInGame_CharAttributes_CharId       = 0x80353C05;
 static const u32 aInGame_CharAttributes_FieldingHand = 0x80353C06;
 static const u32 aInGame_CharAttributes_BattingHand  = 0x80353C07;
 
+static const u32 aPlayer1Port                        = 0x800E874C;
+static const u32 aPlayer2Port                        = 0x800E874D;
+static const u32 aBattingTeam_P1P2                   = 0x80892990;
+static const u32 aFieldingTeam_P1P2                  = 0x80892994;
+
 //Addrs for DefensiveStats
 static const u32 aPitcher_BattersFaced      = 0x803535C9;
 static const u32 aPitcher_RunsAllowed       = 0x803535CA;
@@ -1204,12 +1209,12 @@ public:
     std::pair<u8,u8> getBatterFielderPorts(const Core::CPUThreadGuard& guard){
         // These values are the actual port numbers
         // and are indexed into using the below u8s
-        std::array<u8, 2> ports = {PowerPC::MMU::HostRead_U8(guard, 0x800e874c), PowerPC::MMU::HostRead_U8(guard, 0x800e874d)};
+        std::array<u8, 2> ports = {PowerPC::MMU::HostRead_U8(guard, aPlayer1Port), PowerPC::MMU::HostRead_U8(guard, aPlayer2Port)};
 
         // These registers will always be 0 or 1
         // and swap values each half inning
-        u32 BattingTeam = PowerPC::MMU::HostRead_U32(guard, 0x80892990);
-        u32 PitchingTeam = PowerPC::MMU::HostRead_U32(guard, 0x80892994);
+        u32 BattingTeam = PowerPC::MMU::HostRead_U32(guard, aBattingTeam_P1P2);
+        u32 PitchingTeam = PowerPC::MMU::HostRead_U32(guard, aFieldingTeam_P1P2);
         
         u8 BattingPort = ports[BattingTeam];
         u8 FieldingPort = ports[PitchingTeam];
