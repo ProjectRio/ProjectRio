@@ -333,7 +333,7 @@ void LocalPlayersWidget::PopulateTagsetCombobox()
     {
       return;
     }
-    valid_tagsets.push_back(Tag::getAvailableTagSets(m_http, player1key));
+    valid_tagsets.push_back(Tag::getAvailableTagSets(m_http, player4key));
   }
 
   if (valid_tagsets.size() == 0)
@@ -399,6 +399,8 @@ void LocalPlayersWidget::ValidateAndApplyFastReset()
     m_fast_reset_status->setText(tr("Fast Reset is disabled."));
     return;
   }
+
+  Core::SetTagSet(m_tagset_combobox_map[m_local_tagset->currentIndex()], false);
 
   std::string p1Username = LocalPlayers::m_local_player_1.GetUsername();
   std::string p2Username = LocalPlayers::m_local_player_2.GetUsername();
