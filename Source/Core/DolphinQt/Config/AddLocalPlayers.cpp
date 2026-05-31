@@ -38,6 +38,7 @@ void AddLocalPlayersEditor::SetPlayer(LocalPlayers::LocalPlayers::Player* name)
 void AddLocalPlayersEditor::CreateWidgets()
 {
   m_username_edit = new QLineEdit;
+  m_username_edit->setMaxLength(30);
   m_userid_edit = new QLineEdit;
   m_description = new QLabel(
       tr("\nEnter a Username.\n\n"
