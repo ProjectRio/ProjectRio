@@ -11,6 +11,7 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
 #include <QPushButton>
@@ -66,6 +67,9 @@ void GeckoCodeWidget::CreateWidgets()
 #ifdef USE_RETRO_ACHIEVEMENTS
   m_hc_warning = new HardcoreWarningWidget(this);
 #endif  // USE_RETRO_ACHIEVEMENTS
+  m_search_box = new QLineEdit;
+  m_search_box->setPlaceholderText(tr("Search codes..."));
+  m_search_box->setClearButtonEnabled(true);
   m_code_list = new QListWidget;
   m_name_label = new QLabel;
   m_creator_label = new QLabel;
@@ -119,6 +123,7 @@ void GeckoCodeWidget::CreateWidgets()
 #ifdef USE_RETRO_ACHIEVEMENTS
   layout->addWidget(m_hc_warning);
 #endif  // USE_RETRO_ACHIEVEMENTS
+  layout->addWidget(m_search_box);
   layout->addWidget(m_code_list);
 
   auto* info_layout = new QFormLayout;
@@ -160,6 +165,7 @@ void GeckoCodeWidget::ConnectWidgets()
   connect(m_code_list, &QListWidget::customContextMenuRequested, this,
           &GeckoCodeWidget::OnContextMenuRequested);
 
+  connect(m_search_box, &QLineEdit::textChanged, this, &GeckoCodeWidget::FilterList);
   connect(m_add_code, &QPushButton::clicked, this, &GeckoCodeWidget::AddCode);
   connect(m_remove_code, &QPushButton::clicked, this, &GeckoCodeWidget::RemoveCode);
   connect(m_edit_code, &QPushButton::clicked, this, &GeckoCodeWidget::EditCode);
@@ -359,7 +365,18 @@ void GeckoCodeWidget::UpdateList()
     }
   }
   m_code_list->setDragDropMode(QAbstractItemView::InternalMove);
+  FilterList(m_search_box->text());
   MakeEnabledList();
+}
+
+void GeckoCodeWidget::FilterList(const QString& text)
+{
+  for (int i = 0; i < m_code_list->count(); i++)
+  {
+    QListWidgetItem* item = m_code_list->item(i);
+    item->setHidden(!text.isEmpty() &&
+                    !item->text().contains(text, Qt::CaseInsensitive));
+  }
 }
 
 void GeckoCodeWidget::DownloadCodes()

@@ -16,6 +16,7 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
@@ -572,6 +573,9 @@ QWidget* TexturePackManagerDialog::BuildTab(Tab& tab, GameTag game)
   auto* available_box = new QGroupBox(tr("Available Packs"));
   available_box->setSizePolicy(pane_size_policy);
   auto* available_layout = new QVBoxLayout;
+  tab.available_search = new QLineEdit;
+  tab.available_search->setPlaceholderText(tr("Search available packs..."));
+  tab.available_search->setClearButtonEnabled(true);
   tab.available_tree = new QTreeWidget;
   tab.available_tree->setHeaderHidden(true);
   tab.available_tree->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -582,6 +586,9 @@ QWidget* TexturePackManagerDialog::BuildTab(Tab& tab, GameTag game)
           [this, &tab](const QPoint& p) { OnAvailableContextMenu(tab, p); });
   connect(tab.available_tree, &QTreeWidget::itemDoubleClicked, this,
           [this, &tab](QTreeWidgetItem*, int) { OnAddSelected(tab); });
+  connect(tab.available_search, &QLineEdit::textChanged, this,
+          [this, &tab](const QString& text) { FilterAvailableTree(tab, text); });
+  available_layout->addWidget(tab.available_search);
   available_layout->addWidget(tab.available_tree);
   available_box->setLayout(available_layout);
 
@@ -601,6 +608,9 @@ QWidget* TexturePackManagerDialog::BuildTab(Tab& tab, GameTag game)
   auto* active_box = new QGroupBox(tr("Active Packs (top = highest priority)"));
   active_box->setSizePolicy(pane_size_policy);
   auto* active_layout = new QVBoxLayout;
+  tab.active_search = new QLineEdit;
+  tab.active_search->setPlaceholderText(tr("Search active packs..."));
+  tab.active_search->setClearButtonEnabled(true);
   tab.active_list = new QListWidget;
   tab.active_list->setSelectionMode(QAbstractItemView::ExtendedSelection);
   tab.active_list->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -614,6 +624,9 @@ QWidget* TexturePackManagerDialog::BuildTab(Tab& tab, GameTag game)
           [this, &tab](QListWidgetItem*) { OnRemoveSelected(tab); });
   connect(tab.active_list->model(), &QAbstractItemModel::rowsMoved, this,
           [this] { UpdateInlineNotice(); });
+  connect(tab.active_search, &QLineEdit::textChanged, this,
+          [this, &tab](const QString& text) { FilterActiveList(tab, text); });
+  active_layout->addWidget(tab.active_search);
   active_layout->addWidget(tab.active_list);
 
   auto* active_buttons_layout = new QHBoxLayout;
@@ -702,6 +715,9 @@ void TexturePackManagerDialog::PopulateAvailableTree(Tab& tab)
 
   for (auto& [_, node] : category_nodes)
     node->setHidden(node->childCount() == 0);
+
+  if (!tab.available_search->text().isEmpty())
+    FilterAvailableTree(tab, tab.available_search->text());
 }
 
 void TexturePackManagerDialog::PopulateActiveListFromConfig(Tab& tab)
@@ -738,6 +754,9 @@ void TexturePackManagerDialog::PopulateActiveListFromConfig(Tab& tab)
       item->setForeground(QBrush(palette().color(QPalette::Disabled, QPalette::Text)));
     }
   }
+
+  if (!tab.active_search->text().isEmpty())
+    FilterActiveList(tab, tab.active_search->text());
 }
 
 std::vector<std::string> TexturePackManagerDialog::CurrentActiveOrder(const Tab& tab) const
@@ -764,6 +783,35 @@ void TexturePackManagerDialog::UpdateInlineNotice()
   m_inline_notice->setText(
       tr("Emulation is running. Applying will reload the texture cache so the new pack "
          "order takes effect immediately."));
+}
+
+void TexturePackManagerDialog::FilterAvailableTree(Tab& tab, const QString& text)
+{
+  // Show/hide leaf items based on text match. After updating visibility, hide any category
+  // header whose children are all hidden.
+  for (int i = 0; i < tab.available_tree->topLevelItemCount(); i++)
+  {
+    QTreeWidgetItem* category = tab.available_tree->topLevelItem(i);
+    bool any_visible = false;
+    for (int j = 0; j < category->childCount(); j++)
+    {
+      QTreeWidgetItem* child = category->child(j);
+      const bool match = text.isEmpty() || child->text(0).contains(text, Qt::CaseInsensitive);
+      child->setHidden(!match);
+      if (match)
+        any_visible = true;
+    }
+    category->setHidden(!any_visible);
+  }
+}
+
+void TexturePackManagerDialog::FilterActiveList(Tab& tab, const QString& text)
+{
+  for (int i = 0; i < tab.active_list->count(); i++)
+  {
+    QListWidgetItem* item = tab.active_list->item(i);
+    item->setHidden(!text.isEmpty() && !item->text().contains(text, Qt::CaseInsensitive));
+  }
 }
 
 void TexturePackManagerDialog::OnAddSelected(Tab& tab)
