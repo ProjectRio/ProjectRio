@@ -1741,6 +1741,7 @@ void NetPlayClient::OnChecksumMsg(sf::Packet& packet)
 
   if (ourChecksum[checksumId] != inChecksum)
   {
+    m_desync_detected = true;
     m_dialog->OnDesync(0, "");
   }
 }
