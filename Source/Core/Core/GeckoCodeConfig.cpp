@@ -146,10 +146,15 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
     std::optional<std::string> BuiltInGeckoCodes;
     if (gameId == "GYQE01")
     {
+      // Honor the local options for local play and the netplay-synced options for netplay; the two
+      // sets are kept separate so a persisted local setting can never leak into a netplay match.
+      const bool night_stadium = is_netplay ? isNightStadiumNetplay : isNightStadiumLocal;
+      const bool disable_replays = is_netplay ? isDisableReplaysNetplay : isDisableReplaysLocal;
+
       BuiltInGeckoCodes = MSSB_BuiltInGeckoCodes;
-      if (isNightStadium)
+      if (night_stadium)
         BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_NightStadium;
-      if (isDisableReplays)
+      if (disable_replays)
         BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_DisableReplays;
     }
     // else if (gameId == "GFTE01")
@@ -339,16 +344,32 @@ void ReadLines(std::vector<GeckoCode>& gcodes, std::vector<std::string>& lines, 
   }
 }
 
-bool isNightStadium = false;
-void setNightStadium(bool is_night)
+bool isNightStadiumLocal = false;
+bool isNightStadiumNetplay = false;
+void setNightStadiumLocal(bool is_night)
 {
-  isNightStadium = is_night;
+  isNightStadiumLocal = is_night;
+}
+void setNightStadiumNetplay(bool is_night)
+{
+  isNightStadiumNetplay = is_night;
 }
 
-bool isDisableReplays = false;
-void setDisableReplays(bool disable)
+bool isDisableReplaysLocal = false;
+bool isDisableReplaysNetplay = false;
+void setDisableReplaysLocal(bool disable)
 {
-  isDisableReplays = disable;
+  isDisableReplaysLocal = disable;
+}
+void setDisableReplaysNetplay(bool disable)
+{
+  isDisableReplaysNetplay = disable;
+}
+
+void resetNetplayGameOptions()
+{
+  isNightStadiumNetplay = false;
+  isDisableReplaysNetplay = false;
 }
 
 bool isLoadingFromHUD = false;

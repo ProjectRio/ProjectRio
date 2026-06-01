@@ -140,6 +140,11 @@ NetPlayServer::NetPlayServer(const u16 port, const bool forward_port, NetPlayUI*
   m_gba_config.fill({});
   m_wiimote_map.fill(0);
 
+  // Clear any netplay game options left over from a previous session in this process so a stale
+  // value can't apply before the host toggles/syncs them. The host's per-session checkbox state
+  // drives these via AdjustNightStadium/AdjustReplays.
+  Gecko::resetNetplayGameOptions();
+
   if (traversal_config.use_traversal)
   {
     if (!Common::EnsureTraversalClient(traversal_config.traversal_host,
@@ -724,6 +729,10 @@ void NetPlayServer::AdjustNightStadium(const bool is_night)
   std::lock_guard lkg(m_crit.game);
   m_current_night_value = is_night;
 
+  // Apply on the host directly so the code-sync build (LoadCodes with is_netplay=true) reads the
+  // correct value without depending on the host's loopback client processing the broadcast first.
+  Gecko::setNightStadiumNetplay(is_night);
+
   // tell clients to change night stadium
   sf::Packet spac;
   spac << MessageID::NightStadium;
@@ -736,6 +745,10 @@ void NetPlayServer::AdjustReplays(const bool disable)
 {
   std::lock_guard lkg(m_crit.game);
   m_current_disable_replays_value = disable;
+
+  // Apply on the host directly so the code-sync build (LoadCodes with is_netplay=true) reads the
+  // correct value without depending on the host's loopback client processing the broadcast first.
+  Gecko::setDisableReplaysNetplay(disable);
 
   // tell clients to change disable replays
   sf::Packet spac;
@@ -2306,9 +2319,11 @@ bool NetPlayServer::SyncCodes()
   // Sync Gecko Codes
   {
 
-    // Create a Gecko Code Vector with just the active codes
+    // Create a Gecko Code Vector with just the active codes.
+    // This runs on the host during a netplay session, so load with is_netplay=true to honor the
+    // netplay-synced game options rather than the host's local-play settings.
     std::vector<Gecko::GeckoCode> s_active_codes =
-        Gecko::SetAndReturnActiveCodes(Gecko::LoadCodes(globalIni, localIni, game_id, false));
+        Gecko::SetAndReturnActiveCodes(Gecko::LoadCodes(globalIni, localIni, game_id, true));
 
     // Determine Codelist Size
     u16 codelines = 0;

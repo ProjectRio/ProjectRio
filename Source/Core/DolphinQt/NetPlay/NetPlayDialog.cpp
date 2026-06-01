@@ -806,6 +806,16 @@ void NetPlayDialog::show(bool use_traversal)
   m_fast_reset_from_HUD->setHidden(!is_hosting);
   m_fast_reset_from_HUD->setEnabled(is_hosting);
 
+  // Start each netplay session with these host options off so a previous session's checkbox state
+  // can't linger out of sync with the (reset) Gecko netplay flags. Signals are blocked because no
+  // server/client may exist yet and we don't want to fire the broadcast handlers here.
+  m_night_stadium->blockSignals(true);
+  m_disable_replays->blockSignals(true);
+  m_night_stadium->setChecked(false);
+  m_disable_replays->setChecked(false);
+  m_night_stadium->blockSignals(false);
+  m_disable_replays->blockSignals(false);
+
   UpdateLobbyLayout();
   SetOptionsEnabled(true);
 
