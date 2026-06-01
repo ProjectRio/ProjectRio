@@ -197,10 +197,9 @@ void FrameUpdateOnCPUThread()
 {
   if (NetPlay::IsNetPlayRunning() && Core::IsRunningAndStarted())
   {
-    if (mGameBeingPlayed != GameName::MarioBaseball)
-      NetPlay::NetPlayClient::SendTimeBase();
+    NetPlay::NetPlayClient::SendTimeBase();
 
-    else if (s_stat_tracker)
+    if (s_stat_tracker)
     {
       // Figure out if client is hosting via netplay settings. Could use local player as well
       //bool is_hosting = NetPlay::GetNetSettings().m_IsHosting;
@@ -245,13 +244,13 @@ void RunRioFunctions(const Core::CPUThreadGuard& guard)
 
     if (NetPlay::IsNetPlayRunning())
     {
-      // send checksum for desync detection
-      if (frame % 60)
-      {
-        u8 checksumId = (frame / 60) & 0xF;
-        u32 checksum = PowerPC::MMU::HostRead_U32(guard, 0x802EBFB8);
-        NetPlay::NetPlayClient::SendChecksum(checksumId, frame, checksum);
-      }
+      //// send checksum for desync detection
+      //if (frame % 60)
+      //{
+      //  u8 checksumId = (frame / 60) & 0xF;
+      //  u32 checksum = PowerPC::MMU::HostRead_U32(guard, 0x802EBFB8);
+      //  NetPlay::NetPlayClient::SendChecksum(checksumId, frame, checksum);
+      //}
       if (runNetplayGameFunctions)
       {
         SetNetplayerUserInfo();
