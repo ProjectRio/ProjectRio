@@ -241,7 +241,13 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                 if (PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr) == 0xb){
                     std::cout << "Game paused, need to re-init event " << std::to_string(m_game_info.event_num) << "\n";
                     logGameInfo(guard);
-                    updateOngoingGame(m_game_info.getCurrentEvent());
+
+                    // if there's a pause before the first pitch, do not run the update function since the initial post of the ongoing game hasn't happened yet.
+                    if (m_game_info.post_ongoing_game == false)
+                    {
+                        updateOngoingGame(m_game_info.getCurrentEvent());
+                    }
+                    
                     m_event_state = EVENT_STATE::INIT_EVENT;
                 }
                 //Watch for Runners Stealing
