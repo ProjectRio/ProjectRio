@@ -66,9 +66,14 @@ jobs:
         shell: bash
         working-directory: ${{ github.workspace }}
         run: |
-          FILE_NAME="${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-${{ matrix.artifact_name }}.exe"
+          FILE_NAME="${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-${{ matrix.artifact_name }}"
           mkdir artifact
-          mv "Installer/projectrio-x64-${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-installer.exe" "artifact/$FILE_NAME"
+          # Zip the portable build
+          cd Binary/x64
+          7z a "../../artifact/${FILE_NAME}.zip" .
+          cd ../../
+          # Move the installer
+          mv "Installer/projectrio-x64-${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-installer.exe" "artifact/${FILE_NAME}.exe"
       - name: "Publish"
         if: success()
         uses: actions/upload-artifact@v4
