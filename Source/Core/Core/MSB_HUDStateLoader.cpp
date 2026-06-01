@@ -120,8 +120,8 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
             if (!roster.count("CharID") || !roster.count("Fielding Position") ||
                 !roster.count("Batting Hand") || !roster.count("Fielding Hand") || !roster.count("Superstar"))
             {
-                ERROR_LOG_FMT(COMMON, "Roster {} missing required fields, skipping.", p1Key);
-                continue;
+                ERROR_LOG_FMT(COMMON, "Roster {} missing required fields.", p1Key);
+                return false;
             }
             uint8_t charID = static_cast<uint8_t>(roster.at("CharID").get<double>());
             uint8_t position = static_cast<uint8_t>(roster.at("Fielding Position").get<double>());
@@ -146,8 +146,8 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
             if (!roster.count("CharID") || !roster.count("Fielding Position") ||
                 !roster.count("Batting Hand") || !roster.count("Fielding Hand") || !roster.count("Superstar"))
             {
-                ERROR_LOG_FMT(COMMON, "Roster {} missing required fields, skipping.", p2Key);
-                continue;
+                ERROR_LOG_FMT(COMMON, "Roster {} missing required fields.", p2Key);
+                return false;
             }
             uint8_t charID = static_cast<uint8_t>(roster.at("CharID").get<double>());
             uint8_t position = static_cast<uint8_t>(roster.at("Fielding Position").get<double>());
