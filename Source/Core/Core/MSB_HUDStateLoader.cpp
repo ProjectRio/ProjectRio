@@ -322,11 +322,11 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
         else
             state.p2TeamStars = awayStars;
     }
-    INFO_LOG_FMT(COMMON, "Away Stars assigned to P{}: {}", 
-        p1IsAway ? 
-            (state.p1TeamStars.has_value() ? std::to_string(state.p1TeamStars.value()) : "not set") : 
-            (state.p2TeamStars.has_value() ? std::to_string(state.p2TeamStars.value()) : "not set"),
-        p1IsAway ? "1" : "2");
+    INFO_LOG_FMT(COMMON, "Away Stars assigned to P{}: {}",
+        p1IsAway ? "1" : "2",
+        p1IsAway ?
+            (state.p1TeamStars.has_value() ? std::to_string(state.p1TeamStars.value()) : "not set") :
+            (state.p2TeamStars.has_value() ? std::to_string(state.p2TeamStars.value()) : "not set"));
 
     if (j.count("Home Stars"))
     {
@@ -336,11 +336,11 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
         else
             state.p1TeamStars = homeStars;
     }
-    INFO_LOG_FMT(COMMON, "Home Stars assigned to P{}: {}", 
-        p1IsAway ? 
-            (state.p2TeamStars.has_value() ? std::to_string(state.p2TeamStars.value()) : "not set") : 
-            (state.p1TeamStars.has_value() ? std::to_string(state.p1TeamStars.value()) : "not set"),
-        p1IsAway ? "2" : "1");
+    INFO_LOG_FMT(COMMON, "Home Stars assigned to P{}: {}",
+        p1IsAway ? "2" : "1",
+        p1IsAway ?
+            (state.p2TeamStars.has_value() ? std::to_string(state.p2TeamStars.value()) : "not set") :
+            (state.p1TeamStars.has_value() ? std::to_string(state.p1TeamStars.value()) : "not set"));
 
     if (j.count("Star Chance"))
         state.isStarChance = static_cast<uint8_t>(j.at("Star Chance").get<double>());
