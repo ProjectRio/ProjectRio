@@ -511,14 +511,18 @@ void LocalPlayersWidget::LoadLocalGameOptions()
   m_night_stadium->blockSignals(true);
   m_disable_replays->blockSignals(true);
 
-  m_night_stadium->setChecked(nightStadium);
-  m_disable_replays->setChecked(disableReplays);
+  // Bugs detected that cause desyncs in netplay. Disabling for 2.2.0 release.
+  m_night_stadium->setChecked(false);
+  m_disable_replays->setChecked(false);
+  m_night_stadium->setEnabled(false);
+  m_disable_replays->setEnabled(false);
 
   m_night_stadium->blockSignals(false);
   m_disable_replays->blockSignals(false);
 
-  Gecko::setNightStadium(nightStadium);
-  Gecko::setDisableReplays(disableReplays);
+
+  Gecko::setNightStadium(false); // temp for 2.2.0 until bugs can be fixed
+  Gecko::setDisableReplays(false); // temp for 2.2.0 until bugs can be fixed
 }
 
 void LocalPlayersWidget::SaveLocalGameOptions()
