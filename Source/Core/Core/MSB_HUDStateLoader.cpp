@@ -117,6 +117,12 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
         if (j.count(p1Key))
         {
             const picojson::object& roster = j.at(p1Key).get<picojson::object>();
+            if (!roster.count("CharID") || !roster.count("Fielding Position") ||
+                !roster.count("Batting Hand") || !roster.count("Fielding Hand") || !roster.count("Superstar"))
+            {
+                ERROR_LOG_FMT(COMMON, "Roster {} missing required fields, skipping.", p1Key);
+                continue;
+            }
             uint8_t charID = static_cast<uint8_t>(roster.at("CharID").get<double>());
             uint8_t position = static_cast<uint8_t>(roster.at("Fielding Position").get<double>());
             if (position < 9)
@@ -137,6 +143,12 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
         if (j.count(p2Key))
         {
             const picojson::object& roster = j.at(p2Key).get<picojson::object>();
+            if (!roster.count("CharID") || !roster.count("Fielding Position") ||
+                !roster.count("Batting Hand") || !roster.count("Fielding Hand") || !roster.count("Superstar"))
+            {
+                ERROR_LOG_FMT(COMMON, "Roster {} missing required fields, skipping.", p2Key);
+                continue;
+            }
             uint8_t charID = static_cast<uint8_t>(roster.at("CharID").get<double>());
             uint8_t position = static_cast<uint8_t>(roster.at("Fielding Position").get<double>());
             if (position < 9)
