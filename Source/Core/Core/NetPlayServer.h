@@ -5,6 +5,7 @@
 
 #include <SFML/Network/Packet.hpp>
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -200,7 +201,7 @@ private:
   std::map<PlayerId, Client> m_players;
 
   std::unordered_map<u32, std::vector<std::pair<PlayerId, u64>>> m_timebase_by_frame;
-  bool m_desync_detected = false;
+  std::atomic<bool> m_desync_detected = false;
 
   struct
   {
