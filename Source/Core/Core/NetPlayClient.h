@@ -5,6 +5,7 @@
 
 #include <SFML/Network/Packet.hpp>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <map>
 #include <memory>
@@ -375,7 +376,7 @@ private:
   int framesAsGolfer = 0;
 
   bool m_is_connected = false;
-  bool m_desync_detected = false;
+  std::atomic<bool> m_desync_detected = false;
   ConnectionState m_connection_state = ConnectionState::Failure;
 
   PlayerId m_pid = 0;
