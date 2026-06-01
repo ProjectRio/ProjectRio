@@ -36,6 +36,7 @@
 
 #include "Core/GeckoCodeConfig.h"
 #include "Core/MSB_HUDStateLoader.h"
+#include "Core/NetPlayProto.h"
 
 #include "DolphinQt/Settings.h"
 #include "DolphinQt/QtUtils/ModalMessageBox.h"
@@ -333,7 +334,7 @@ void LocalPlayersWidget::PopulateTagsetCombobox()
     {
       return;
     }
-    valid_tagsets.push_back(Tag::getAvailableTagSets(m_http, player1key));
+    valid_tagsets.push_back(Tag::getAvailableTagSets(m_http, player4key));
   }
 
   if (valid_tagsets.size() == 0)
@@ -399,6 +400,8 @@ void LocalPlayersWidget::ValidateAndApplyFastReset()
     m_fast_reset_status->setText(tr("Fast Reset is disabled."));
     return;
   }
+
+  Core::SetTagSet(m_tagset_combobox_map[m_local_tagset->currentIndex()], false);
 
   std::string p1Username = LocalPlayers::m_local_player_1.GetUsername();
   std::string p2Username = LocalPlayers::m_local_player_2.GetUsername();
@@ -485,9 +488,12 @@ void LocalPlayersWidget::OnEmulationStateChanged(Core::State state)
     Gecko::setFastResetFromHUD(false);
     m_fast_reset_status->setText(tr("Fast Reset was cleared after emulation stopped."));
 
-    // Re-apply local game options in case netplay overwrote the flags during the session.
-    Gecko::setNightStadium(m_night_stadium->isChecked());
-    Gecko::setDisableReplays(m_disable_replays->isChecked());
+    // Re-apply local game options only after the netplay session ends, not between games.
+    if (!NetPlay::IsNetPlayRunning())
+    {
+      Gecko::setNightStadium(m_night_stadium->isChecked());
+      Gecko::setDisableReplays(m_disable_replays->isChecked());
+    }
   }
 }
 

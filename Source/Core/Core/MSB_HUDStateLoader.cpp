@@ -487,11 +487,15 @@ int allowLoadFromHUD(const std::string& path,
     // Get the active tagset from the current netplay session
     std::optional<Tag::TagSet> activeTagSet = Core::GetActiveTagSet(isNetplay);
 
-    // Check if HUD file has a TagSetID
+    // Read the HUD's TagSetID. The HUD writer always emits this field, using -1
+    // as the sentinel for "no game mode", so check the value rather than key presence.
+    int hudTagSetId = -1;
     if (j.count("TagSetID"))
-    {
-        int hudTagSetId = static_cast<int>(j.at("TagSetID").get<double>());
+        hudTagSetId = static_cast<int>(j.at("TagSetID").get<double>());
+    bool hudHasTagSet = (hudTagSetId != -1);
 
+    if (hudHasTagSet)
+    {
         if (activeTagSet.has_value())
         {
             // Both HUD and lobby have a tagset - they must match
@@ -523,7 +527,7 @@ int allowLoadFromHUD(const std::string& path,
     else if (activeTagSet.has_value())
     {
         // Lobby has a tagset but HUD does not record one
-        ERROR_LOG_FMT(COMMON, "Lobby has TagSet ID={} but HUD file has no TagSetID field.",
+        ERROR_LOG_FMT(COMMON, "Lobby has TagSet ID={} but HUD has no game mode.",
                     activeTagSet.value().id);
         if (outDetails)
         {
@@ -532,6 +536,7 @@ int allowLoadFromHUD(const std::string& path,
         }
         return 3;
     }
+    // else: neither HUD nor lobby has a game mode — no mismatch.
 
     INFO_LOG_FMT(COMMON, "Gamemode check passed, checking players.");
 
