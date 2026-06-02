@@ -491,8 +491,8 @@ void LocalPlayersWidget::OnEmulationStateChanged(Core::State state)
     // Re-apply local game options only after the netplay session ends, not between games.
     if (!NetPlay::IsNetPlayRunning())
     {
-      Gecko::setNightStadium(m_night_stadium->isChecked());
-      Gecko::setDisableReplays(m_disable_replays->isChecked());
+      Gecko::setNightStadiumLocal(m_night_stadium->isChecked());
+      Gecko::setDisableReplaysLocal(m_disable_replays->isChecked());
     }
   }
 }
@@ -517,8 +517,8 @@ void LocalPlayersWidget::LoadLocalGameOptions()
   m_night_stadium->blockSignals(false);
   m_disable_replays->blockSignals(false);
 
-  Gecko::setNightStadium(nightStadium);
-  Gecko::setDisableReplays(disableReplays);
+  Gecko::setNightStadiumLocal(nightStadium);
+  Gecko::setDisableReplaysLocal(disableReplays);
 }
 
 void LocalPlayersWidget::SaveLocalGameOptions()
@@ -572,12 +572,12 @@ void LocalPlayersWidget::ConnectWidgets()
           &LocalPlayersWidget::ValidateAndApplyFastReset);
 
   connect(m_night_stadium, &QCheckBox::stateChanged, this, [this]() {
-    Gecko::setNightStadium(m_night_stadium->isChecked());
+    Gecko::setNightStadiumLocal(m_night_stadium->isChecked());
     SaveLocalGameOptions();
   });
 
   connect(m_disable_replays, &QCheckBox::stateChanged, this, [this]() {
-    Gecko::setDisableReplays(m_disable_replays->isChecked());
+    Gecko::setDisableReplaysLocal(m_disable_replays->isChecked());
     SaveLocalGameOptions();
   });
 

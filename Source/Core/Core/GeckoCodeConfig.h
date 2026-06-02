@@ -26,11 +26,23 @@ void SaveCodes(Common::IniFile& inifile, const std::vector<GeckoCode>& gcodes);
 std::optional<GeckoCode::Code> DeserializeLine(const std::string& line);
 void ReadLines(std::vector<GeckoCode>& gcodes, std::vector<std::string>& lines, bool user_defined);
 
-extern bool isNightStadium;
-void setNightStadium(bool is_night);
+// Night Mario Stadium / Disable Replays are exposed both in local play (via the Local Players
+// widget) and in netplay (host-controlled, synced to clients). The two contexts are kept in
+// completely separate state so a persisted local setting can never leak into a netplay match and
+// cause a desync. LoadCodes() selects which set to honor based on its is_netplay argument.
+extern bool isNightStadiumLocal;
+extern bool isNightStadiumNetplay;
+void setNightStadiumLocal(bool is_night);
+void setNightStadiumNetplay(bool is_night);
 
-extern bool isDisableReplays;
-void setDisableReplays(bool disable);
+extern bool isDisableReplaysLocal;
+extern bool isDisableReplaysNetplay;
+void setDisableReplaysLocal(bool disable);
+void setDisableReplaysNetplay(bool disable);
+
+// Resets the netplay-only options to their defaults (off). Called at the start of a netplay
+// session so a previous session's state can't carry over before the host syncs values.
+void resetNetplayGameOptions();
 
 extern bool isLoadingFromHUD;
 extern MSBQuickMatchGameState HUDState;
