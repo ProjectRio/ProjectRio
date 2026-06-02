@@ -22,7 +22,9 @@ LogConfigWidget::LogConfigWidget(QWidget* parent) : QDockWidget(parent)
   setWindowTitle(tr("Log Configuration"));
   setObjectName(QStringLiteral("logconfig"));
 
-  setHidden(!Settings::Instance().IsLogConfigVisible());
+  setHidden(!Settings::Instance().IsLogConfigVisible()  || !Settings::Instance().IsDebugModeEnabled());
+  connect(&Settings::Instance(), &Settings::DebugModeToggled, this, [this](bool enabled) { setHidden(!enabled || !Settings::Instance().IsLogConfigVisible()); });
+
   setAllowedAreas(Qt::AllDockWidgetAreas);
 
   CreateWidgets();

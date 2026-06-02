@@ -170,12 +170,16 @@ void MenuBar::OnEmulationStateChanged(Core::State state)
 
 void MenuBar::OnDebugModeToggled(bool enabled)
 {
+  setVisible(enabled);
+
   // Options
   m_boot_to_pause->setVisible(enabled);
   m_reset_ignore_panic_handler->setVisible(enabled);
   m_change_font->setVisible(enabled);
 
   // View
+  m_show_log->setVisible(enabled);
+  m_show_log_config->setVisible(enabled);
   m_show_code->setVisible(enabled);
   m_show_registers->setVisible(enabled);
   m_show_threads->setVisible(enabled);
@@ -409,17 +413,18 @@ void MenuBar::UpdateStateSlotMenu()
 void MenuBar::AddViewMenu()
 {
   QMenu* view_menu = addMenu(tr("&View"));
-  QAction* show_log = view_menu->addAction(tr("Show &Log"));
-  show_log->setCheckable(true);
-  show_log->setChecked(Settings::Instance().IsLogVisible());
 
-  connect(show_log, &QAction::toggled, &Settings::Instance(), &Settings::SetLogVisible);
+  m_show_log = view_menu->addAction(tr("Show &Log"));
+  m_show_log->setCheckable(true);
+  m_show_log->setChecked(Settings::Instance().IsLogVisible());
 
-  QAction* show_log_config = view_menu->addAction(tr("Show Log &Configuration"));
-  show_log_config->setCheckable(true);
-  show_log_config->setChecked(Settings::Instance().IsLogConfigVisible());
+  connect(m_show_log, &QAction::toggled, &Settings::Instance(), &Settings::SetLogVisible);
 
-  connect(show_log_config, &QAction::toggled, &Settings::Instance(),
+  m_show_log_config = view_menu->addAction(tr("Show Log &Configuration"));
+  m_show_log_config->setCheckable(true);
+  m_show_log_config->setChecked(Settings::Instance().IsLogConfigVisible());
+
+  connect(m_show_log_config, &QAction::toggled, &Settings::Instance(),
           &Settings::SetLogConfigVisible);
 
   QAction* show_toolbar = view_menu->addAction(tr("Show &Toolbar"));
@@ -428,8 +433,9 @@ void MenuBar::AddViewMenu()
 
   connect(show_toolbar, &QAction::toggled, &Settings::Instance(), &Settings::SetToolBarVisible);
 
-  connect(&Settings::Instance(), &Settings::LogVisibilityChanged, show_log, &QAction::setChecked);
-  connect(&Settings::Instance(), &Settings::LogConfigVisibilityChanged, show_log_config,
+  connect(&Settings::Instance(), &Settings::LogVisibilityChanged, m_show_log,
+          &QAction::setChecked);
+  connect(&Settings::Instance(), &Settings::LogConfigVisibilityChanged, m_show_log_config,
           &QAction::setChecked);
   connect(&Settings::Instance(), &Settings::ToolBarVisibilityChanged, show_toolbar,
           &QAction::setChecked);

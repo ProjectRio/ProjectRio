@@ -775,21 +775,24 @@ void NetPlaySetupDialog::UpdateListBrowser()
   const int session_count = static_cast<int>(m_sessions.size());
 
   m_table_widget->clear();
-  m_table_widget->setColumnCount(7);
-  m_table_widget->setHorizontalHeaderLabels({tr("Region"), tr("Name"), tr("Game Mode"),
-                                             tr("In Game"), tr("Game"), tr("Players"),
-                                             tr("Version")});
+  m_table_widget->setColumnCount(6);
+  m_table_widget->setHorizontalHeaderLabels({tr("Lobby Name"), tr("Game Mode"), tr("Game"),
+                                             tr("Players"), tr("In Game"), tr("Region")});
 
   auto* hor_header = m_table_widget->horizontalHeader();
 
-  hor_header->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+  hor_header->setSectionResizeMode(0, QHeaderView::Stretch);
   hor_header->setSectionResizeMode(1, QHeaderView::Stretch);
-  //hor_header->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-  //hor_header->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-  hor_header->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+  hor_header->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+  hor_header->setSectionResizeMode(3, QHeaderView::Fixed);
+  hor_header->setSectionResizeMode(4, QHeaderView::Fixed);
+  hor_header->setSectionResizeMode(5, QHeaderView::Fixed);
   hor_header->setHighlightSections(false);
 
   m_table_widget->setRowCount(session_count);
+  m_table_widget->verticalHeader()->setVisible(false);
+  m_table_widget->setFont(QFont(QStringLiteral("Helvetica"), 16));
+  hor_header->setFont(QFont(QStringLiteral("Helvetica"), 14));
 
   for (int i = 0; i < session_count; i++)
   {
@@ -798,9 +801,9 @@ void NetPlaySetupDialog::UpdateListBrowser()
     std::vector<std::string> game_tags = Config::LobbyNameVector(entry.name);
     std::string game_name;
     if (entry.game_id == "Mario Superstar Baseball (GYQE01)")
-      game_name = "MSSB";
+      game_name = "Mario\n Superstar Baseball ";
     else if (entry.game_id == "Mario Golf: Toadstool Tour (GFTE01)")
-      game_name = "MGTT";
+      game_name = "Mario Golf:\nToadstool Tour";
     else
       game_name = "Unknown";
 
@@ -811,7 +814,6 @@ void NetPlaySetupDialog::UpdateListBrowser()
     auto* in_game = new QTableWidgetItem(entry.in_game ? tr("Yes") : tr("No"));
     auto* gamemode = new QTableWidgetItem(QString::fromStdString(game_tags[1]));
     auto* player_count = new QTableWidgetItem(QStringLiteral("%1").arg(entry.player_count));
-    auto* version = new QTableWidgetItem(QString::fromStdString(entry.version));
 
     bool enabled = Common::GetRioRevStr() == entry.version;
     int tagset_id = stoi(game_tags[2]); // should make this safe in the future to catch when it can't convert to int cleanly
@@ -820,17 +822,22 @@ void NetPlaySetupDialog::UpdateListBrowser()
     if (tagset_id == 0)
       enabled = true;
 
-    for (const auto& item : {region, name, in_game, gamemode, game, player_count, version})
+    for (const auto& item : { region, name, in_game, gamemode, game, player_count })
+    {
       item->setFlags(enabled ? Qt::ItemIsEnabled | Qt::ItemIsSelectable : Qt::NoItemFlags);
+      item->setTextAlignment(Qt::AlignCenter);
+    }
 
-    m_table_widget->setItem(i, 0, region);
-    m_table_widget->setItem(i, 1, name);
-    m_table_widget->setItem(i, 2, gamemode);  // was game_id
-    m_table_widget->setItem(i, 3, in_game);
-    m_table_widget->setItem(i, 4, game);
-    m_table_widget->setItem(i, 5, player_count);
-    m_table_widget->setItem(i, 6, version);
+    m_table_widget->setItem(i, 0, name);
+    m_table_widget->setItem(i, 1, gamemode);
+    m_table_widget->setItem(i, 2, game);  // was game_id
+    m_table_widget->setItem(i, 3, player_count);
+    m_table_widget->setItem(i, 4, in_game);
+    m_table_widget->setItem(i, 5, region);
   }
+
+  m_table_widget->setWordWrap(true);
+  m_table_widget->resizeRowsToContents();
 
   m_status_label->setText(
       (session_count == 1 ? tr("%1 session found") : tr("%1 sessions found")).arg(session_count));

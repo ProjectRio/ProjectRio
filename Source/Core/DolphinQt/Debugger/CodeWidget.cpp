@@ -17,6 +17,7 @@
 #include <QSplitter>
 #include <QStyleHints>
 #include <QTableWidget>
+#include <QToolBar>
 #include <QWidget>
 
 #include "Common/Event.h"
@@ -30,6 +31,7 @@
 #include "DolphinQt/Host.h"
 #include "DolphinQt/QtUtils/SetWindowDecorations.h"
 #include "DolphinQt/Settings.h"
+#include <DolphinQt/Resources.h>
 
 static const QString BOX_SPLITTER_STYLESHEET = QStringLiteral(
     "QSplitter::handle { border-top: 1px dashed black; width: 1px; margin-left: 10px; "
@@ -104,6 +106,46 @@ void CodeWidget::CreateWidgets()
   layout->setContentsMargins(2, 2, 2, 2);
   layout->setSpacing(0);
 
+  // create the toolbar
+  m_code_toolbar = new QToolBar;
+  m_code_toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+  m_code_toolbar->setMovable(!Settings::Instance().AreWidgetsLocked());
+  m_code_toolbar->setFloatable(false);
+  m_code_toolbar->setIconSize(QSize(32,32));
+
+  m_pause_play_action = m_code_toolbar->addAction(tr("Play"), [this] { emit PlayPressed(); });
+  m_stop_action = m_code_toolbar->addAction(tr("Stop"), [this] { emit StopPressed(); });
+
+  m_code_toolbar->addSeparator();
+
+  m_step_action = m_code_toolbar->addAction(tr("Step"), this, &CodeWidget::Step);
+  m_step_over_action = m_code_toolbar->addAction(tr("Step Over"), this, &CodeWidget::StepOver);
+  m_step_out_action = m_code_toolbar->addAction(tr("Step Out"), this, &CodeWidget::StepOut);
+  m_skip_action = m_code_toolbar->addAction(tr("Skip"), this, &CodeWidget::Skip);
+  m_show_pc_action = m_code_toolbar->addAction(tr("Show PC"), this, &CodeWidget::ShowPC);
+  m_set_pc_action = m_code_toolbar->addAction(tr("Set PC"), this, &CodeWidget::SetPC);
+  // m_open_action = m_code_toolbar->addAction(tr("Open"), this, &CodeWidget::OpenPressed);
+
+  m_step_action->setIcon(Resources::GetThemeIcon("debugger_step_in"));
+  m_step_over_action->setIcon(Resources::GetThemeIcon("debugger_step_over"));
+  m_step_out_action->setIcon(Resources::GetThemeIcon("debugger_step_out"));
+  m_skip_action->setIcon(Resources::GetThemeIcon("debugger_skip"));
+  m_show_pc_action->setIcon(Resources::GetThemeIcon("debugger_show_pc"));
+  m_set_pc_action->setIcon(Resources::GetThemeIcon("debugger_set_pc"));
+  // m_open_action->setIcon(Resources::GetThemeIcon("open"));
+
+  const Core::State state = Core::GetState();
+  const bool playing = state != Core::State::Uninitialized && state != Core::State::Paused;
+  if (!playing)
+    m_pause_play_action->setIcon(Resources::GetThemeIcon("play"));
+  else
+    m_pause_play_action->setIcon(Resources::GetThemeIcon("pause"));
+
+  m_stop_action->setIcon(Resources::GetThemeIcon("stop"));
+
+  layout->addWidget(m_code_toolbar, 0, 0, 1, -1);
+  ///
+
   m_search_address = new QLineEdit;
   m_code_diff = new QPushButton(tr("Diff"));
   m_code_view = new CodeViewWidget;
@@ -148,9 +190,9 @@ void CodeWidget::CreateWidgets()
   m_code_splitter->addWidget(m_box_splitter);
   m_code_splitter->addWidget(m_code_view);
 
-  layout->addWidget(m_search_address, 0, 0);
-  layout->addWidget(m_code_diff, 0, 2);
-  layout->addWidget(m_code_splitter, 1, 0, -1, -1);
+  layout->addWidget(m_search_address, 1, 0, 1, -1);
+  layout->addWidget(m_code_diff, 2, 2);
+  layout->addWidget(m_code_splitter, 2, 0, -1, -1);
 
   QWidget* widget = new QWidget(this);
   widget->setLayout(layout);
@@ -207,6 +249,20 @@ void CodeWidget::ConnectWidgets()
   connect(m_code_view, &CodeViewWidget::RequestPPCComparison, this,
           &CodeWidget::RequestPPCComparison);
   connect(m_code_view, &CodeViewWidget::ShowMemory, this, &CodeWidget::ShowMemory);
+
+  //connect(m_code_toolbar, &ToolBar::OpenPressed, this, &CodeWidget::Open);
+
+  //connect(m_code_toolbar, &ToolBar::PlayPressed, this, [this]() { Play(); });
+  //connect(m_code_toolbar, &ToolBar::PausePressed, this, &MainWindow::Pause);
+  //connect(m_code_toolbar, &ToolBar::StopPressed, this, &MainWindow::RequestStop);
+  //connect(m_code_toolbar, &ToolBar::ScreenShotPressed, this, &MainWindow::ScreenShot);
+
+  //connect(m_code_toolbar, &ToolBar::StepPressed, this, &CodeWidget::Step);
+  //connect(m_code_toolbar, &ToolBar::StepOverPressed, this, &CodeWidget::StepOver);
+  //connect(m_code_toolbar, &ToolBar::StepOutPressed, this, &CodeWidget::StepOut);
+  //connect(m_code_toolbar, &ToolBar::SkipPressed, this, &CodeWidget::Skip);
+  //connect(m_code_toolbar, &ToolBar::ShowPCPressed, this, &CodeWidget::ShowPC);
+  //connect(m_code_toolbar, &ToolBar::SetPCPressed, this, &CodeWidget::SetPC);
 }
 
 void CodeWidget::OnDiff()
@@ -325,6 +381,7 @@ void CodeWidget::Update()
 
   m_code_view->Update();
   m_code_view->setFocus();
+  UpdateIcons();
 
   if (!symbol)
     return;
@@ -444,6 +501,46 @@ void CodeWidget::UpdateFunctionCallers(const Common::Symbol* symbol)
       m_function_callers_list->addItem(item);
     }
   }
+}
+
+void CodeWidget::UpdatePausePlayButtonState(const bool playing_state)
+{
+  if (playing_state)
+  {
+    disconnect(m_pause_play_action, nullptr, nullptr, nullptr);
+    m_pause_play_action->setText(tr("Pause"));
+    m_pause_play_action->setIcon(Resources::GetThemeIcon("pause"));
+    connect(m_pause_play_action, &QAction::triggered, this, &CodeWidget::PausePressed);
+  }
+  else
+  {
+    disconnect(m_pause_play_action, nullptr, nullptr, nullptr);
+    m_pause_play_action->setText(tr("Play"));
+    m_pause_play_action->setIcon(Resources::GetThemeIcon("play"));
+    connect(m_pause_play_action, &QAction::triggered, this, &CodeWidget::PlayPressed);
+  }
+}
+
+void CodeWidget::UpdateIcons()
+{
+  m_step_action->setIcon(Resources::GetThemeIcon("debugger_step_in"));
+  m_step_over_action->setIcon(Resources::GetThemeIcon("debugger_step_over"));
+  m_step_out_action->setIcon(Resources::GetThemeIcon("debugger_step_out"));
+  m_skip_action->setIcon(Resources::GetThemeIcon("debugger_skip"));
+  m_show_pc_action->setIcon(Resources::GetThemeIcon("debugger_show_pc"));
+  m_set_pc_action->setIcon(Resources::GetThemeIcon("debugger_set_pc"));
+
+  // m_open_action->setIcon(Resources::GetThemeIcon("open"));
+
+  const Core::State state = Core::GetState();
+  const bool playing = state != Core::State::Uninitialized && state != Core::State::Paused;
+  if (!playing)
+    m_pause_play_action->setIcon(Resources::GetThemeIcon("play"));
+  else
+    m_pause_play_action->setIcon(Resources::GetThemeIcon("pause"));
+  UpdatePausePlayButtonState(playing);
+
+  m_stop_action->setIcon(Resources::GetThemeIcon("stop"));
 }
 
 void CodeWidget::Step()

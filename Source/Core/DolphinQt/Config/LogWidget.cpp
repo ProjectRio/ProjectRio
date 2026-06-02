@@ -34,7 +34,9 @@ LogWidget::LogWidget(QWidget* parent) : QDockWidget(parent), m_timer(new QTimer(
   setWindowTitle(tr("Log"));
   setObjectName(QStringLiteral("log"));
 
-  setHidden(!Settings::Instance().IsLogVisible());
+  setHidden(!Settings::Instance().IsLogVisible() || !Settings::Instance().IsDebugModeEnabled());
+  connect(&Settings::Instance(), &Settings::DebugModeToggled, this, [this](bool enabled) { setHidden(!enabled || !Settings::Instance().IsLogVisible()); });
+
   setAllowedAreas(Qt::AllDockWidgetAreas);
 
   CreateWidgets();

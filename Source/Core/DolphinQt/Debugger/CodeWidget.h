@@ -10,6 +10,7 @@
 #include "DolphinQt/Debugger/CodeDiffDialog.h"
 #include "DolphinQt/Debugger/CodeViewWidget.h"
 
+class QAction;
 class QCloseEvent;
 class QLineEdit;
 class QShowEvent;
@@ -17,6 +18,7 @@ class QSplitter;
 class QListWidget;
 class QPushButton;
 class QTableWidget;
+class QToolBar;
 
 namespace Common
 {
@@ -53,12 +55,21 @@ signals:
   void RequestPPCComparison(u32 addr);
   void ShowMemory(u32 address);
 
+  //void OpenPressed();
+  //void RefreshPressed();
+  void PlayPressed();
+  void PausePressed();
+  void StopPressed();
+  //void ScreenShotPressed();
+
 private:
   void CreateWidgets();
   void ConnectWidgets();
   void UpdateCallstack();
   void UpdateFunctionCalls(const Common::Symbol* symbol);
   void UpdateFunctionCallers(const Common::Symbol* symbol);
+  void UpdatePausePlayButtonState(const bool playing_state);
+  void UpdateIcons();
 
   void OnSearchAddress();
   void OnSearchSymbols();
@@ -87,6 +98,18 @@ private:
   CodeViewWidget* m_code_view;
   QSplitter* m_box_splitter;
   QSplitter* m_code_splitter;
+  QToolBar* m_code_toolbar;
+
+  //QAction* m_open_action;
+  QAction* m_pause_play_action;
+  QAction* m_stop_action;
+  //QAction* m_screenshot_action;
+  QAction* m_step_action;
+  QAction* m_step_over_action;
+  QAction* m_step_out_action;
+  QAction* m_skip_action;
+  QAction* m_show_pc_action;
+  QAction* m_set_pc_action;
 
   QString m_symbol_filter;
 };

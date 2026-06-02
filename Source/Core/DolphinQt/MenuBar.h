@@ -246,6 +246,8 @@ private:
   QAction* m_controllers_action;
 
   // View
+  QAction* m_show_log;
+  QAction* m_show_log_config;
   QAction* m_show_code;
   QAction* m_show_registers;
   QAction* m_show_threads;
