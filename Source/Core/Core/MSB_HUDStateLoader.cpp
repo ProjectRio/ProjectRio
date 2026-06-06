@@ -71,27 +71,34 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
         return false;
     }
 
-    // If opponent is known, validate they match the other slot
-    if (!p2Username.empty())
-    {
-        bool opponentIsAway = (p2Username == awayPlayer);
-        bool opponentIsHome = (p2Username == homePlayer);
+    // Validate the opponent slot (the one P1 doesn't occupy) every time. A CPU opponent is recorded
+    // in the HUD as the literal "CPU", while locally it appears as an empty p2Username (Player 2 =
+    // "No Player Selected"); treat those as equivalent so a CPU game validates against a CPU game,
+    // but still reject a CPU-vs-human mismatch in either direction.
+    const std::string hudOpponent = p1IsAway ? homePlayer : awayPlayer;
+    const bool hudOpponentIsCpu = (hudOpponent == "CPU" || hudOpponent == "No Player Selected");
+    const bool localOpponentIsCpu = p2Username.empty();
 
-        if (!((p1IsAway && opponentIsHome) || (p1IsHome && opponentIsAway)))
+    if (hudOpponentIsCpu || localOpponentIsCpu)
+    {
+        if (hudOpponentIsCpu != localOpponentIsCpu)
         {
-            ERROR_LOG_FMT(COMMON, "Player mismatch. P1='{}', Opponent='{}', HUD Away='{}', HUD Home='{}'",
-                        p1Username, p2Username, awayPlayer, homePlayer);
+            ERROR_LOG_FMT(COMMON,
+                "Player mismatch (CPU). P1='{}', Local Opponent='{}', HUD Away='{}', HUD Home='{}'",
+                p1Username, p2Username.empty() ? "CPU" : p2Username, awayPlayer, homePlayer);
             return false;
         }
-
-        menuInputRestrictionEnabled = true; // if both players present, restrict menu inputs to prevent accidental desync. 
     }
-    // Solo game - just verify P1 player is in the file, P2 slot can be "No Player Selected"
-    else
+    else if (hudOpponent != p2Username)
     {
-        menuInputRestrictionEnabled = false; // if solo, don't restrict menu inputs since P1 needs some control on the captain screen. Used for debugging.
-        INFO_LOG_FMT(COMMON, "Solo game detected, skipping opponent validation.");
+        ERROR_LOG_FMT(COMMON, "Player mismatch. P1='{}', Opponent='{}', HUD Away='{}', HUD Home='{}'",
+                    p1Username, p2Username, awayPlayer, homePlayer);
+        return false;
     }
+
+    // Restrict menu inputs only when a human opponent is present; a CPU game leaves P1 free to
+    // control the captain screen.
+    menuInputRestrictionEnabled = !localOpponentIsCpu;
 
     INFO_LOG_FMT(COMMON, "Starting parsing HUD to fill out state");
 
@@ -315,11 +322,11 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
         else
             state.p2TeamStars = awayStars;
     }
-    INFO_LOG_FMT(COMMON, "Away Stars assigned to P{}: {}", 
-        p1IsAway ? 
-            (state.p1TeamStars.has_value() ? std::to_string(state.p1TeamStars.value()) : "not set") : 
-            (state.p2TeamStars.has_value() ? std::to_string(state.p2TeamStars.value()) : "not set"),
-        p1IsAway ? "1" : "2");
+    INFO_LOG_FMT(COMMON, "Away Stars assigned to P{}: {}",
+        p1IsAway ? "1" : "2",
+        p1IsAway ?
+            (state.p1TeamStars.has_value() ? std::to_string(state.p1TeamStars.value()) : "not set") :
+            (state.p2TeamStars.has_value() ? std::to_string(state.p2TeamStars.value()) : "not set"));
 
     if (j.count("Home Stars"))
     {
@@ -329,11 +336,11 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
         else
             state.p1TeamStars = homeStars;
     }
-    INFO_LOG_FMT(COMMON, "Home Stars assigned to P{}: {}", 
-        p1IsAway ? 
-            (state.p2TeamStars.has_value() ? std::to_string(state.p2TeamStars.value()) : "not set") : 
-            (state.p1TeamStars.has_value() ? std::to_string(state.p1TeamStars.value()) : "not set"),
-        p1IsAway ? "2" : "1");
+    INFO_LOG_FMT(COMMON, "Home Stars assigned to P{}: {}",
+        p1IsAway ? "2" : "1",
+        p1IsAway ?
+            (state.p2TeamStars.has_value() ? std::to_string(state.p2TeamStars.value()) : "not set") :
+            (state.p1TeamStars.has_value() ? std::to_string(state.p1TeamStars.value()) : "not set"));
 
     if (j.count("Star Chance"))
         state.isStarChance = static_cast<uint8_t>(j.at("Star Chance").get<double>());
@@ -583,18 +590,29 @@ int allowLoadFromHUD(const std::string& path,
         return 4;
     }
 
-    // If opponent is known, validate they match the other slot
-    if (!p2Username.empty())
-    {
-        bool opponentIsAway = (p2Username == awayPlayer);
-        bool opponentIsHome = (p2Username == homePlayer);
+    // Validate the opponent slot (the one P1 doesn't occupy) every time. A CPU opponent is recorded
+    // in the HUD as the literal "CPU", while locally it appears as an empty p2Username (Player 2 =
+    // "No Player Selected"); treat those as equivalent so a CPU game validates against a CPU game,
+    // but still reject a CPU-vs-human mismatch in either direction.
+    const std::string hudOpponent = p1IsAway ? homePlayer : awayPlayer;
+    const bool hudOpponentIsCpu = (hudOpponent == "CPU" || hudOpponent == "No Player Selected");
+    const bool localOpponentIsCpu = p2Username.empty();
 
-        if (!((p1IsAway && opponentIsHome) || (p1IsHome && opponentIsAway)))
+    if (hudOpponentIsCpu || localOpponentIsCpu)
+    {
+        if (hudOpponentIsCpu != localOpponentIsCpu)
         {
-            ERROR_LOG_FMT(COMMON, "Player mismatch. P1='{}', Opponent='{}', HUD Away='{}', HUD Home='{}'",
-                        p1Username, p2Username, awayPlayer, homePlayer);
+            ERROR_LOG_FMT(COMMON,
+                "Player mismatch (CPU). P1='{}', Local Opponent='{}', HUD Away='{}', HUD Home='{}'",
+                p1Username, p2Username.empty() ? "CPU" : p2Username, awayPlayer, homePlayer);
             return 4;
         }
+    }
+    else if (hudOpponent != p2Username)
+    {
+        ERROR_LOG_FMT(COMMON, "Player mismatch. P1='{}', Opponent='{}', HUD Away='{}', HUD Home='{}'",
+                    p1Username, p2Username, awayPlayer, homePlayer);
+        return 4;
     }
 
     INFO_LOG_FMT(COMMON, "All checks passed. HUD can load.");

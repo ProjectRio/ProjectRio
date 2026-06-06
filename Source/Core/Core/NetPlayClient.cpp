@@ -1651,7 +1651,7 @@ void NetPlayClient::OnNightMsg(sf::Packet& packet)
   bool is_night;
   packet >> is_night;
   m_dialog->OnNightResult(is_night);
-  Gecko::setNightStadium(is_night);
+  Gecko::setNightStadiumNetplay(is_night);
 }
 
 void NetPlayClient::OnDisableReplaysMsg(sf::Packet& packet)
@@ -1659,7 +1659,7 @@ void NetPlayClient::OnDisableReplaysMsg(sf::Packet& packet)
   bool disable;
   packet >> disable;
   m_dialog->OnDisableReplaysResult(disable);
-  Gecko::setDisableReplays(disable);
+  Gecko::setDisableReplaysNetplay(disable);
 }
 
 void NetPlayClient::OnFastResetFromHUDMsg(sf::Packet& packet)

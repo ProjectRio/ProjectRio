@@ -1838,7 +1838,11 @@ void StatTracker::initPlayerInfo(const Core::CPUThreadGuard& guard){
         m_game_info.team1_port = ports[1];
 
         //Need to acount for possibility to init during the bottom of the inning if the fast load mod is on.
-        if (m_game_info.getCurrentEvent().half_inning == 0)
+        //Read half_inning from live memory here: initPlayerInfo runs before logEventState populates
+        //the current event's half_inning, so the event field is still stale (default 0) at this point.
+        //BattingPort/FieldingPort above are live reads, so half_inning must be too or away/home flip.
+        u8 half_inning = PowerPC::MMU::HostRead_U8(guard, aAB_HalfInning);
+        if (half_inning == 0)
         {
             m_game_info.home_port = FieldingPort;
             m_game_info.away_port = BattingPort;
