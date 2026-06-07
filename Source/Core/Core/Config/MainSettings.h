@@ -230,6 +230,7 @@ extern const Info<bool> MAIN_USE_HIGH_CONTRAST_TOOLTIPS;
 extern const Info<bool> MAIN_USE_PANIC_HANDLERS;
 extern const Info<bool> MAIN_ABORT_ON_PANIC_ALERT;
 extern const Info<bool> MAIN_OSD_MESSAGES;
+extern const Info<bool> MAIN_OSD_CLIP_PLAYER_NAMES;
 extern const Info<bool> MAIN_SKIP_NKIT_WARNING;
 extern const Info<bool> MAIN_CONFIRM_ON_STOP;
 

@@ -15,17 +15,12 @@
     <Import Project="$(VSPropsDir)ClDisableAllWarnings.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <ClCompile>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-    </ClCompile>
-  </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="pugixml.cpp" />
+    <ClCompile Include="pugixml\src\pugixml.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="pugixml.hpp" />
-    <ClInclude Include="pugiconfig.hpp" />
+    <ClInclude Include="pugixml\src\pugixml.hpp" />
+    <ClInclude Include="pugixml\src\pugiconfig.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

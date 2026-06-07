@@ -7,6 +7,10 @@
 #include <set>
 #include <tuple>
 #include <iostream>
+#include <queue>
+#include <mutex>
+#include <thread>
+#include <condition_variable>
 #include "Core/HW/Memmap.h"
 #include <picojson.h>
 
@@ -18,6 +22,7 @@
 #include "Core/LocalPlayers.h"
 #include "Core/Logger.h"
 #include "Core/TrackerAdr.h"
+#include "Core/GeckoCodeConfig.h"
 
 namespace Tag {
 class TagSet;
@@ -43,7 +48,6 @@ enum class EVENT_STATE
     INIT_EVENT,
     PITCH_RESULT,
     CONTACT_RESULT,
-    LOG_FIELDER,
     MONITOR_RUNNERS,
     PLAY_OVER,
     FINAL_RESULT,
@@ -52,11 +56,19 @@ enum class EVENT_STATE
     UNDEFINED
 };
 
+enum class DEAD_BALL_REASON
+{
+    N_A,
+    HOME_RUN,
+    FOUL_BALL,
+    GROUND_RULE_DOUBLE,
+    BALL_DEAD
+};
+
 static std::map<EVENT_STATE, std::string> c_event_state = {
     {EVENT_STATE::INIT_EVENT, "INIT_EVENT"},
     {EVENT_STATE::PITCH_RESULT, "PITCH_RESULT"},
     {EVENT_STATE::CONTACT_RESULT, "CONTACT_RESULT"},
-    {EVENT_STATE::LOG_FIELDER, "LOG_FIELDER"},
     {EVENT_STATE::MONITOR_RUNNERS, "MONITOR_RUNNERS"},
     {EVENT_STATE::PLAY_OVER, "PLAY_OVER"},
     {EVENT_STATE::FINAL_RESULT, "FINAL_RESULT"},
@@ -126,6 +138,21 @@ static const std::map<u8, std::string> cCharIdToCharName = {
     {0x35, "Bro(B)"}
 };
 
+static const std::set<u8> cCaptainTypeCharIds = {
+    0x0,  // Mario
+    0x1,  // Luigi
+    0x2,  // DK
+    0x3,  // Diddy
+    0x4,  // Peach
+    0x5,  // Daisy
+    0x6,  // Yoshi
+    0x9,  // Bowser
+    0xa,  // Wario
+    0xb,  // Waluigi
+    0x11, // Birdo
+    0x13, // Bowser Jr
+};
+
 static const std::map<u8, std::string> cStadiumIdToStadiumName = {
     {0x0, "Mario Stadium"},
     {0x1, "Bowser Castle"},
@@ -134,6 +161,57 @@ static const std::map<u8, std::string> cStadiumIdToStadiumName = {
     {0x4, "Peach Garden"},
     {0x5, "DK Jungle"},
     {0x6, "Toy Field"}
+};
+
+static const std::map<u32, std::string> cLogoIdToTeamName = {
+    {0x0,  "Mario Sunshines"},
+    {0x1,  "Mario All Stars"},
+    {0x2,  "Mario Fireballs"},
+    {0x3,  "Mario Heroes"},
+    {0x4,  "Luigi Mansioneers"},
+    {0x5,  "Luigi Leapers"},
+    {0x6,  "Luigi Vacuums"},
+    {0x7,  "Luigi Gentlemen"},
+    {0x8,  "Peach Monarchs"},
+    {0x9,  "Peach Princesses"},
+    {0xA,  "Peach Dynasties"},
+    {0xB,  "Peach Roses"},
+    {0xC,  "Daisy Queen Bees"},
+    {0xD,  "Daisy Petals"},
+    {0xE,  "Daisy Cupids"},
+    {0xF,  "Daisy Lillies"},
+    {0x10, "Yoshi Islanders"},
+    {0x11, "Yoshi Flutters"},
+    {0x12, "Yoshi Speed Stars"},
+    {0x13, "Yoshi Eggs"},
+    {0x14, "Birdo Bows"},
+    {0x15, "Birdo Fans"},
+    {0x16, "Birdo Models"},
+    {0x17, "Birdo Beauties"},
+    {0x18, "Wario Greats"},
+    {0x19, "Wario Beasts"},
+    {0x1A, "Wario Steakheads"},
+    {0x1B, "Wario Garlics"},
+    {0x1C, "Waluigi Flankers"},
+    {0x1D, "Waluigi Mashers"},
+    {0x1E, "Waluigi Smart Alecks"},
+    {0x1F, "Waluigi Mystiques"},
+    {0x20, "DK Kongs"},
+    {0x21, "DK Animals"},
+    {0x22, "DK Wild Ones"},
+    {0x23, "DK Explorers"},
+    {0x24, "Diddy Tails"},
+    {0x25, "Diddy Red Caps"},
+    {0x26, "Diddy Ninjas"},
+    {0x27, "Diddy Survivors"},
+    {0x28, "Bowser Monsters"},
+    {0x29, "Bowser Black Stars"},
+    {0x2A, "Bowser Blue Shells"},
+    {0x2B, "Bowser Flames"},
+    {0x2C, "Jr Pixies"},
+    {0x2D, "Jr Rookies"},
+    {0x2E, "Jr Bombers"},
+    {0x2F, "Jr Fangs"},
 };
 
 static const std::map<u8, std::string> cTypeOfContactToHR = {
@@ -279,12 +357,50 @@ static const std::map<u8, std::string> cAtBatResult = {
     {0x10, "Foul catch"}
 };
 
+static const std::map<u8, std::string> cDeadBallReason = {
+    {0x0,  "N/A"},
+    {0x1,  "Home Run"},
+    {0x2,  "Foul Ball"},
+    {0x3,  "Ground Rule Double"},
+    {0x4,  "Ball Dead"}
+};
+
 static const std::map<u8, std::string> cManualSelectDecode = {
     {0x0,  "No Selected Char"},
     {0x1,  "Pitcher"},
     {0x2,  "Catcher"},
     {0x3,  "Closest to Ball"},
     {0x4,  "Closest to Drop"},
+};
+
+// From Nuche
+static const std::map<u8, std::string> cGameControlState = {
+    {0x0,  "default"},
+    {0x1,  "AtBat"},
+    {0x2,  "LiveBall"},
+    {0x3,  "InningTransition"},
+    {0x4,  "LoadGame"},
+    {0x5,  "GameStartMovie"},
+    {0x6,  "TransitionToMinigameStart"},
+    {0x7,  "TransitionPrepareNextGame"},
+    {0x8,  "TransitionMainFunction"},
+    {0x9,  "EndOfGame?"},
+    {0xb,  "Paused"},
+    {0xd,  "HowToPlayScreen"},
+    {0xe,  "MVP/EndGameScreen"},
+    {0xf,  "MinigamePostGameTransition"},
+    {0x13, "HomeRunEnd"},
+    {0x14, "HomeRunLap"},
+    {0x15, "PostReplayBatterCelebration"},
+    {0x16, "StarChanceVsScreen"},
+    {0x17, "ChampionshipScreen"},
+    {0x19, "MinigameNewRound?"},
+    {0x1a, "MinigameTransitionToBatting1"},
+    {0x1c, "MinigameSelectScreen"},
+    {0x1d, "ToyFieldStadiumLoadScreen"},
+    {0x1e, "CharacterSelectMinigameToyField"},
+    {0x21, "ReadyMinigameScreen"},
+    {0x22, "PostMinigameMenu"},
 };
 
 //Const for structs
@@ -300,9 +416,9 @@ static const u32 aGameControlStateCurr = 0x80892aaa;
 static const u32 aGameControlStatePrev = 0x80892aab;
 
 static const u32 aAB_PitchThrown     = 0x8088A81B;
-static const u32 aAB_ContactResult   = 0x808926B3; //0=InAir, 1=Landed, 2=Landed (almost caught), 3=Caught, FF=Foul
+static const u32 aAB_ContactResult   = 0x808926B3; //0=InAir, 1=Landed, 2=Fielded, 3=Caught, FF=Foul
 static const u32 aAB_ContactMade     = 0x808909a1; //Boolean, from Roeming
-static const u32 aAB_PickoffAttempt  = 0x80892857;
+static const u32 aAB_PickoffAttempt  = 0x80892857; //0=None, 1=Pickoff, 2=Steal
 
 static const u32 aAB_GameIsLive  = 0x8036F3A9; //0 at beginning of game and inbetween innings/changes
 static const u32 aAB_PlayIsReadyToStart  = 0x808909AA; //Key addr that tells us when all addrs have been initialized for the play
@@ -314,6 +430,9 @@ static const u32 aStadiumId = 0x800E8705;
 static const u32 aTeam0_Captain = 0x80353083;
 static const u32 aTeam1_Captain = 0x80353087;
 
+static const u32 aAway_Logo = 0x808929b0;
+static const u32 aHome_Logo = 0x808929bc;
+
 static const u32 aTeam0_Captain_Roster_Loc = 0x80892A83;
 static const u32 aTeam1_Captain_Roster_Loc = 0x80892A87;
 
@@ -321,12 +440,20 @@ static const u32 aAwayTeam_Score = 0x808928A4;
 static const u32 aHomeTeam_Score = 0x808928CA;
 
 static const u32 aInningsSelected = 0x8089294A;
+static const u32 aFirstBattingTeam = 0x803c5f40;
+static const u32 aStarSkillsOn = 0x803c5f41;
+static const u32 aMercyOn = 0x803c5f43;
 
 static const u8 c_roster_table_offset = 0xa0;
 
 static const u32 aInGame_CharAttributes_CharId       = 0x80353C05;
 static const u32 aInGame_CharAttributes_FieldingHand = 0x80353C06;
 static const u32 aInGame_CharAttributes_BattingHand  = 0x80353C07;
+
+static const u32 aPlayer1Port                        = 0x800E874C;
+static const u32 aPlayer2Port                        = 0x800E874D;
+static const u32 aBattingTeam_P1P2                   = 0x80892990;
+static const u32 aFieldingTeam_P1P2                  = 0x80892994;
 
 //Addrs for DefensiveStats
 static const u32 aPitcher_BattersFaced      = 0x803535C9;
@@ -385,6 +512,9 @@ static const u32 aAB_RunnerOn1       = 0x8088F09D;
 static const u32 aAB_RunnerOn2       = 0x8088F1F1;
 static const u32 aAB_RunnerOn3       = 0x8088F345;
 
+static const u32 aAB_AwayBatter     = 0x80892a68; //int but can be downcast to byte
+static const u32 aAB_HomeBatter     = 0x80892a6c; //always valid; will show up to bat for next inning for fielding team
+
 //Pitch
 static const u32 aAB_PitcherRosterID       = 0x80890AD9;
 static const u32 aAB_PitcherID             = 0x80890ADB;
@@ -427,7 +557,8 @@ static const u32 aAB_ContactRandInt3 = 0x802ec014;
 
 static const u32 aAB_ContactAbsolute = 0x80890950;
 static const u32 aAB_ContactQuality  = 0x80890954;
-static const u32 aAB_TypeOfSwing    = 0x8089099B; //1=Slap, 2=Charge, 3=Bunt. Set on contact
+// 0=slap/linedrive star, 1=charge/grounder star/pop star, 2=captain star/moonshot, 3=bunt
+static const u32 aAB_TypeOfSwing    = 0x8089099B; 
 static const u32 aAB_ChargeUp       = 0x80890968;
 static const u32 aAB_ChargeDown     = 0x8089096C;
 static const u32 aAB_BatterHand     = 0x8089098B; //Right=0, Left=1
@@ -460,6 +591,7 @@ static const u32 aAB_BallPos_Z = 0x80890B40;
 static const u32 aAB_NumOutsDuringPlay = 0x808938AD;
 static const u32 aAB_HitByPitch = 0x808909A3;
 
+static const u32 aAB_DeadBallReason = 0x80892709; //0 = n/a, 1 = HR, 2=foul, 3=ground rule double, 4 = ball dead
 static const u32 aAB_FinalResult = 0x80893BAA;
 
 //Frame Data. Capture once play is over
@@ -483,6 +615,14 @@ static const u32 aFielder_Pos_Z = 0x8088F370; //Pitcher
 static const u32 aFielder_Pos_Y = 0x8088F374; //Pitcher
 static const u32 aFielder_ManualSelectArg = 0x802EBF97; //Pitcher
 static const u32 cFielder_Offset = 0x268;
+
+
+// This table is laid out by away/home (block 0 = away, block 1 = home), NOT by the
+// controller-port team0/team1 ordering used by the pitcher/character stat tables.
+static const u32 aBattingOrderAndPosition_Away = 0x808929D0;
+static const u32 aBattingOrderAndPosition_Home = 0x80892A20;
+static const u8 cBattingOrderAndPosition_Offset = 0x4;
+static const u8 cRoster_Offset = 0x8;
 
 //Runner addrs
 static const u32 aRunner_BasepathPercentage = 0x8088EE7C;
@@ -697,6 +837,12 @@ public:
         u8 batter_roster_loc;
         u8 catcher_roster_loc;
 
+        std::array<u16, 18> away_inning_scores = {};
+        std::array<u16, 18> home_inning_scores = {};
+
+        u8 away_batter_roster_loc = 0; // Current batter for away team (persists when fielding)
+        u8 home_batter_roster_loc = 0; // Current batter for home team (persists when fielding)
+
         u8 balls;
         u8 strikes;
         u8 outs;
@@ -713,6 +859,7 @@ public:
         TrackerAdr<u8> num_outs_during_play = TrackerAdr<u8>("Num Outs During Play", aAB_NumOutsDuringPlay, 0xFF);
 
         u8 rbi;
+        u8 dead_ball_reason;
         u8 result_of_atbat;
 
         //Partial game. indicates this game has not been finished
@@ -745,6 +892,9 @@ public:
         u8 team0_captain_roster_loc = 0xFF;
         u8 team1_captain_roster_loc = 0xFF;
 
+        u32 away_logo;
+        u32 home_logo;
+
         LocalPlayers::LocalPlayers::Player team0_player;
         LocalPlayers::LocalPlayers::Player team1_player;
         int avg_ping = 0;
@@ -759,15 +909,26 @@ public:
         u8 innings_selected;
         u8 innings_played;
 
+        u8 first_batting_team;
+        u8 star_skills_on;
+        u8 mercy_on;
+
         //Netplay info
         bool netplay;
         std::string netplay_opponent_alias;
+
+        //Started mid-game using the fast reset from HUD code.
+        //Set authoritatively at the PREGAME->INGAME transition in Run(); see MSB_StatTracker.cpp.
+        bool fastResetFromHUD = false;
 
         //TagSet info
         std::optional<int> tag_set_id = std::nullopt;
 
         //Quit?
         u8 quitter_team = 0xFF;
+
+        //Tracks the current batter for each team across half-inning switches; index 0=Away, 1=Home
+        std::array<u8, 2> current_batter_roster_locs = {0, 0};
 
         //Bookkeeping
         //int pitch_num = 0;
@@ -849,15 +1010,15 @@ public:
             team_id = inTeamId;
             initialized = true;
             for (u8 pos=0; pos < cRosterSize; ++pos){
-                u32 aFielderRosterLoc_calc = aFielder_RosterLoc + (pos * cFielder_Offset);
+                u32 aFielderRosterLoc_calc = aBattingOrderAndPosition_Away + (pos * cRoster_Offset) + (10 * cRoster_Offset * team_id) + cBattingOrderAndPosition_Offset;
 
-                u8 roster_loc = PowerPC::MMU::HostRead_U8(guard, aFielderRosterLoc_calc);
+                u8 fielder_loc = static_cast<u8>(PowerPC::MMU::HostRead_U32(guard, aFielderRosterLoc_calc));
 
-                std::cout << "RosterLoc:" << std::to_string(roster_loc) 
-                          << " Init Pos=" << cPosition.at(pos) << std::endl;
+                std::cout << "RosterLoc:" << std::to_string(pos) 
+                          << " Init Pos=" << cPosition.at(fielder_loc) << std::endl;
 
-                fielder_map[roster_loc].current_pos = pos;
-                fielder_map[roster_loc].previous_pos = pos;
+                fielder_map[pos].current_pos = fielder_loc;
+                fielder_map[pos].previous_pos = fielder_loc;
             }
         }
 
@@ -870,21 +1031,20 @@ public:
         //Scans field to see who is playing which position and increments counts for positions
         void evaluateFielders(const Core::CPUThreadGuard& guard) {
             for (u8 pos=0; pos < cRosterSize; ++pos){
-                u32 aFielderRosterLoc_calc = aFielder_RosterLoc + (pos * cFielder_Offset);
+                u32 aFielderRosterLoc_calc = aBattingOrderAndPosition_Away + (pos * cRoster_Offset) + (10 * cRoster_Offset * team_id) + cBattingOrderAndPosition_Offset;
 
-                u8 roster_loc = PowerPC::MMU::HostRead_U8(guard, aFielderRosterLoc_calc);
+                u8 fielder_loc = static_cast<u8>(PowerPC::MMU::HostRead_U32(guard, aFielderRosterLoc_calc));
 
-                //If new position, mark changed (unless this is the first pitch of the AB (pos==0xFF))
-                //Then set new position
-                if (fielder_map[roster_loc].current_pos != pos){
-                    std::cout << " Team=" << std::to_string(team_id) << " RosterLoc:" << std::to_string(roster_loc) 
-                                << " swapped from " << cPosition.at(fielder_map[roster_loc].current_pos)
-                                << " to " << cPosition.at(pos) << std::endl; 
-                    fielder_map[roster_loc].current_pos = pos; 
+                //If new position, mark changed, then set new position
+                if (fielder_map[pos].current_pos != fielder_loc){
+                    std::cout << " Team=" << std::to_string(team_id) << " RosterLoc:" << std::to_string(pos)
+                                << " swapped from " << cPosition.at(fielder_map[pos].current_pos)
+                                << " to " << cPosition.at(fielder_loc) << std::endl;
+                    fielder_map[pos].current_pos = fielder_loc;
                 }
 
                 //Increment the number of pitches this player has seen at this position
-                ++fielder_map[roster_loc].pitch_count_by_position[pos];
+                ++fielder_map[pos].pitch_count_by_position[fielder_loc];
                 //std::cout << " Team=" << std::to_string(team_id) << " RosterLoc=" << std::to_string(roster_loc)
                 //          << " Pos=" << std::to_string(pos) << "++" << std::endl; 
             }
@@ -1020,6 +1180,7 @@ public:
     //RunnerInfo
     std::optional<Runner> logRunnerInfo(const Core::CPUThreadGuard& guard, u8 base);
     bool anyRunnerStealing(const Core::CPUThreadGuard& guard, Event& in_event);
+    bool hasEnoughStarsForStarSwing(const Core::CPUThreadGuard& guard, Event& in_event);
     void logRunnerEvents(const Core::CPUThreadGuard& guard, Runner* in_runner);
 
     //TODO Redo these tuple functions
@@ -1039,6 +1200,54 @@ public:
 
     Common::HttpRequest m_http{std::chrono::minutes{3}};
 
+    // Sends ongoing-game submissions to the web server on a dedicated background
+    // thread so the blocking HTTP round-trip never stalls the emulation thread.
+    //
+    // The emulation thread builds the JSON payload (cheap) and hands it off via
+    // QueuePost()/QueueUpdate(); the worker owns its own HttpRequest and performs
+    // the blocking POST. "Post" submissions establish the ongoing-game record and
+    // are always sent in order, never dropped. "Update" submissions are full state
+    // snapshots, so if several pile up behind a slow request the worker coalesces
+    // consecutive pending updates down to the newest one. A post is never dropped
+    // or reordered relative to the updates around it.
+    class OngoingGameSubmitter
+    {
+    public:
+        OngoingGameSubmitter() = default;
+        ~OngoingGameSubmitter();
+
+        // Non-blocking. Safe to call from the emulation thread.
+        void QueuePost(std::string payload);
+        void QueueUpdate(std::string payload);
+
+    private:
+        enum class Kind { Post, Update };
+        struct Item
+        {
+            Kind kind = Kind::Update;
+            std::string payload;
+        };
+
+        void EnsureThreadStarted();
+        void Enqueue(Item&& item);
+        void ThreadLoop();
+
+        static constexpr char s_url[] = "https://api.projectrio.app/populate_db/ongoing_game/";
+
+        // Short timeout: these are fire-and-forget telemetry, so a stalled request
+        // should be abandoned quickly rather than holding up later submissions.
+        Common::HttpRequest m_http{std::chrono::seconds{10}};
+
+        std::thread m_thread;
+        std::mutex m_lock;
+        std::condition_variable m_cv;
+        std::queue<Item> m_items;
+        bool m_thread_started = false;
+        bool m_shutdown = false;
+    };
+
+    OngoingGameSubmitter m_ongoing_game_submitter;
+
     //The type of value to decode, the value to be decoded, bool for decode if true or original value if false
     std::string decode(std::string type, u8 value, bool decode);
 
@@ -1055,12 +1264,12 @@ public:
     std::pair<u8,u8> getBatterFielderPorts(const Core::CPUThreadGuard& guard){
         // These values are the actual port numbers
         // and are indexed into using the below u8s
-        std::array<u8, 2> ports = {PowerPC::MMU::HostRead_U8(guard, 0x800e874c), PowerPC::MMU::HostRead_U8(guard, 0x800e874d)};
+        std::array<u8, 2> ports = {PowerPC::MMU::HostRead_U8(guard, aPlayer1Port), PowerPC::MMU::HostRead_U8(guard, aPlayer2Port)};
 
         // These registers will always be 0 or 1
         // and swap values each half inning
-        u32 BattingTeam = PowerPC::MMU::HostRead_U32(guard, 0x80892990);
-        u32 PitchingTeam = PowerPC::MMU::HostRead_U32(guard, 0x80892994);
+        u32 BattingTeam = PowerPC::MMU::HostRead_U32(guard, aBattingTeam_P1P2);
+        u32 PitchingTeam = PowerPC::MMU::HostRead_U32(guard, aFieldingTeam_P1P2);
         
         u8 BattingPort = ports[BattingTeam];
         u8 FieldingPort = ports[PitchingTeam];
@@ -1092,7 +1301,7 @@ public:
 
             //Remove current event, wasn't finished
             auto it = m_game_info.events.find(m_game_info.event_num);
-            if ((&it != NULL) && (it != m_game_info.events.end()))
+            if (it != m_game_info.events.end())
             {
               m_game_info.events.erase(it);
             }

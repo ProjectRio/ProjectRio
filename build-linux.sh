@@ -1,19 +1,25 @@
 #!/bin/bash -e
 # build-linux.sh
 
-CMAKE_FLAGS='-DLINUX_LOCAL_DEV=true -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc-11 -DCMAKE_CXX_COMPILER=g++-11'
+CMAKE_FLAGS='-DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DLINUX_LOCAL_DEV=true -DCMAKE_BUILD_WITH_INSTALL_RPATH=true -DCMAKE_BUILD_TYPE=Release -GNinja'
+
+# Use ccache if available (speeds up incremental CI builds significantly)
+if command -v ccache &> /dev/null; then
+    CMAKE_FLAGS+=' -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
+fi
 
 DATA_SYS_PATH="./Data/Sys/"
 BINARY_PATH="./build/Binaries/"
 
 # Move into the build directory, run CMake, and compile the project
 mkdir -p build
-pushd build
-cmake .. ${CMAKE_FLAGS}
-make -j$(nproc)
-popd
+(
+    cd ./build
+    cmake .. ${CMAKE_FLAGS}
+    ninja -j$(nproc)
+)
 
 # Copy the Sys folder in
-cp -r -n ${DATA_SYS_PATH} ${BINARY_PATH}
+cp -r --update=none ${DATA_SYS_PATH} ${BINARY_PATH}
 
-touch ./build/Binaries/portable.txt
+touch ${BINARY_PATH}/portable.txt

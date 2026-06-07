@@ -20,9 +20,10 @@ if(GIT_FOUND)
       OUTPUT_STRIP_TRAILING_WHITESPACE)
 endif()
 
-# version number
-set(DOLPHIN_VERSION_MAJOR "5")
-set(DOLPHIN_VERSION_MINOR "0")
+# Project Rio version number (kept in sync with RIO_REV_STR in Version.cpp)
+set(DOLPHIN_VERSION_MAJOR "2")
+set(DOLPHIN_VERSION_MINOR "2")
+set(DOLPHIN_VERSION_PATCH_NUM "0")
 if(DOLPHIN_WC_BRANCH STREQUAL "stable")
   set(DOLPHIN_VERSION_PATCH "0")
 else()

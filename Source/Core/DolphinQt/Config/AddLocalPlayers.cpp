@@ -38,6 +38,7 @@ void AddLocalPlayersEditor::SetPlayer(LocalPlayers::LocalPlayers::Player* name)
 void AddLocalPlayersEditor::CreateWidgets()
 {
   m_username_edit = new QLineEdit;
+  m_username_edit->setMaxLength(30);
   m_userid_edit = new QLineEdit;
   m_description = new QLabel(
       tr("\nEnter a Username.\n\n"
@@ -94,10 +95,10 @@ bool AddLocalPlayersEditor::AcceptPlayer()
     return false;
   }
 
-  // checks if the username is too long
-  if (22 <= m_local_player->username.length())
+  // checks if the username is too long (max 30 chars, matches NetPlay MAX_NAME_LENGTH)
+  if (30 < m_local_player->username.length())
   {
-    ModalMessageBox::critical(this, tr("Error"), tr("Username is too long."));
+    ModalMessageBox::critical(this, tr("Error"), tr("Username is too long (max 30 characters)."));
     return false;
   }
 

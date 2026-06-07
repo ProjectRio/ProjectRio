@@ -35,6 +35,7 @@ signals:
 
   void StartNetPlayPressed();
   void ViewGeckoCodes();
+  void ViewTexturePacks();
   void ViewLocalPlayers();
   void DiscordPressed();
 
@@ -62,6 +63,7 @@ private:
   QAction* m_config_action;
   QAction* m_start_netplay_action;
   QAction* m_view_gecko_codes_action;
+  QAction* m_view_texture_packs_action;
   QAction* m_controllers_action;
   QAction* m_graphics_action;
   QAction* m_step_action;

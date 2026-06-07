@@ -32,6 +32,7 @@
 
 #include <cstddef>
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <iterator>
 #include <limits>
 #include <type_traits>

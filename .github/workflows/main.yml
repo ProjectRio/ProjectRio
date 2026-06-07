@@ -43,11 +43,6 @@ jobs:
           echo "CURR_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
       - uses: seanmiddleditch/gha-setup-ninja@master
       - uses: egor-tensin/vs-shell@v2
-      # - name: "Install Windows SDK"
-      #   shell: pwsh
-      #   working-directory: ${{ github.workspace }}
-      #   run: | 
-      #     powershell -NoLogo -Sta -NoProfile -NonInteractive -ExecutionPolicy Unrestricted -Command ./install-windows-sdk.ps1 22621
       - name: "Build ${{ matrix.build_type }} Dolphin"
         shell: cmd
         working-directory: ${{ github.workspace }}
@@ -62,18 +57,21 @@ jobs:
           cd .\Binary\x64\
           fsutil file createnew FIX-VCRUNTIME140-ERROR.txt 0
           echo "Download and install this: https://aka.ms/vs/16/release/vc_redist.x64.exe" > .\FIX-VCRUNTIME140-ERROR.txt
-      - name: Package Artifact
+      - name: "Build Installer"
+        shell: cmd
         working-directory: ${{ github.workspace }}
         run: |
-          $FILE_NAME="${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-${{ matrix.artifact_name }}.zip"
+          makensis /DDOLPHIN_ARCH=x64 /DPRODUCT_VERSION="${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}" Installer\Installer.nsi
+      - name: "Package Artifact"
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          FILE_NAME="${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-${{ matrix.artifact_name }}.exe"
           mkdir artifact
-          cd .\Binary\x64\
-          fsutil file createnew portable.txt 0
-          7z a $FILE_NAME .\*
-          move $FILE_NAME ..\..\artifact\
+          mv "Installer/projectrio-x64-${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-installer.exe" "artifact/$FILE_NAME"
       - name: "Publish"
         if: success()
-        uses: actions/upload-artifact@v2-preview
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: "./artifact/"
@@ -84,10 +82,10 @@ jobs:
         build_type: [ Release ]
         include:
           - build_type: Release
-            artifact_name: linux
+            artifact_name: ProjectRio-Linux
             build_config: release
     name: "Linux ${{ matrix.build_type }}"
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: "Checkout"
         uses: actions/checkout@v2
@@ -103,73 +101,93 @@ jobs:
           echo "CURR_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
       - name: "Install prerequisites"
         if: success()
-        shell: bash
-        run: |
-          sudo dpkg --add-architecture amd64
-          sudo apt update
-          sudo apt install -y software-properties-common 
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          sudo add-apt-repository ppa:daschuer/qt6-backports
-          sudo apt install -y gcc-11 g++-11
-          sudo apt-get install fuse libfuse2
-          sudo apt update
-          sudo apt install \
-          cmake \
-          ca-certificates \
-          qt6-base-dev \
-          qt6-base-private-dev \
-          libqt6svg6-dev \
-          make \
-          pkg-config \
-          udev \
-          libudev1 \
-          libavcodec-dev \
-          libavformat-dev \
-          libavutil-dev \
-          libswscale-dev \
-          libxi-dev \
-          libxrandr-dev \
-          libevdev-dev \
-          libsfml-dev \
-          libminiupnpc-dev \
-          libmbedtls-dev \
-          libcurl4-openssl-dev \
-          libhidapi-dev \
-          libbluetooth-dev \
-          libasound2-dev \
-          libpulse-dev \
-          libpugixml-dev \
-          libbz2-dev \
-          libzstd-dev \
-          liblzo2-dev \
-          libpng-dev \
-          libusb-1.0-0-dev \
-          gettext libudev-dev \
-          libsystemd-dev \
-          -y
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: build-essential \
+            fuse \
+            libfuse2 \
+            cmake \
+            ccache \
+            ninja-build \
+            ca-certificates \
+            qt6-base-dev \
+            qt6-base-private-dev \
+            qt6-svg-dev \
+            qt6-xdgdesktopportal-platformtheme \
+            pkg-config \
+            udev \
+            libudev1 \
+            libavcodec-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libswscale-dev \
+            libxi-dev \
+            libxrandr-dev \
+            libevdev-dev \
+            libsfml-dev \
+            libminiupnpc-dev \
+            libmbedtls-dev \
+            libcurl4-openssl-dev \
+            libhidapi-dev \
+            libbluetooth-dev \
+            libasound2-dev \
+            libpulse-dev \
+            libpugixml-dev \
+            libbz2-dev \
+            libzstd-dev \
+            liblzo2-dev \
+            libpng-dev \
+            libusb-1.0-0-dev \
+            libsdl2-dev \
+            libfmt-dev \
+            liblz4-dev \
+            gettext \
+            libenet-dev \
+            liblzma-dev \
+            libgtest-dev \
+            libudev-dev \
+            libsystemd-dev
+          version: 1.0
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          create-symlink: true
       - name: "Build ${{ matrix.build_type }} Project Rio"
         if: success()
         working-directory: ${{ github.workspace }}
         run: |
-          git config core.fileMode false ; chmod +x ./build-linux.sh && ./build-linux.sh ${{ matrix.build_config }}
+          git config core.fileMode false ; bash ./build-linux.sh ${{ matrix.build_config }}
+      - name: Package ${{ matrix.build_type }}
+        working-directory: ${{ github.workspace }}
+        run: |
+          git config core.fileMode false ; bash ./build-appimage.sh
+      - name: "Publish"
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ./build/Binaries/${{ matrix.artifact_name }}.AppImage
+          archive: false
   macOS:
     strategy:
       fail-fast: false
       matrix:
-        build_type: [ Release ]
         include:
-          - build_type: Release
-            artifact_name: ProjectRio-macOS
-            build_config: release
-    name: "macOS ${{ matrix.build_type }}"
-    runs-on: macos-12
+          - arch: arm64
+            runner: macos-26
+            artifact_name: ProjectRio-macOS-arm64
+          - arch: x86_64
+            runner: macos-26-intel
+            artifact_name: ProjectRio-macOS-x86_64
+    name: "macOS ${{ matrix.arch }}"
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
     steps:
       - name: "Checkout"
         uses: actions/checkout@v2
         with:
           submodules: recursive
-      - name: 'Fetch Git Tags'
-        if: success()
+      - name: "Fetch Git Tags"
         run: |
           git fetch --prune --unshallow
           echo "GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)" >> $GITHUB_ENV
@@ -179,56 +197,102 @@ jobs:
       - name: "Set up Python"
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11.6"
-          architecture: "x64"
-      - name: "Install 12.3 SDK"
-        if: success()
+          python-version: "3.11"
+      - name: "Cache Homebrew downloads"
+        uses: actions/cache@v3
+        with:
+          path: ~/Library/Caches/Homebrew
+          key: ${{ runner.os }}-${{ matrix.arch }}-brew-${{ hashFiles('.github/workflows/main.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-brew-
+      - name: "Cache ccache"
+        uses: actions/cache@v3
+        with:
+          path: ~/.ccache
+          key: ${{ runner.os }}-${{ matrix.arch }}-ccache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-ccache-
+      - name: "Install prerequisites"
         shell: bash
-        working-directory: ${{ github.workspace }}
         run: |
-          wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.0.sdk.tar.xz
-          tar -xf MacOSX11.0.sdk.tar.xz
-          rm MacOSX11.0.sdk.tar.xz
-          sudo mv MacOSX11.0.sdk /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/
-        #  wget https://github.com/alexey-lysiuk/macos-sdk/releases/download/12.3/MacOSX12.3.tar.xz
-        #  tar -xf MacOSX12.3.tar.xz
-        #  rm MacOSX12.3.tar.xz
-        #  sudo mv MacOSX12.3 /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/
-      - name: "Download and Install prerequisites"
-        if: success()
-        shell: bash
-        run: |
-          rm '/usr/local/bin/2to3' || true
-          echo "HOMEBREW_NO_AUTO_UPDATE=1" >> $GITHUB_ENV
-          brew upgrade cmake
+          export HOMEBREW_NO_AUTO_UPDATE=1
+
+          # Pin qtbase to 6.11.0. qtbase 6.11.1 regressed macOS fullscreen handling:
+          # the render window no longer snaps back to the forced 4:3 aspect ratio on a
+          # fullscreen toggle until the window is manually nudged. Homebrew's `qt`
+          # formula is just an umbrella of symlinks; QtGui (where the regression lives)
+          # ships in the separate `qtbase` formula, so we pin qtbase, not qt. `qt`
+          # depends on `qtbase` without a version constraint, so installing 6.11.0 first
+          # satisfies the `qt@6` install below and it won't upgrade qtbase. Other Qt
+          # modules (qtsvg, etc.) stay current — a 6.11.0 qtbase against 6.11.1 modules
+          # builds and runs fine (validated locally). Drop this pin once a qtbase past
+          # 6.11.1 restores the fullscreen behaviour.
+          # homebrew-core commit for qtbase 6.11.0 (bottled): arm64_tahoe + sonoma cover
+          # the macos-26 (arm64) and macos-26-intel (x86_64, via the sonoma fallback) runners.
+          QTBASE_REF="56729e9a19c74be24ba16e2bef7dfa9ab6e07a76"
+          PIN_TAP_DIR="$(brew --repository)/Library/Taps/local/homebrew-qtpin/Formula"
+          mkdir -p "$PIN_TAP_DIR"
+          curl -fsSL "https://raw.githubusercontent.com/Homebrew/homebrew-core/${QTBASE_REF}/Formula/q/qtbase.rb" \
+            -o "$PIN_TAP_DIR/qtbase.rb"
+          brew uninstall --ignore-dependencies qtbase 2>/dev/null || true
+          brew install local/qtpin/qtbase
+          brew pin qtbase
+
           brew install \
-          ffmpeg \
-          libpng \
-          pkgconfig \
-          libao \
-          sound-touch \
-          hidapi \
-          icu4c \
-          qt@6
-      - name: "Build ${{ matrix.build_type }} Project Rio"
-        if: success()
+            ccache \
+            ffmpeg \
+            libpng \
+            pkgconfig \
+            libao \
+            sound-touch \
+            hidapi \
+            icu4c \
+            qt@6
+          brew unlink fmt || true
+      - name: "Build ${{ matrix.arch }}"
         shell: bash
         working-directory: ${{ github.workspace }}
         run: |
-          git config core.fileMode false ; chmod +x ./build-mac.sh && ./build-mac.sh ${{ matrix.build_config }}
-      - name: Package ${{ matrix.build_type }}
-        if: success()
+          git config core.fileMode false
+          ./build-mac.sh release
+      - name: "Package"
         shell: bash
         working-directory: ${{ github.workspace }}
         run: |
-          FILE_NAME=${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-${{ matrix.artifact_name }}.tar.gz
+          FILE_NAME=${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-${{ matrix.artifact_name }}.zip
           mkdir artifact
           cd ./build/Binaries/
-          zip -r "${FILE_NAME}" "Dolphin.app"
+          zip -ry "${FILE_NAME}" "ProjectRio.app"
           mv "${FILE_NAME}" ../../artifact/
       - name: "Publish"
         if: success()
-        uses: actions/upload-artifact@v2-preview
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: "./artifact/"
+
+  steamOS:
+    name: "Steam Deck (Flatpak)"
+    runs-on: ubuntu-latest
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:kde-6.7
+      options: --privileged
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [ Release ]
+        include:
+          - build_type: Release
+            artifact_name: ProjectRio-steamOS
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@bf5cafdfd97dcf5a89c7475bbc86a616e1f86acb # v6.7
+        with:
+          manifest-path: Tools/flatpak.yml
+          bundle: ${{ matrix.artifact_name }}.flatpak
+          cache-key: flatpak-builder-${{ github.sha }}

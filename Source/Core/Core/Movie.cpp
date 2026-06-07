@@ -22,6 +22,7 @@
 #include <fmt/format.h>
 
 #include "Common/Assert.h"
+#include "Common/TimeUtil.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonPaths.h"
 #include "Common/Config/Config.h"
@@ -167,7 +168,7 @@ std::string MovieManager::GetRTCDisplay() const
   using ExpansionInterface::CEXIIPL;
 
   const time_t current_time = CEXIIPL::GetEmulatedTime(m_system, CEXIIPL::UNIX_EPOCH);
-  const tm gm_time = fmt::gmtime(current_time);
+  const tm gm_time = Common::GmTime(current_time).value_or(std::tm{});
 
   // Use current locale for formatting time, as fmt is locale-agnostic by default.
   return fmt::format(std::locale{""}, "Date/Time: {:%c}", gm_time);

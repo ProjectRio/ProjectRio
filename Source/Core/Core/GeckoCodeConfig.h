@@ -8,6 +8,8 @@
 #include <vector>
 
 #include "Core/GeckoCode.h"
+#include "Core/MSB_GenerateQuickMatchSetupGeckoCode.h"
+#include "Common/FileUtil.h"
 
 namespace Common
 {
@@ -24,20 +26,27 @@ void SaveCodes(Common::IniFile& inifile, const std::vector<GeckoCode>& gcodes);
 std::optional<GeckoCode::Code> DeserializeLine(const std::string& line);
 void ReadLines(std::vector<GeckoCode>& gcodes, std::vector<std::string>& lines, bool user_defined);
 
-static bool isDisableReplays = false;
-void setDisableReplays(bool disable);
-static bool isNightStadium = false;
-void setNightStadium(bool is_night);
-//static bool isTrainingMode = false;
+// Night Mario Stadium / Disable Replays are exposed both in local play (via the Local Players
+// widget) and in netplay (host-controlled, synced to clients). The two contexts are kept in
+// completely separate state so a persisted local setting can never leak into a netplay match and
+// cause a desync. LoadCodes() selects which set to honor based on its is_netplay argument.
+extern bool isNightStadiumLocal;
+extern bool isNightStadiumNetplay;
+void setNightStadiumLocal(bool is_night);
+void setNightStadiumNetplay(bool is_night);
 
-const std::string MSSB_DisableReplays = R"(
-+$Disable Replays [LittleCoaks]
-206bb214 38000001
-046bb214 38000000
-E2000001 00000000
-*Disables replays
+extern bool isDisableReplaysLocal;
+extern bool isDisableReplaysNetplay;
+void setDisableReplaysLocal(bool disable);
+void setDisableReplaysNetplay(bool disable);
 
-)";
+// Resets the netplay-only options to their defaults (off). Called at the start of a netplay
+// session so a previous session's state can't carry over before the host syncs values.
+void resetNetplayGameOptions();
+
+extern bool isLoadingFromHUD;
+extern MSBQuickMatchGameState HUDState;
+void setFastResetFromHUD(bool load_from_hud);
 
 const std::string MSSB_NightStadium = R"(
 +$Night Mario Stadium [LittleCoaks]
@@ -49,6 +58,15 @@ C2650678 00000004
 60000000 00000000
 E2000001 00000000
 *Mario Stadium is given the night-time effect as seen in Bom-omb Derby
+
+)";
+
+const std::string MSSB_DisableReplays = R"(
++$Disable Replays [LittleCoaks]
+206bb214 38000001
+046bb214 38000000
+E2000001 00000000
+*Disables replays
 
 )";
 
@@ -197,42 +215,35 @@ E2000001 00000000
 00361C14 00010001
 *All mingames, stadiums, characters, and star characters are unlocked.
 
-+$Boot to Main Menu [LittleCoaks]
-280e877C 00000000
-0463f964 38600005
-E2000001 00000000
-*Skips the opening cutscenes and stars the game on the main menu. Does not load in memory card.
-
 +$Default Mercy On [LittleCoaks]
 040498DC 9867003F
 *Mercy defaults to on when starting a game
 
 +$Captain Swap [nuche, LittleCoaks]
-2064F67C 40820AB4
-C264F67C 00000058
+C264F67C 0000006D
 3D60800F 398B877C
 A54C0000 280A0004
 41820014 38C4298C
 38A0000D 38830910
-4800029C 57C004E7
-57C3043E 41820290
+48000344 57C004E7
+57C3043E 41820338
 3D608075 398B0C48
 7D6CDA14 8D4B0045
-280A0000 40820230
+280A0000 408202D8
 3D608075 398B0C48
 7D6CDA14 8D4B0041
-280A0000 40820218
+280A0000 408202C0
 3D608075 398B0C48
 1D5B0004 7D6C5214
 850B0000 2C080009
-408001FC 3D60803C
+408002A4 3D60803C
 398B6738 1D5B0009
 7D6C5214 39400009
 7D4903A6 38E00000
 894B0000 7C085000
 40820008 48000014
 396B0001 38E70001
-4200FFE8 480001C0
+4200FFE8 48000268
 60000000 3D60803C
 398B6726 1D5B0009
 7D6C5214 7D4B3A14
@@ -241,7 +252,7 @@ A54C0000 280A0004
 7D6903A6 896C0000
 7C095800 40820008
 48000010 398C0001
-4200FFEC 48000178
+4200FFEC 48000220
 60000000 3D608035
 398B3080 1D5B0004
 7D6A6214 912B0000
@@ -249,6 +260,27 @@ A54C0000 280A0004
 1D5B0009 7D6C5214
 898B0000 992B0000
 7D4B3A14 998A0000
+3D60803A 616B488E
+3980003B 2C090000
+40820008 3980004A
+2C090001 40820008
+3980005B 2C090004
+40820008 39800056
+2C090006 40820008
+39800058 2C090002
+40820008 39800059
+2C090009 40820008
+3980005A 2C090005
+40820008 3980005C
+2C090011 40820008
+3980005E 2C09000B
+40820008 3980005D
+2C090003 40820008
+3980005F 2C09000A
+40820008 39800057
+2C090013 40820008
+39800060 1D5B00C0
+7D6B5214 B18B0000
 3D60803C 398B6738
 1D5B0009 7D6C5214
 898B0000 990B0000
@@ -298,7 +330,15 @@ BC610008 386001BA
 4E800421 B8610008
 80010104 38210100
 7C0803A6 00000000
-E2000001 00000000
+06515E52 00000040
+002F004F 00420050
+00504002 80570032
+0051003E 004F0051
+80584002 0051004C
+40020050 0054003E
+004D4002 0040003E
+004D0051 003E0046
+004B000D 40024000
 *Press "Start" over a character to change your captain while mid-draft
 
 +$Checksum [LittleCoaks]

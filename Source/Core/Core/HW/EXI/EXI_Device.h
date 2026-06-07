@@ -110,7 +110,7 @@ struct fmt::formatter<ExpansionInterface::EXIDeviceType>
   constexpr formatter() : EnumFormatter(names) {}
 
   template <typename FormatContext>
-  auto format(const ExpansionInterface::EXIDeviceType& e, FormatContext& ctx)
+  auto format(const ExpansionInterface::EXIDeviceType& e, FormatContext& ctx) const
   {
     if (e != ExpansionInterface::EXIDeviceType::None)
     {

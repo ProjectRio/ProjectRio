@@ -628,7 +628,9 @@ if (_M_X86_64)
 endif()
 add_subdirectory(Externals/cpp-optparse)
 
-dolphin_find_optional_system_library(fmt Externals/fmt 10.1)
+dolphin_find_optional_system_library_pkgconfig(FMT
+  fmt>=10.1 fmt::fmt Externals/fmt
+)
 
 add_subdirectory(Externals/imgui)
 add_subdirectory(Externals/implot)
@@ -671,7 +673,7 @@ dolphin_make_imported_target_if_missing(LibLZMA::LibLZMA LIBLZMA)
 
 dolphin_find_optional_system_library_pkgconfig(ZSTD libzstd>=1.4.0 zstd::zstd Externals/zstd)
 
-dolphin_find_optional_system_library_pkgconfig(ZLIB zlib-ng ZLIB::ZLIB Externals/zlib-ng)
+dolphin_find_optional_system_library_pkgconfig(ZLIB zlib<1.3.1 ZLIB::ZLIB Externals/zlib-ng)
 
 dolphin_find_optional_system_library_pkgconfig(MINIZIP minizip>=3.0.0 minizip::minizip Externals/minizip)
 
@@ -736,7 +738,7 @@ if(NOT ENABLE_QT)
   set(USE_MGBA 0)
 endif()
 if(USE_MGBA)
-  dolphin_find_optional_system_library(LIBMGBA Externals/mGBA)
+  dolphin_find_optional_system_library_pkgconfig(LIBMGBA libmgba<0.10.5 mGBA::mGBA Externals/mGBA)
 endif()
 
 find_package(SYSTEMD)
@@ -785,6 +787,11 @@ find_package(Git)
 if(NOT GIT_FOUND)
 	set(GIT_EXECUTABLE "")
 endif()
+
+# Populate version variables at configure time so that Info.plist.in
+# substitution works (the ScmRevGen custom target only runs at build time).
+include(CMake/ScmRevGen.cmake)
+
 add_custom_target(
 	dolphin_scmrev
 	${CMAKE_COMMAND} -DPROJECT_SOURCE_DIR=${PROJECT_SOURCE_DIR} -DPROJECT_BINARY_DIR=${PROJECT_BINARY_DIR} -DDISTRIBUTOR=${DISTRIBUTOR} -DDOLPHIN_DEFAULT_UPDATE_TRACK=${DOLPHIN_DEFAULT_UPDATE_TRACK} -DGIT_FOUND=${GIT_FOUND} -DGIT_EXECUTABLE=${GIT_EXECUTABLE} -DDOLPHIN_WC_REVISION=${DOLPHIN_WC_REVISION} -DDOLPHIN_WC_DESCRIBE=${DOLPHIN_WC_DESCRIBE} -DDOLPHIN_WC_BRANCH=${DOLPHIN_WC_BRANCH} -P ${CMAKE_SOURCE_DIR}/CMake/ScmRevGen.cmake
@@ -829,11 +836,11 @@ if(NOT CMAKE_SYSTEM_NAME MATCHES "Linux|FreeBSD|OpenBSD|Darwin")
 endif()
 if(CMAKE_SYSTEM_NAME MATCHES "Linux|FreeBSD|OpenBSD")
   # Install the application icon and menu item
-  install(FILES Data/dolphin-emu.svg
+  install(FILES Data/ProjectRio.svg
           DESTINATION ${CMAKE_INSTALL_PREFIX}/share/icons/hicolor/scalable/apps)
-  install(FILES Data/RioLogo.png
+  install(FILES Data/ProjectRio.png
           DESTINATION ${CMAKE_INSTALL_PREFIX}/share/icons/hicolor/256x256/apps)
-  install(FILES Data/dolphin-emu.desktop
+  install(FILES Data/ProjectRio.desktop
           DESTINATION ${CMAKE_INSTALL_PREFIX}/share/applications)
   # Install manpages
   install(FILES Data/dolphin-emu.6

@@ -456,6 +456,10 @@ add_library(core
   LibusbUtils.h
   MSB_StatTracker.cpp
   MSB_StatTracker.h
+  MSB_GenerateQuickMatchSetupGeckoCode.cpp
+  MSB_GenerateQuickMatchSetupGeckoCode.h
+  MSB_HUDStateLoader.cpp
+  MSB_HUDStateLoader.h
   LocalPlayers.cpp
   LocalPlayers.h
   LocalPlayersConfig.cpp

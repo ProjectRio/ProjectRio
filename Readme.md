@@ -89,6 +89,13 @@ Doing this is more complex as it requires installation of library dependencies f
 equivalents) and may require specifying additional arguments to point to relevant library locations. 
 Execute BuildMacOSUniversalBinary.py --help for more details.  
 
+### Linux AppImage Creation
+
+To create an AppImage
+
+1. `bash ./build-linux.sh`
+2. `bash ./build-appimage.sh`S
+
 ### Linux Global Build Steps:
 
 To install to your system.

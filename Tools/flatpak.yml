@@ -1,0 +1,69 @@
+app-id: org.DolphinEmu.project-rio
+runtime: org.kde.Platform
+runtime-version: '6.7'
+sdk: org.kde.Sdk
+command: project-rio-wrapper
+rename-desktop-file: ProjectRio.desktop
+rename-icon: ProjectRio
+finish-args:
+  - --device=all
+  # File pickers use portals, but the manual "set game directory" feature
+  # still needs direct read access to the host filesystem.
+  - --filesystem=host:ro
+  - --socket=pulseaudio
+  - --socket=x11
+  - --share=network
+  - --share=ipc
+  # Required for the emulated bluetooth adapter feature to work.
+  - --allow=bluetooth
+  - --filesystem=xdg-run/app/com.discordapp.Discord:create
+  - --filesystem=xdg-run/discord-ipc-0:create
+  # Required to disable the screensaver in various desktops.
+  - --talk-name=org.freedesktop.ScreenSaver
+  - --talk-name=org.xfce.ScreenSaver
+  - --talk-name=org.mate.ScreenSaver
+  # Required for Gamescope on Steam Deck.
+  - --filesystem=xdg-run/gamescope-0:ro
+modules:
+  # Enables motion controls on non-Wii controllers (Switch, PS4, etc).
+  # Requires a udev rule enabling Motion Sensors access.
+  - name: libevdev
+    buildsystem: meson
+    config-opts:
+      - -Dtests=disabled
+      - -Ddocumentation=disabled
+    sources:
+      - type: archive
+        url: https://www.freedesktop.org/software/libevdev/libevdev-1.13.3.tar.xz
+        sha256: abf1aace86208eebdd5d3550ffded4c8d73bb405b796d51c389c9d0604cbcfbf
+        x-checker-data:
+          type: anitya
+          project-id: 20540
+          stable-only: true
+          url-template: https://www.freedesktop.org/software/libevdev/libevdev-$version.tar.xz
+
+  - name: project-rio
+    buildsystem: cmake-ninja
+    builddir: true
+    build-options:
+      cflags: ""
+      cflags-override: true
+      cxxflags: ""
+      cxxflags-override: true
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      - -DENABLE_ALSA=OFF
+      - -DENABLE_SDL=ON
+      - -DENABLE_EVDEV=ON
+      - -DDISTRIBUTOR=Project Rio
+      - -DCPACK_PACKAGE_CONTACT=Project Rio
+    cleanup:
+      - /share/man
+    post-install:
+      - install -Dm755 -t ${FLATPAK_DEST}/bin/ ../Tools/project-rio-wrapper
+      - desktop-file-edit --set-key=Exec --set-value='/app/bin/project-rio-wrapper'
+        /app/share/applications/ProjectRio.desktop
+    sources:
+      - type: dir
+        path: ..

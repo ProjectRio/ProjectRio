@@ -4,6 +4,7 @@
 #include <iosfwd>
 #include "DolphinQt/Config/LocalPlayersWidget.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -33,6 +34,10 @@
 
 #include "Common/TagSet.h"
 
+#include "Core/GeckoCodeConfig.h"
+#include "Core/MSB_HUDStateLoader.h"
+#include "Core/NetPlayProto.h"
+
 #include "DolphinQt/Settings.h"
 #include "DolphinQt/QtUtils/ModalMessageBox.h"
 
@@ -46,6 +51,7 @@ LocalPlayersWidget::LocalPlayersWidget(QWidget* parent) : QWidget(parent)
   PopulateTagsetCombobox();
   ConnectWidgets();
   SetTagSet();
+  LoadLocalGameOptions();
 }
 
 // create the basic UI elements for the local players widget
@@ -126,17 +132,36 @@ void LocalPlayersWidget::CreateLayout()
   player_layout->addWidget(m_remove_button, 1);
   m_player_box->setLayout(player_layout);
 
+  m_night_stadium = new QCheckBox(tr("Night Mario Stadium"));
+  m_disable_replays = new QCheckBox(tr("Disable Replays"));
+
   auto* options_layout = new QGridLayout;
   options_layout->setAlignment(Qt::AlignTop);
   options_layout->addWidget(new QLabel(tr("Game Mode:")), 0, 0);
   options_layout->addWidget(m_local_tagset, 0, 1, 1, -1, Qt::AlignLeft);
   options_layout->addWidget(tagset_description, 1, 0, 1, -1);
   options_layout->addWidget(m_game_mode_description, 2, 0, 1, -1);
+  options_layout->addWidget(m_night_stadium, 3, 0, 1, -1);
+  options_layout->addWidget(m_disable_replays, 4, 0, 1, -1);
   m_options_box->setLayout(options_layout);
+
+  m_fast_reset_box = new QGroupBox(tr("Local Fast Reset"));
+  m_fast_reset_checkbox = new QCheckBox(tr("Enable Fast Reset from HUD"));
+  m_fast_reset_status = new QLabel(tr("Fast Reset is disabled."));
+  m_fast_reset_status->setWordWrap(true);
+  m_fast_reset_status->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+
+  auto* fast_reset_layout = new QVBoxLayout;
+  fast_reset_layout->setAlignment(Qt::AlignTop);
+  fast_reset_layout->addWidget(m_fast_reset_checkbox);
+  fast_reset_layout->addSpacing(8);
+  fast_reset_layout->addWidget(m_fast_reset_status);
+  m_fast_reset_box->setLayout(fast_reset_layout);
 
   auto* layout = new QHBoxLayout;
   layout->addWidget(m_player_box, 1);
   layout->addWidget(m_options_box);
+  layout->addWidget(m_fast_reset_box);
   layout->addSpacing(20);
 
   setLayout(layout);
@@ -247,6 +272,7 @@ void LocalPlayersWidget::SetPortInfo()
   LocalPlayers::SaveLocalPorts();
   SavePlayers();
   PopulateTagsetCombobox();
+  SetTagSet();  // syncs Core tagset to current combobox state before validation
 }
 
 void LocalPlayersWidget::PopulateTagsetCombobox()
@@ -308,7 +334,7 @@ void LocalPlayersWidget::PopulateTagsetCombobox()
     {
       return;
     }
-    valid_tagsets.push_back(Tag::getAvailableTagSets(m_http, player1key));
+    valid_tagsets.push_back(Tag::getAvailableTagSets(m_http, player4key));
   }
 
   if (valid_tagsets.size() == 0)
@@ -344,6 +370,7 @@ void LocalPlayersWidget::SetTagSet()
   if (!selected_tagset.has_value())
   {
     m_game_mode_description->append(tr("No Game Mode Selected."));
+    ValidateAndApplyFastReset();
     return;
   }
 
@@ -361,6 +388,149 @@ void LocalPlayersWidget::SetTagSet()
 
   QScrollBar* scrollBar = m_game_mode_description->verticalScrollBar();
   scrollBar->setValue(scrollBar->minimum());  // set scroll bar to the top
+
+  ValidateAndApplyFastReset();
+}
+
+void LocalPlayersWidget::ValidateAndApplyFastReset()
+{
+  if (!m_fast_reset_checkbox->isChecked())
+  {
+    Gecko::setFastResetFromHUD(false);
+    m_fast_reset_status->setText(tr("Fast Reset is disabled."));
+    return;
+  }
+
+  Core::SetTagSet(m_tagset_combobox_map[m_local_tagset->currentIndex()], false);
+
+  std::string p1Username = LocalPlayers::m_local_player_1.GetUsername();
+  std::string p2Username = LocalPlayers::m_local_player_2.GetUsername();
+
+  if (p1Username == "No Player Selected") p1Username = "";
+  if (p2Username == "No Player Selected") p2Username = "";
+
+  const std::string hudPath = File::GetUserPath(D_HUDFILES_IDX) + "hud.json";
+
+  HUDValidationDetails details;
+  int resultCode = allowLoadFromHUD(hudPath, p1Username, p2Username, false, &details);
+
+  if (resultCode != 0)
+  {
+    Gecko::setFastResetFromHUD(false);
+    switch (resultCode)
+    {
+    case 2:
+      m_fast_reset_status->setText(tr("Error: HUD file not found or could not be parsed."));
+      break;
+    case 3:
+    {
+      QString hudTagSetLabel = QString::number(details.hudTagSetId);
+      if (details.hudTagSetId >= 0)
+      {
+        for (const auto& [idx, tagset] : m_tagset_combobox_map)
+        {
+          if (tagset.has_value() && tagset.value().id == details.hudTagSetId)
+          {
+            hudTagSetLabel = QString::fromStdString(tagset.value().name);
+            break;
+          }
+        }
+      }
+      if (details.hudTagSetId == -1)
+        m_fast_reset_status->setText(
+            tr("Error: Game Mode mismatch. HUD has no Game Mode, but '%1' is active. "
+               "Deselect the Game Mode or use a HUD from a '%1' match.")
+                .arg(QString::fromStdString(details.activeTagSetName)));
+      else if (details.activeTagSetName.empty())
+        m_fast_reset_status->setText(
+            tr("Error: Game Mode mismatch. HUD expects '%1', but no Game Mode is selected.")
+                .arg(hudTagSetLabel));
+      else
+        m_fast_reset_status->setText(
+            tr("Error: Game Mode mismatch. HUD expects '%1', but '%2' is active.")
+                .arg(hudTagSetLabel)
+                .arg(QString::fromStdString(details.activeTagSetName)));
+      break;
+    }
+    case 4:
+      m_fast_reset_status->setText(
+          tr("Error: Player mismatch. HUD expects Away='%1', Home='%2'. "
+             "Player 1 is '%3', Player 2 is '%4'.")
+              .arg(QString::fromStdString(details.hudAwayPlayer))
+              .arg(QString::fromStdString(details.hudHomePlayer))
+              .arg(QString::fromStdString(p1Username.empty() ? "None" : p1Username))
+              .arg(QString::fromStdString(p2Username.empty() ? "None" : p2Username)));
+      break;
+    default:
+      m_fast_reset_status->setText(tr("Error: Unknown validation failure."));
+      break;
+    }
+    return;
+  }
+
+  if (!LoadStateFromHud(hudPath, Gecko::HUDState, p1Username, p2Username))
+  {
+    Gecko::setFastResetFromHUD(false);
+    m_fast_reset_status->setText(tr("Error: Failed to parse game state from HUD file."));
+    return;
+  }
+
+  Gecko::setFastResetFromHUD(true);
+  m_fast_reset_status->setText(tr("Fast Reset is enabled. Game state loaded successfully.\n"
+                                  "Start the game to apply."));
+}
+
+void LocalPlayersWidget::OnEmulationStateChanged(Core::State state)
+{
+  if (state == Core::State::Uninitialized)
+  {
+    m_fast_reset_checkbox->setChecked(false);
+    Gecko::setFastResetFromHUD(false);
+    m_fast_reset_status->setText(tr("Fast Reset was cleared after emulation stopped."));
+
+    // Re-apply local game options only after the netplay session ends, not between games.
+    if (!NetPlay::IsNetPlayRunning())
+    {
+      Gecko::setNightStadiumLocal(m_night_stadium->isChecked());
+      Gecko::setDisableReplaysLocal(m_disable_replays->isChecked());
+    }
+  }
+}
+
+void LocalPlayersWidget::LoadLocalGameOptions()
+{
+  Common::IniFile ini;
+  ini.Load(File::GetUserPath(F_LOCALPLAYERSCONFIG_IDX));
+
+  bool nightStadium = false;
+  bool disableReplays = false;
+  ini.GetOrCreateSection("Local Game Options")->Get("NightStadium", &nightStadium, false);
+  ini.GetOrCreateSection("Local Game Options")->Get("DisableReplays", &disableReplays, false);
+
+  // Block signals so the stateChanged handlers don't fire redundant saves during load.
+  m_night_stadium->blockSignals(true);
+  m_disable_replays->blockSignals(true);
+
+  m_night_stadium->setChecked(nightStadium);
+  m_disable_replays->setChecked(disableReplays);
+
+  m_night_stadium->blockSignals(false);
+  m_disable_replays->blockSignals(false);
+
+  Gecko::setNightStadiumLocal(nightStadium);
+  Gecko::setDisableReplaysLocal(disableReplays);
+}
+
+void LocalPlayersWidget::SaveLocalGameOptions()
+{
+  const auto ini_path = std::string(File::GetUserPath(F_LOCALPLAYERSCONFIG_IDX));
+  Common::IniFile ini;
+  ini.Load(ini_path);
+
+  ini.GetOrCreateSection("Local Game Options")->Set("NightStadium", m_night_stadium->isChecked());
+  ini.GetOrCreateSection("Local Game Options")->Set("DisableReplays", m_disable_replays->isChecked());
+
+  ini.Save(ini_path);
 }
 
 bool LocalPlayersWidget::IsValidUser(LocalPlayers::LocalPlayers::Player player)
@@ -397,4 +567,20 @@ void LocalPlayersWidget::ConnectWidgets()
 
   connect(m_add_button, &QPushButton::clicked, this, &LocalPlayersWidget::OnAddPlayers);
   connect(m_remove_button, &QPushButton::clicked, this, &LocalPlayersWidget::OnRemovePlayers);
+
+  connect(m_fast_reset_checkbox, &QCheckBox::stateChanged, this,
+          &LocalPlayersWidget::ValidateAndApplyFastReset);
+
+  connect(m_night_stadium, &QCheckBox::stateChanged, this, [this]() {
+    Gecko::setNightStadiumLocal(m_night_stadium->isChecked());
+    SaveLocalGameOptions();
+  });
+
+  connect(m_disable_replays, &QCheckBox::stateChanged, this, [this]() {
+    Gecko::setDisableReplaysLocal(m_disable_replays->isChecked());
+    SaveLocalGameOptions();
+  });
+
+  connect(&Settings::Instance(), &Settings::EmulationStateChanged, this,
+          &LocalPlayersWidget::OnEmulationStateChanged);
 }

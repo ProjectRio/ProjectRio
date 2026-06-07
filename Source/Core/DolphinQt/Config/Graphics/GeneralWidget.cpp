@@ -103,6 +103,8 @@ void GeneralWidget::CreateWidgets()
 
   m_show_ping = new ConfigBool(tr("Show NetPlay Ping"), Config::GFX_SHOW_NETPLAY_PING);
   m_show_player_names = new ConfigBool(tr("Show Player Names"), Config::GFX_SHOW_PLAYER_NAMES);
+  m_clip_player_names_to_pillar =
+      new ConfigBool(tr("Clip Player Names to Pillar"), Config::MAIN_OSD_CLIP_PLAYER_NAMES);
   m_training_mode = new ConfigBool(tr("Training Mode v1.0"), Config::GFX_TRAINING_MODE);
   m_draft_timer = new ConfigBool(tr("Draft Timer"), Config::GFX_DRAFT_TIMER);
 
@@ -122,7 +124,9 @@ void GeneralWidget::CreateWidgets()
   m_options_layout->addWidget(m_show_player_names, 3, 0);
   m_options_layout->addWidget(m_training_mode, 3, 1);
 
-  m_options_layout->addWidget(m_draft_timer, 4, 0);
+  m_options_layout->addWidget(m_clip_player_names_to_pillar, 4, 0);
+
+  m_options_layout->addWidget(m_draft_timer, 5, 0);
 
   // Other
   auto* shader_compilation_box = new QGroupBox(tr("Shader Compilation"));
@@ -308,6 +312,12 @@ void GeneralWidget::AddDescriptions()
       QT_TR_NOOP("Shows the names of the players during a match. For Mario Baseball, the Batter and Fielder names are shown."
                  " For Mario Golf, the current Golfer's name is shown. Be sure to assign Local Players to the correct port.");
 
+  static const char TR_CLIP_PLAYER_NAMES_TO_PILLAR[] =
+      QT_TR_NOOP("Clips the Batter and Fielder name boxes so they don't extend past the left "
+                 "pillar edge. Long names are truncated with an ellipsis (...). Has no effect "
+                 "when there is no left pillar (e.g. fullscreen at the game's native aspect "
+                 "ratio).<br><br><dolphin_emphasis>If unsure, leave this unchecked.</dolphin_emphasis>");
+
   static const char TR_TRAINING_MODE[] =
       QT_TR_NOOP("Displays game information on screen in real-time. Useful for "
                  "practice/testing/labbing purposes.");
@@ -333,6 +343,7 @@ void GeneralWidget::AddDescriptions()
   m_show_ping->SetDescription(tr(TR_SHOW_NETPLAY_PING_DESCRIPTION));
 
   m_show_player_names->SetDescription(tr(TR_SHOW_PLAYER_NAMES));
+  m_clip_player_names_to_pillar->SetDescription(tr(TR_CLIP_PLAYER_NAMES_TO_PILLAR));
 
   m_training_mode->SetDescription(tr(TR_TRAINING_MODE));
 

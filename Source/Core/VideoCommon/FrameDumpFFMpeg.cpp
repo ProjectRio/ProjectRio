@@ -31,6 +31,7 @@ extern "C" {
 #include "Common/Logging/LogManager.h"
 #include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
+#include "Common/TimeUtil.h"
 
 #include "Core/Config/MainSettings.h"
 #include "Core/ConfigManager.h"
@@ -129,7 +130,7 @@ std::string GetDumpPath(const std::string& extension, std::time_t time, u32 inde
       File::GetUserPath(D_DUMPFRAMES_IDX) + SConfig::GetInstance().GetGameID();
 
   const std::string base_name =
-      fmt::format("{}_{:%Y-%m-%d_%H-%M-%S}_{}", path_prefix, fmt::localtime(time), index);
+      fmt::format("{}_{:%Y-%m-%d_%H-%M-%S}_{}", path_prefix, Common::LocalTime(time).value_or(std::tm{}), index);
 
   const std::string path = fmt::format("{}.{}", base_name, extension);
 

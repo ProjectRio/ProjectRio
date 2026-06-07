@@ -39,7 +39,7 @@
       <PrecompiledHeaderFile>pch_qt.h</PrecompiledHeaderFile>
       <ForcedIncludeFiles>pch_qt.h</ForcedIncludeFiles>
       <LanguageStandard Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdcpplatest</LanguageStandard>
-      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4459;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
     <Manifest>
       <AdditionalManifestFiles>DolphinQt.manifest;%(AdditionalManifestFiles)</AdditionalManifestFiles>
@@ -80,6 +80,7 @@
     <ClCompile Include="Config\GamecubeControllersWidget.cpp" />
     <ClCompile Include="Config\GeckoCodeWidget.cpp" />
     <ClCompile Include="Config\Graphics\AdvancedWidget.cpp" />
+    <ClCompile Include="Config\TexturePackManagerDialog.cpp" />
     <ClCompile Include="Config\Graphics\EnhancementsWidget.cpp" />
     <ClCompile Include="Config\Graphics\GeneralWidget.cpp" />
     <ClCompile Include="Config\Graphics\GraphicsWindow.cpp" />
@@ -299,6 +300,7 @@
     <QtMoc Include="Config\GameConfigWidget.h" />
     <QtMoc Include="Config\GeckoCodeWidget.h" />
     <QtMoc Include="Config\Graphics\AdvancedWidget.h" />
+    <QtMoc Include="Config\TexturePackManagerDialog.h" />
     <QtMoc Include="Config\Graphics\EnhancementsWidget.h" />
     <QtMoc Include="Config\Graphics\GeneralWidget.h" />
     <QtMoc Include="Config\Graphics\GraphicsWindow.h" />

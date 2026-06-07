@@ -3,6 +3,8 @@
 
 #include <gtest/gtest.h>
 
+#include <fmt/ranges.h>
+
 #include "Common/BitField.h"
 #include "Common/CommonTypes.h"
 #include "Common/EnumFormatter.h"

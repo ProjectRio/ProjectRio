@@ -22,6 +22,7 @@
 #include "AudioCommon/AudioCommon.h"
 
 #include "Common/Assert.h"
+#include "Common/TimeUtil.h"
 #include "Core/HW/AddressSpace.h"
 #include "Common/CPUDetect.h"
 #include "Common/CommonPaths.h"
@@ -88,6 +89,7 @@
 
 #include "DiscIO/RiivolutionPatcher.h"
 #include "Core/MSB_StatTracker.h"
+#include "Core/MSB_GenerateQuickMatchSetupGeckoCode.h"
 
 #include "InputCommon/ControlReference/ControlReference.h"
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
@@ -105,6 +107,7 @@
 #include "VideoCommon/VideoConfig.h"
 
 #include "Common/TagSet.h"
+#include "Core/GeckoCodeConfig.h"
 
 namespace Core
 {
@@ -230,6 +233,11 @@ void RunRioFunctions(const Core::CPUThreadGuard& guard)
   {
     s_stat_tracker->Run(guard);
 
+    // Boot to main menu if there is an active tagset
+    if (PowerPC::MMU::HostRead_U16(guard, aRelState) == 0 && isTagSetActive())
+    {
+      PowerPC::MMU::HostWrite_U32(guard, 0x38600005, 0x8063F964);
+    }
     if (PowerPC::MMU::HostRead_U32(guard, aGameId) == 0)
     {
       runNetplayGameFunctions = true;
@@ -257,6 +265,8 @@ void RunRioFunctions(const Core::CPUThreadGuard& guard)
   }
 
   DisplayPlayerNames(guard);
+  if (Gecko::isLoadingFromHUD)
+    MSBQuickMatchBattingOrderMsg(guard, Gecko::HUDState);
   AutoGolfMode(guard);
   TrainingMode(guard);
 }
@@ -619,7 +629,7 @@ void DisplayPlayerNames(const Core::CPUThreadGuard& guard)
     // check for valid user
     if (batterName != "")
     {
-      OSD::AddTypedMessage(OSD::MessageType::CurrentBatter, fmt::format("Batter: {}", batterName),
+      OSD::AddTypedMessage(OSD::MessageType::CurrentBatter, fmt::format("B: {}", batterName),
                            OSD::Duration::SHORT, portColor[BatterPort]);
     }
 
@@ -627,7 +637,7 @@ void DisplayPlayerNames(const Core::CPUThreadGuard& guard)
     if (fielderName != "")
     {
       OSD::AddTypedMessage(OSD::MessageType::CurrentFielder,
-                           fmt::format("Fielder: {}", fielderName), OSD::Duration::SHORT,
+                           fmt::format("F: {}", fielderName), OSD::Duration::SHORT,
                            portColor[FielderPort]);
     }
 
@@ -703,6 +713,36 @@ void RunDraftTimer(const Core::CPUThreadGuard& guard)
                              fmt::format("Draft:  {}:0{}", draftMinutes, draftSeconds), 2000);
       }
     }
+  }
+}
+
+void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMatchGameState& state)
+{
+  // Validate state has been initialized
+  if (!state.firstBatter.has_value())
+  {
+    INFO_LOG_FMT(COMMON, "State.firstBatter doesn't have value - no message");
+    return;
+  }
+
+  // make batting order message if not in-game
+  RelNumber rel = static_cast<RelNumber>(PowerPC::MMU::HostRead_U16(guard, aRelNumber));
+  if (rel == RelNumber::MainMenu)
+  {
+    // create message
+    OSD::AddTypedMessage
+    (
+      OSD::MessageType::QuickMatchBattingOrder,
+      fmt::format
+      (
+        "Quick Match Setup V1 \n"
+        "The match will load to 1 pitch before the crash.\n"
+        "Everything will be set automatically.\n"
+        "Just press A and ignore the graphics.\n"
+      ), 
+      OSD::Duration::NORMAL,
+      OSD::Color::BLUE
+    );
   }
 }
 
@@ -1410,7 +1450,7 @@ static std::string GenerateScreenshotName()
 
   const std::time_t cur_time = std::time(nullptr);
   const std::string base_name =
-      fmt::format("{}_{:%Y-%m-%d_%H-%M-%S}", path_prefix, fmt::localtime(cur_time));
+      fmt::format("{}_{:%Y-%m-%d_%H-%M-%S}", path_prefix, Common::LocalTime(cur_time).value_or(std::tm{}));
 
   // First try a filename without any suffixes, if already exists then append increasing numbers
   std::string name = fmt::format("{}.png", base_name);
@@ -1828,21 +1868,6 @@ bool GameSupportsTagSets()
     return true;
   else
     return false;
-}
-
-std::optional<std::pair<u32,u32>> getGameFreeMemory()
-{
-  switch (mGameBeingPlayed) {
-  case GameName::MarioBaseball:
-    //return std::make_pair(0x802ED200, 0x802EE764);
-    return std::make_pair(0x802D5100, 0x802D9500);
-  case GameName::ToadstoolTour:
-    return std::nullopt;
-  case GameName::UnknownGame:
-    return std::nullopt;
-  default:
-    return std::nullopt;
-  }
 }
 
 int GetNextGolferID()

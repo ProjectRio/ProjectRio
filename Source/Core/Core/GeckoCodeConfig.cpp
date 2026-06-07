@@ -14,6 +14,8 @@
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 #include "Core/CheatCodes.h"
+#include "Core/MSB_GenerateQuickMatchSetupGeckoCode.h"
+#include "Core/GeckoCode.h"
 
 namespace Gecko
 {
@@ -144,14 +146,16 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
     std::optional<std::string> BuiltInGeckoCodes;
     if (gameId == "GYQE01")
     {
+      // Honor the local options for local play and the netplay-synced options for netplay; the two
+      // sets are kept separate so a persisted local setting can never leak into a netplay match.
+      const bool night_stadium = is_netplay ? isNightStadiumNetplay : isNightStadiumLocal;
+      const bool disable_replays = is_netplay ? isDisableReplaysNetplay : isDisableReplaysLocal;
+
       BuiltInGeckoCodes = MSSB_BuiltInGeckoCodes;
-      if (is_netplay)
-      {
-        if (isDisableReplays)
-          BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_DisableReplays;
-        if (isNightStadium)
-          BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_NightStadium;
-      }
+      if (night_stadium)
+        BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_NightStadium;
+      if (disable_replays)
+        BuiltInGeckoCodes = BuiltInGeckoCodes.value() + MSSB_DisableReplays;
     }
     // else if (gameId == "GFTE01")
     //   BuiltInGeckoCodes = MGTT_BuiltInGeckoCodes;
@@ -179,6 +183,15 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
       for (GeckoCode& code : gcodes)
         code.built_in_code = true;
     }
+  }
+
+  // append the gecko codes to allow starting a game from the latest hud game state.
+  // HUDState is pre-populated by OnFastResetFromHUDMsg before the game starts.
+  if (isLoadingFromHUD)
+  {
+          auto hudCodes = MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSetupGeckoCode(HUDState);
+          for (auto& code : hudCodes)
+              gcodes.push_back(std::move(code));
   }
 
   for (const auto* ini : {&globalIni, &localIni})
@@ -331,14 +344,58 @@ void ReadLines(std::vector<GeckoCode>& gcodes, std::vector<std::string>& lines, 
   }
 }
 
-void setDisableReplays(bool disable)
+bool isNightStadiumLocal = false;
+bool isNightStadiumNetplay = false;
+void setNightStadiumLocal(bool is_night)
 {
-  isDisableReplays = disable;
+  isNightStadiumLocal = is_night;
+}
+void setNightStadiumNetplay(bool is_night)
+{
+  isNightStadiumNetplay = is_night;
 }
 
-void setNightStadium(bool is_night)
+bool isDisableReplaysLocal = false;
+bool isDisableReplaysNetplay = false;
+void setDisableReplaysLocal(bool disable)
 {
-  isNightStadium = is_night;
+  isDisableReplaysLocal = disable;
+}
+void setDisableReplaysNetplay(bool disable)
+{
+  isDisableReplaysNetplay = disable;
+}
+
+void resetNetplayGameOptions()
+{
+  isNightStadiumNetplay = false;
+  isDisableReplaysNetplay = false;
+}
+
+// One-shot flag for the "fast reset from HUD" feature: when set, the next game boot is started
+// mid-game from a saved HUD state instead of from scratch.
+//
+// Set true by setFastResetFromHUD() after the HUD state is validated and loaded into HUDState:
+//   - local play: LocalPlayersWidget::ValidateAndApplyFastReset() when the checkbox is checked
+//   - netplay:    NetPlayClient::OnFastResetFromHUDMsg() when the host enables it for the lobby
+//
+// Used during boot:
+//   - LoadCodes() generates the quick-match setup gecko code from HUDState (see line ~190)
+//   - Core.cpp sends MSBQuickMatchBattingOrderMsg using HUDState
+// Both run before the game reaches INGAME.
+//
+// Reset to false:
+//   - StatTracker consumes it at the PREGAME->INGAME transition: it copies the value into
+//     m_game_info.fastResetFromHUD (the "Loaded from HUD" stat) and then immediately clears it,
+//     so the flag applies only to the game it was booted for and never leaks into the next game
+//     played in the same session.
+//   - Also cleared by the UI/netplay paths above when fast reset is disabled or emulation stops.
+bool isLoadingFromHUD = false;
+MSBQuickMatchGameState HUDState;
+
+void setFastResetFromHUD(bool load_from_hud)
+{
+  isLoadingFromHUD = load_from_hud;
 }
 
 }  // namespace Gecko

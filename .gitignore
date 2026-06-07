@@ -1,3 +1,5 @@
+# Ignore pyenv local version file (Python version for CI is managed in .github/workflows/main.yml)
+.python-version
 # Ignore image thumbnail files created by windows
 Thumbs.db
 # Ignore Finder view option files created by OS X
@@ -40,3 +42,7 @@ CMakeLists.txt.user
 # Ignore Visual Studio Code's working dir
 /.vscode/
 Installer/ProjectRioInstaller.exe
+# Ignore AppDir & LinuxDeploy Tools
+/AppDir/
+/Tools/linuxdeploy*
+/Tools/appimageupdatetool

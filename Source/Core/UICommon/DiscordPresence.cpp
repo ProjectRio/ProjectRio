@@ -210,15 +210,17 @@ void UpdateDiscordPresence(int party_size, SecretType type, const std::string& s
   DiscordRichPresence discord_presence = {};
   if (game_artwork.empty())
   {
-    discord_presence.largeImageKey = "dolphin_logo";
-    discord_presence.largeImageText = "Dolphin is an emulator for the GameCube and the Wii.";
+    discord_presence.largeImageKey = "project_rio";
+    discord_presence.largeImageText = "Project Rio is a custom Dolphin Emulator build for Mario "
+                                      "Superstar Baseball and Mario Golf: Toadstool Tour.";
   }
   else
   {
     discord_presence.largeImageKey = game_artwork.c_str();
     discord_presence.largeImageText = title.c_str();
-    discord_presence.smallImageKey = "dolphin_logo";
-    discord_presence.smallImageText = "Dolphin is an emulator for the GameCube and the Wii.";
+    discord_presence.smallImageKey = "project_rio";
+    discord_presence.smallImageText = "Project Rio is a custom Dolphin Emulator build for Mario "
+                                      "Superstar Baseball and Mario Golf: Toadstool Tour.";
   }
   discord_presence.details = title.empty() ? "Not in-game" : title.c_str();
   discord_presence.startTimestamp = std::chrono::duration_cast<std::chrono::seconds>(

@@ -15,6 +15,13 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg)
+
+if (Qt6_VERSION VERSION_GREATER_EQUAL 6.10.0)
+  # GuiPrivate is needed to #include qplatformnativeinterface.h in MainWindow.cpp with Qt 6.10+.
+  set(NEED_QT_GUI_PRIVATE_COMPONENT ON)
+  find_package(Qt6 REQUIRED COMPONENTS GuiPrivate)
+endif()
+
 message(STATUS "Found Qt version ${Qt6_VERSION}")
 
 set_property(TARGET Qt6::Core PROPERTY INTERFACE_COMPILE_FEATURES "")
@@ -102,6 +109,8 @@ add_executable(dolphin-emu
   Config/Graphics/PostProcessingConfigWindow.h
   Config/GraphicsModListWidget.cpp
   Config/GraphicsModListWidget.h
+  Config/TexturePackManagerDialog.cpp
+  Config/TexturePackManagerDialog.h
   Config/GraphicsModWarningWidget.cpp
   Config/GraphicsModWarningWidget.h
   Config/HardcoreWarningWidget.cpp
@@ -424,6 +433,13 @@ PRIVATE
   implot
 )
 
+if (NEED_QT_GUI_PRIVATE_COMPONENT)
+  target_link_libraries(dolphin-emu
+  PRIVATE
+    Qt6::GuiPrivate
+  )
+endif()
+
 if (WIN32)
   target_link_libraries(dolphin-emu
   PRIVATE
@@ -567,15 +583,17 @@ endif()
 
 if(APPLE)
   include(BundleUtilities)
-  set(BUNDLE_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/Dolphin.app)
+  set(BUNDLE_PATH ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ProjectRio.app)
 
   # Ask for an application bundle.
   set_target_properties(dolphin-emu PROPERTIES
     MACOSX_BUNDLE true
     MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "${DOLPHIN_VERSION_MAJOR}.${DOLPHIN_VERSION_MINOR}.${DOLPHIN_VERSION_PATCH_NUM}"
+    MACOSX_BUNDLE_BUNDLE_VERSION "${DOLPHIN_VERSION_MAJOR}.${DOLPHIN_VERSION_MINOR}.${DOLPHIN_VERSION_PATCH_NUM}"
     XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${CMAKE_CURRENT_SOURCE_DIR}/DolphinEmu.entitlements"
     XCODE_ATTRIBUTE_OTHER_CODE_SIGN_FLAGS "--deep --options=runtime"
-    OUTPUT_NAME Dolphin
+    OUTPUT_NAME ProjectRio
     )
 
   # Copy qt.conf into the bundle
@@ -583,8 +601,8 @@ if(APPLE)
   set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/qt.conf" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 
   # Copy icon into the bundle
-  target_sources(dolphin-emu PRIVATE "${CMAKE_SOURCE_DIR}/Data/Dolphin.icns")
-  set_source_files_properties("${CMAKE_SOURCE_DIR}/Data/Dolphin.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+  target_sources(dolphin-emu PRIVATE "${CMAKE_SOURCE_DIR}/Data/ProjectRio.icns")
+  set_source_files_properties("${CMAKE_SOURCE_DIR}/Data/ProjectRio.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 
   # Manually include plugins
   find_package(Qt6QMacStylePlugin REQUIRED PATHS ${Qt6Widgets_DIR})
@@ -615,8 +633,8 @@ if(APPLE)
     if(USE_BUNDLED_MOLTENVK)
       add_dependencies(dolphin-emu MoltenVK)
       ExternalProject_Get_Property(MoltenVK SOURCE_DIR)
-      target_sources(dolphin-emu PRIVATE "${SOURCE_DIR}/Package/Release/MoltenVK/dylib/macOS/libMoltenVK.dylib")
-      set_source_files_properties("${SOURCE_DIR}/Package/Release/MoltenVK/dylib/macOS/libMoltenVK.dylib" PROPERTIES MACOSX_PACKAGE_LOCATION Frameworks GENERATED ON)
+      target_sources(dolphin-emu PRIVATE "${SOURCE_DIR}/Package/Release/MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib")
+      set_source_files_properties("${SOURCE_DIR}/Package/Release/MoltenVK/dynamic/dylib/macOS/libMoltenVK.dylib" PROPERTIES MACOSX_PACKAGE_LOCATION Frameworks GENERATED ON)
     else()
       find_file(MOLTENVK_DYLIB NAMES libMoltenVK.dylib PATH_SUFFIXES lib)
       if(NOT MOLTENVK_DYLIB)

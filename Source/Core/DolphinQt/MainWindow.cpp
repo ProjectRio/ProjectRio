@@ -30,7 +30,7 @@
 #include "QtUtils/SignalDaemon.h"
 #endif
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__APPLE__)
 #include <qpa/qplatformnativeinterface.h>
 #endif
 
@@ -114,6 +114,7 @@
 #include "DolphinQt/QtUtils/SetWindowDecorations.h"
 #include "DolphinQt/QtUtils/WindowActivationEventFilter.h"
 #include "DolphinQt/RenderWidget.h"
+#include "DolphinQt/Config/TexturePackManagerDialog.h"
 #include "DolphinQt/ResourcePackManager.h"
 #include "DolphinQt/Resources.h"
 #include "DolphinQt/RiivolutionBootWidget.h"
@@ -617,6 +618,8 @@ void MainWindow::ConnectHotkeys()
   connect(m_hotkey_scheduler, &HotkeyScheduler::UnlockCursor, this, &MainWindow::UnlockCursor);
   connect(m_hotkey_scheduler, &HotkeyScheduler::TogglePauseHotkey, this, &MainWindow::TogglePause);
   connect(m_hotkey_scheduler, &HotkeyScheduler::ActivateChat, this, &MainWindow::OnActivateChat);
+  connect(m_hotkey_scheduler, &HotkeyScheduler::ChatSnapLeft, this, &MainWindow::OnChatSnapLeft);
+  connect(m_hotkey_scheduler, &HotkeyScheduler::ChatSnapRight, this, &MainWindow::OnChatSnapRight);
   connect(m_hotkey_scheduler, &HotkeyScheduler::RequestGolfControl, this,
           &MainWindow::OnRequestGolfControl);
   connect(m_hotkey_scheduler, &HotkeyScheduler::RefreshGameListHotkey, this,
@@ -698,6 +701,7 @@ void MainWindow::ConnectToolBar()
 
   connect(m_tool_bar, &ToolBar::StartNetPlayPressed, this, &MainWindow::ShowNetPlaySetupDialog);
   connect(m_tool_bar, &ToolBar::ViewGeckoCodes, this, &MainWindow::ShowGeckoCodes);
+  connect(m_tool_bar, &ToolBar::ViewTexturePacks, this, &MainWindow::ShowTexturePackManager);
   connect(m_tool_bar, &ToolBar::ViewLocalPlayers, this, &MainWindow::ShowLocalPlayersWindow);
   connect(m_tool_bar, &ToolBar::DiscordPressed, this, &MainWindow::ShowDiscordMenu);
 
@@ -1442,6 +1446,19 @@ void MainWindow::ShowGeckoCodes()
   m_gecko_dialog->activateWindow();
 }
 
+void MainWindow::ShowTexturePackManager()
+{
+  if (!m_texture_pack_dialog)
+  {
+    m_texture_pack_dialog = new TexturePackManagerDialog(this);
+    InstallHotkeyFilter(m_texture_pack_dialog);
+  }
+
+  m_texture_pack_dialog->show();
+  m_texture_pack_dialog->raise();
+  m_texture_pack_dialog->activateWindow();
+}
+
 
 
 void MainWindow::ShowFIFOPlayer()
@@ -2022,6 +2039,18 @@ void MainWindow::OnActivateChat()
 {
   if (g_netplay_chat_ui)
     g_netplay_chat_ui->Activate();
+}
+
+void MainWindow::OnChatSnapLeft()
+{
+  if (g_netplay_chat_ui)
+    g_netplay_chat_ui->RequestSnapLeftPillar();
+}
+
+void MainWindow::OnChatSnapRight()
+{
+  if (g_netplay_chat_ui)
+    g_netplay_chat_ui->RequestSnapRightPillar();
 }
 
 void MainWindow::OnRequestGolfControl()

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Symlink Discord IPC sockets into the sandbox so Rich Presence works.
+for i in 0 1 2 3 4 5 6 7 8 9; do
+  test -S "$XDG_RUNTIME_DIR/discord-ipc-$i" || \
+    ln -sf "app/com.discordapp.Discord/discord-ipc-$i" "$XDG_RUNTIME_DIR/discord-ipc-$i"
+done
+
+exec /app/bin/dolphin-emu "$@"

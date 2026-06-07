@@ -15,6 +15,7 @@ class CheatWarningWidget;
 class HardcoreWarningWidget;
 #endif  // USE_RETRO_ACHIEVEMENTS
 class QLabel;
+class QLineEdit;
 class QListWidget;
 class QListWidgetItem;
 class QTextEdit;
@@ -44,6 +45,7 @@ private:
   void OnItemChanged(QListWidgetItem* item);
   void OnListReordered();
   void OnContextMenuRequested();
+  void FilterList(const QString& text);
 
   void CreateWidgets();
   void ConnectWidgets();
@@ -67,6 +69,7 @@ private:
 #ifdef USE_RETRO_ACHIEVEMENTS
   HardcoreWarningWidget* m_hc_warning;
 #endif  // USE_RETRO_ACHIEVEMENTS
+  QLineEdit* m_search_box;
   QListWidget* m_code_list;
   QLabel* m_name_label;
   QLabel* m_creator_label;
