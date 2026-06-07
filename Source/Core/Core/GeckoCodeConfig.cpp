@@ -372,6 +372,24 @@ void resetNetplayGameOptions()
   isDisableReplaysNetplay = false;
 }
 
+// One-shot flag for the "fast reset from HUD" feature: when set, the next game boot is started
+// mid-game from a saved HUD state instead of from scratch.
+//
+// Set true by setFastResetFromHUD() after the HUD state is validated and loaded into HUDState:
+//   - local play: LocalPlayersWidget::ValidateAndApplyFastReset() when the checkbox is checked
+//   - netplay:    NetPlayClient::OnFastResetFromHUDMsg() when the host enables it for the lobby
+//
+// Used during boot:
+//   - LoadCodes() generates the quick-match setup gecko code from HUDState (see line ~190)
+//   - Core.cpp sends MSBQuickMatchBattingOrderMsg using HUDState
+// Both run before the game reaches INGAME.
+//
+// Reset to false:
+//   - StatTracker consumes it at the PREGAME->INGAME transition: it copies the value into
+//     m_game_info.fastResetFromHUD (the "Loaded from HUD" stat) and then immediately clears it,
+//     so the flag applies only to the game it was booted for and never leaks into the next game
+//     played in the same session.
+//   - Also cleared by the UI/netplay paths above when fast reset is disabled or emulation stops.
 bool isLoadingFromHUD = false;
 MSBQuickMatchGameState HUDState;
 
