@@ -529,6 +529,15 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
             if ((PowerPC::MMU::HostRead_U32(guard, aGameId) != 0) && (PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr) == 0x5) ) {
                 m_game_info.game_id = PowerPC::MMU::HostRead_U32(guard, aGameId);
                 //Sample settings
+
+                // Capture fast-reset-from-HUD at game start (the HUD gecko code is already applied
+                // at boot, so this flag is authoritative by now), then immediately clear the global.
+                // isLoadingFromHUD is a one-shot intent for the game being booted; clearing it here
+                // prevents the value leaking into the next game played in the same session, which
+                // previously left "Loaded from HUD": 1 on subsequent normal games.
+                m_game_info.fastResetFromHUD = Gecko::isLoadingFromHUD;
+                Gecko::setFastResetFromHUD(false);
+
                 m_game_info.netplay = m_state.m_netplay_session;
                 m_game_info.netplay_opponent_alias = m_state.m_netplay_opponent_alias;
                 m_game_info.tag_set_id =
