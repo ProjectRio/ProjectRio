@@ -28,6 +28,7 @@
     <ClCompile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <DisableSpecificWarnings>4459;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <AdditionalOptions>/wd4459 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
