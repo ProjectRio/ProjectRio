@@ -178,10 +178,10 @@ Section "Base"
   !insertmacro UPDATE_DISPLAYNAME
 
   ; Create start menu and desktop shortcuts
-  ; This needs to be done after Dolphin.exe is copied
+  ; This needs to be done after Project Rio.exe is copied
   CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
-  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\$DisplayName.lnk" "$INSTDIR\Dolphin.exe"
-  CreateShortCut "$DESKTOP\$DisplayName.lnk" "$INSTDIR\Dolphin.exe"
+  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\$DisplayName.lnk" "$INSTDIR\Project Rio.exe"
+  CreateShortCut "$DESKTOP\$DisplayName.lnk" "$INSTDIR\Project Rio.exe"
 
   ; ??
   SetOutPath "$TEMP"
@@ -197,12 +197,12 @@ SectionEnd
 Section -Post
   WriteUninstaller "$INSTDIR\uninst.exe"
 
-  WriteRegStr SHCTX "${PRODUCT_DIR_REGKEY}" "" "$INSTDIR\Dolphin.exe"
+  WriteRegStr SHCTX "${PRODUCT_DIR_REGKEY}" "" "$INSTDIR\Project Rio.exe"
 
   ; Write metadata for add/remove programs applet
   WriteRegStr SHCTX "${PRODUCT_UNINST_KEY}" "DisplayName" "$DisplayName"
   WriteRegStr SHCTX "${PRODUCT_UNINST_KEY}" "UninstallString" "$INSTDIR\uninst.exe /$MultiUser.InstallMode"
-  WriteRegStr SHCTX "${PRODUCT_UNINST_KEY}" "DisplayIcon" "$INSTDIR\Dolphin.exe"
+  WriteRegStr SHCTX "${PRODUCT_UNINST_KEY}" "DisplayIcon" "$INSTDIR\Project Rio.exe"
   WriteRegStr SHCTX "${PRODUCT_UNINST_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
   WriteRegStr SHCTX "${PRODUCT_UNINST_KEY}" "URLInfoAbout" "${PRODUCT_WEB_SITE}"
   WriteRegStr SHCTX "${PRODUCT_UNINST_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
@@ -225,7 +225,7 @@ Section Uninstall
   ; Be a bit careful to not delete files a user may have put into the install directory.
   Delete "$INSTDIR\*.dll"
   Delete "$INSTDIR\build_info.txt"
-  Delete "$INSTDIR\Dolphin.exe"
+  Delete "$INSTDIR\Project Rio.exe"
   Delete "$INSTDIR\DolphinTool.exe"
   Delete "$INSTDIR\DSPTool.exe"
   Delete "$INSTDIR\license.txt"
