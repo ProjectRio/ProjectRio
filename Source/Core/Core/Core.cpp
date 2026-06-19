@@ -362,14 +362,14 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
 {
   // if training mode config is on and not ranked netplay
   // using this feature on ranked can be considered an unfair advantage
-  if (!g_ActiveConfig.bTrainingModeOverlay || isTagSetActive())
+  if (!g_ActiveConfig.bTrainingModeOverlay) //|| isTagSetActive())
     return;
 
   if (mGameBeingPlayed == GameName::MarioBaseball)
   {
     // bool isPitchThrown = PowerPC::MMU::HostRead_U8(0x80895D6C) == 1 ? true : false;
-    bool isField = PowerPC::MMU::HostRead_U8(guard, aIsField) == 1 ? true : false;
-    bool isInGame = PowerPC::MMU::HostRead_U8(guard, aIsInGame) == 1 ? true : false;
+    // bool isField = PowerPC::MMU::HostRead_U8(guard, aIsField) == 1 ? true : false;
+    // bool isInGame = PowerPC::MMU::HostRead_U8(guard, aIsInGame) == 1 ? true : false;
     bool ContactMade = PowerPC::MMU::HostRead_U8(guard, aContactMade) == 1 ? true : false;
 
     // Batting Training Mode stats
@@ -390,8 +390,9 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
       int chargeDown = static_cast<int>(
           roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aChargeDown)) * 100));
 
-      float angle = roundf((float)PowerPC::MMU::HostRead_U16(guard, aBallAngle) * 36000 / 4096) /
-                    100;  // 0x400 == 90°, 0x800 == 180°, 0x1000 == 360°
+      // float angle = roundf((float)PowerPC::MMU::HostRead_U16(guard, aBallAngle) * 36000 / 4096) /
+                    // 100;  // 0x400 == 90°, 0x800 == 180°, 0x1000 == 360°
+      /*
       float xVelocity =
           roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallVelocity_X)) * 6000) /
           100;  // * 60 cause default units are meters per frame
@@ -400,7 +401,7 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
       float zVelocity =
           roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallVelocity_Z)) * 6000) / 100;
       float netVelocity = vectorMagnitude(xVelocity, yVelocity, zVelocity);
-
+      */
       // convert type of contact to string
       if (typeOfContact_Value == 0)
         typeOfContact = "Sour - Left";
@@ -442,29 +443,63 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
       int totalCharge;
       chargeUp == 100 ? totalCharge = chargeDown : totalCharge = chargeUp;
 
-      OSD::AddTypedMessage(OSD::MessageType::TrainingModeBatting,
-                           fmt::format("Batting Data:                    \n"
-                                       "Contact Frame:  {}\n"
-                                       "Type of Contact:  {}\n"
-                                       "Contact Quality: {}\n"
-                                       "Input Direction:  {}\n"
-                                       "Charge Percent:  {}%\n"
-                                       "Ball Angle:  {}°\n\n"
-                                       "Exit Velocities:  \n"
-                                       "X :  {} m/s  -->  {} mph\n"
-                                       "Y:  {} m/s  -->  {} mph\n"
-                                       "Z :  {} m/s  -->  {} mph\n"
-                                       "Net:  {} m/s  -->  {} mph",
-                                       contactFrame, typeOfContact, contactQuality, inputDirection,
-                                       totalCharge, angle, xVelocity, ms_to_mph(xVelocity),
-                                       yVelocity, ms_to_mph(yVelocity), zVelocity,
-                                       ms_to_mph(zVelocity), netVelocity, ms_to_mph(netVelocity)),
-                           8000);  // message time & color
+      if (totalCharge > 0.0)
+      {
+        OSD::AddTypedMessage(
+            OSD::MessageType::TrainingModeBatting,
+            fmt::format("Batting Data                    \n\n"
+                        "Contact Frame:      {}\n\n"
+                        "Contact Type:       {}\n\n"
+                        "Contact Quality:    {:.2f}\n\n"
+                        "Input Direction:    {}\n\n"
+                        "Charge Percent:     {}%\n",
+                        // "Ball Angle:         {}°\n",
+                        /* "Exit Velocities:  \n"
+                        "X :  {:.2f} m/s  -->  {:.2f} mph\n"
+                        "Y:  {:.2f} m/s  -->  {:.2f} mph\n"
+                        "Z :  {:.2f} m/s  -->  {:.2f} mph\n"
+                        "Net:  {:.2f} m/s  -->  {:.2f} mph",
+                        contactFrame, typeOfContact, contactQuality, inputDirection,
+                        totalCharge, angle, xVelocity, ms_to_mph(xVelocity),
+                        yVelocity, ms_to_mph(yVelocity), zVelocity,
+                        ms_to_mph(zVelocity), netVelocity, ms_to_mph(netVelocity)), */
+                        contactFrame, typeOfContact, contactQuality, inputDirection,
+                        totalCharge),  //, angle),
+
+            8000);  // message time & color
+      }
+      else
+      {
+        OSD::AddTypedMessage(
+            OSD::MessageType::TrainingModeBatting,
+            fmt::format("Batting Data                    \n\n"
+                        "Contact Frame:      {}\n\n"
+                        "Contact Type:       {}\n\n"
+                        "Contact Quality:    {:.2f}\n\n"
+                        "Input Direction:    {}\n",
+                        // "Charge Percent:     {}%\n",
+                        // "Ball Angle:         {}°\n",
+                        /* "Exit Velocities:  \n"
+                        "X :  {:.2f} m/s  -->  {:.2f} mph\n"
+                        "Y:  {:.2f} m/s  -->  {:.2f} mph\n"
+                        "Z :  {:.2f} m/s  -->  {:.2f} mph\n"
+                        "Net:  {:.2f} m/s  -->  {:.2f} mph",
+                        contactFrame, typeOfContact, contactQuality, inputDirection,
+                        totalCharge, angle, xVelocity, ms_to_mph(xVelocity),
+                        yVelocity, ms_to_mph(yVelocity), zVelocity,
+                        ms_to_mph(zVelocity), netVelocity, ms_to_mph(netVelocity)), */
+                        contactFrame, typeOfContact, contactQuality, inputDirection),
+                        // totalCharge),  //, angle),
+
+            8000);  // message time & color
+      }
     }
 
     // Coordinate data
-    if (isInGame)
-    {
+    // if (isInGame)
+    // {
+      /*
+      
       float BallPos_X =
           roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallPosition_X)) * 100) / 100;
       float BallPos_Y =
@@ -491,7 +526,8 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
       int baseOffset = 0x268 * PowerPC::MMU::HostRead_U8(
                                    guard, 0x80892801);  // used to get offsed for baseFielderAddr
       u32 baseFielderAddr = 0x8088F368 + baseOffset;    // 0x0 == x; 0x8 == y; 0xc == z
-
+      */
+      /*
       float FielderPos_X =
           roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr)) * 100) / 100;
       float FielderPos_Y =
@@ -507,8 +543,9 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
           roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr + 0x34)) * 6000) /
           100;
       float FielderVel_Net =
-          roundf(vectorMagnitude(FielderVel_X, 0 /*FielderVel_Y*/, FielderVel_Z) * 100) / 100;
-
+          roundf(vectorMagnitude(FielderVel_X, 0, FielderVel_Z) * 100) / 100;
+      */
+      /*
       OSD::AddTypedMessage(
           OSD::MessageType::TrainingModeBallCoordinates,
           fmt::format("Ball Coordinates:                \n"
@@ -524,7 +561,7 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
                       ms_to_mph(BallVel_Y), BallVel_Z, ms_to_mph(BallVel_Z), BallVel_Net,
                       ms_to_mph(BallVel_Net)),
           200, OSD::Color::CYAN);  // short time cause we don't want this info to linger
-
+      
       OSD::AddTypedMessage(OSD::MessageType::TrainingModeFielderCoordinates,
                            fmt::format("Fielder Coordinates:             \n"
                                        "X:  {}\n"
@@ -541,8 +578,9 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
                                        FielderVel_Z, ms_to_mph(FielderVel_Z), FielderVel_Net,
                                        ms_to_mph(FielderVel_Net)),
                            200, OSD::Color::CYAN);
-    }
-
+                            */
+    // }
+   
     previousContactMade = ContactMade;
   }
   else if (mGameBeingPlayed == GameName::ToadstoolTour)
@@ -561,18 +599,21 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
         PowerPC::MMU::HostRead_U32(guard, aActiveShotVerticalAdjustment);
     int ActiveShotHorizontalAdjustment =
         PowerPC::MMU::HostRead_U32(guard, aActiveShotHorizontalAdjustment);
+    int isGolfing = PowerPC::MMU::HostRead_U8(guard, aIsGolfMatch);
+
+    if (isGolfing)
 
     OSD::AddTypedMessage(OSD::MessageType::TrainingModeGolfing,
-                         fmt::format("Golf Training Mode:                    \n"
-                                     "Distance to Hole:  {}\n"
-                                     "Shot Aim Angle:  {}\n"
-                                     "Vertical Adj:  {} / {}\n"
-                                     "Horizontal Adj:  {} / {}\n"
-                                     "Shot Accuracy:  {}\n"
-                                     "Power Meter Accuracy:  {}\n"
-                                     "Ball Sim Aim X:  {}\n"
-                                     "Ball Sim Aim Y:  {}\n"
-                                     "Ball Sim Aim Z:  {}\n",
+                         fmt::format("Shot Data                       \n\n"
+                                     "Hole Distance:          {:.2f}\n\n"
+                                     "Aim Angle:              {:.2f}\n\n"
+                                     "Vertical Adj:           {} | {}\n\n"
+                                     "Horizontal Adj:         {} | {}\n\n"
+                                     "Shot Accuracy:          {}\n\n"
+                                     "Power Meter Hit:        {}\n\n"
+                                     "Sim Aim X:              {:.2f}\n\n"
+                                     "Sim Aim Y:              {:.2f}\n\n"
+                                     "Sim Aim Z:              {:.2f}\n",
                                      DistanceRemainingToHole, CurrentShotAimAngle,
                                      PreShotVerticalAdjustment, ActiveShotVerticalAdjustment,
                                      PreShotHorizontalAdjustment, ActiveShotHorizontalAdjustment,
