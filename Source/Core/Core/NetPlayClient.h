@@ -166,7 +166,7 @@ public:
   void RequestGolfControl();
   std::string GetCurrentGolfer();
   std::vector<std::string> v_ActiveGeckoCodes;
-  std::map<u8, u32> ourChecksum;
+  //std::map<u8, u32> ourChecksum;
 
   // Send and receive pads values
   struct WiimoteDataBatchEntry
@@ -200,7 +200,7 @@ public:
   bool PortHasPlayerAssigned(int port);
 
   static void SendTimeBase();
-  static void SendChecksum(u8 checksumId, u64 frame, u32 checksum);
+  //static void SendChecksum(u8 checksumId, u64 frame, u32 checksum);
   bool DoAllPlayersHaveGame();
 
   static std::string GetNetplayNames(u8 PortInt);
@@ -366,7 +366,7 @@ private:
   void OnSendCodesMsg(sf::Packet& packet);
   void OnCoinFlipMsg(sf::Packet& packet);
   void OnNightMsg(sf::Packet& packet);
-  void OnChecksumMsg(sf::Packet& packet);
+  //void OnChecksumMsg(sf::Packet& packet);
   void OnGameIDMsg(sf::Packet& packet);
   void OnStadiumMsg(sf::Packet& packet);
   void OnCourseMsg(sf::Packet& packet);

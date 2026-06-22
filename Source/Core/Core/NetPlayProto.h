@@ -175,7 +175,7 @@ enum class MessageID : u8
 
   TimeBase = 0xB0,
   DesyncDetected = 0xB1,
-  Checksum = 0xB2,
+  //Checksum = 0xB2,
 
   ComputeGameDigest = 0xC0,
   GameDigestProgress = 0xC1,
