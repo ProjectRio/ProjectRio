@@ -298,12 +298,12 @@ void AutoGolfMode(const Core::CPUThreadGuard& guard)
 
 void MSSBCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer)
 {
-  u8 BatterPort = PowerPC::MMU::HostRead_U8(guard, aBatterPort);
-  u8 FielderPort = PowerPC::MMU::HostRead_U8(guard, aFielderPort);
+  u8 BatterPort = PowerPC::MMU::HostRead_U32(guard, aBatterPort);
+  u8 FielderPort = PowerPC::MMU::HostRead_U32(guard, aFielderPort);
   bool isField = PowerPC::MMU::HostRead_U8(guard, aIsField) == 1;
 
-  // means game hasn't started yet
-  if (BatterPort == 0)
+  RelNumber rel = static_cast<RelNumber>(PowerPC::MMU::HostRead_U16(guard, aRelNumber));
+  if (rel != RelNumber::InGame)
     return;
 
   // makes the player who paused the golfer
@@ -314,17 +314,17 @@ void MSSBCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer)
   int minigameId = PowerPC::MMU::HostRead_U8(guard, aMinigameID);
   if (minigameId == 3 || minigameId == 1)
   {
-    BatterPort = PowerPC::MMU::HostRead_U8(guard, aBarrelBatterPort) + 1;
+    BatterPort = PowerPC::MMU::HostRead_U8(guard, aBarrelBatterPort);
     isField = false;
   }
   else if (minigameId == 2)
   {
-    FielderPort = PowerPC::MMU::HostRead_U8(guard, aWallBallPort) + 1;
+    FielderPort = PowerPC::MMU::HostRead_U8(guard, aWallBallPort);
     isField = true;
   }
 
   // evaluate which player should be golfer here
-  nextGolfer = isField ? FielderPort - 1 : BatterPort - 1;  // subtract 1 since m_pad_map uses 0->3 instead of 1->4
+  nextGolfer = isField ? FielderPort : BatterPort;
 }
 
 void MGTTCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer)
@@ -375,9 +375,7 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
     // Batting Training Mode stats
     if (ContactMade && !previousContactMade)
     {
-      u8 BatterPort = PowerPC::MMU::HostRead_U8(guard, aBatterPort);
-      if (BatterPort > 0)
-        BatterPort--;
+      u8 BatterPort = PowerPC::MMU::HostRead_U32(guard, aBatterPort);
       u32 stickDirectionAddr = 0x8089392D + (0x10 * BatterPort);
       float contactQuality = PowerPC::MMU::HostRead_F32(guard, aAB_ContactQuality);
       u16 contactFrame = PowerPC::MMU::HostRead_U16(guard, aContactFrame);
@@ -599,14 +597,10 @@ void DisplayPlayerNames(const Core::CPUThreadGuard& guard)
   {
   case GameName::MarioBaseball:
   {
-    u8 BatterPort = PowerPC::MMU::HostRead_U8(guard, aBatterPort);
-    u8 FielderPort = PowerPC::MMU::HostRead_U8(guard, aFielderPort);
-    if (BatterPort == 0 || FielderPort == 0)  // game hasn't started yet; do not continue func
+    u8 BatterPort = PowerPC::MMU::HostRead_U32(guard, aBatterPort);
+    u8 FielderPort = PowerPC::MMU::HostRead_U32(guard, aFielderPort);
+    if (PowerPC::MMU::HostRead_U8(guard, aHasMatchStarted) == 0)
       break;
-
-    // subtract 1 from each port so they can be used as indeces in the arrays
-    BatterPort--;
-    FielderPort--;
 
     std::string batterName = "";
     std::string fielderName = "";

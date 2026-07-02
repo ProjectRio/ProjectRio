@@ -266,8 +266,8 @@ bool GameSupportsTagSets();
 
 static const u32 aRelState = 0x800E877C;
 static const u32 aOpponentPort = 0x802EBF92;
-static const u32 aFielderPort = 0x802EBF94;
-static const u32 aBatterPort = 0x802EBF95;
+static const u32 aBatterPort = 0x80892990;
+static const u32 aFielderPort = 0x80892994;
 static const u32 aIsField = 0x8089389B;
 static const u32 aIsInGame = 0x80871A6D;
 static const u32 aContactMade = 0x808909A1;
@@ -292,6 +292,7 @@ static const u32 aWhoPaused = 0x8039D7D3; // 2 == fielder, 1 == batter
 //static const u32 aMatchStarted = 0x8036F3B8;  // bool for if a game is in session
 static const u32 aSceneId = 0x800E877F;
 static const u32 aRelNumber = 0x800E877C;
+static const u32 aHasMatchStarted = 0x80892AB5;
 
 // toadstooltour addresses
 static const u32 aDistanceRemainingToHole = 0x802D7368;
