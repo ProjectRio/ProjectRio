@@ -495,8 +495,6 @@ static const u8 c_offensive_stat_offset = 0x26;
 
 
 //Event Scenario 
-static const u32 aAB_BatterPort      = 0x802EBF95;
-static const u32 aAB_PitcherPort     = 0x802EBF94;
 static const u32 aAB_BatterRosterID  = 0x80890971;
 static const u32 aAB_Inning          = 0x808928A3;
 static const u32 aAB_HalfInning      = 0x8089294D;
@@ -598,8 +596,6 @@ static const u32 aAB_FinalResult = 0x80893BAA;
 static const u32 aAB_FrameOfSwing = 0x80890976; //(halfword) frame of swing animation; stops increasing when contact is made
 static const u32 aAB_FrameOfPitchSeqUponSwing    = 0x80890978; //(halfword) frame of pitch that the batter swung
 
-static const u32 aAB_FieldingPort = 0x802EBF94;
-static const u32 aAB_BattingPort = 0x802EBF95;
 
 //Fielder addrs
 //All of these addrs start with the pitcher. The rest are 0x268 away
