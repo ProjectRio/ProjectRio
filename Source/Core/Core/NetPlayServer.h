@@ -6,11 +6,13 @@
 #include <SFML/Network/Packet.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <queue>
+#include <set>
 #include <sstream>
 #include <thread>
 #include <unordered_map>
@@ -70,6 +72,9 @@ public:
 
   void AdjustPadBufferSize(unsigned int size);
   void SetHostInputAuthority(bool enable);
+  // When enabled, the server switches to golf mode while Mario Baseball reports
+  // being in-game (RelNumber == 5) and back to fair input delay otherwise.
+  void SetAutoNetcodeSwitch(bool enable);
   void SetTagSet(bool exists, int tagset_id);
 
   void AdjustNightStadium(bool is_night);
@@ -166,6 +171,12 @@ private:
   void SetupIndex();
   bool PlayerHasControllerMapped(PlayerId pid) const;
 
+  bool StartNetcodeSwitch(bool enable);
+  void BeginNetcodeSwitchPhase();
+  void HandleNetcodeSwitchAck(PlayerId pid);
+  void CompleteNetcodeSwitch();
+  void CheckNetcodeSwitch();
+
   // pulled from OnConnect()
   void AssignNewUserAPad(const Client& player);
   // pulled from OnConnect()
@@ -192,6 +203,19 @@ private:
   bool m_host_input_authority = false;
   PlayerId m_current_golfer = 1;
   PlayerId m_pending_golfer = 0;
+
+  // Mid-game netcode switch state (guarded by m_crit.game). While a switch is in
+  // progress every in-game client is stalled; the mode is only flipped once all
+  // of them have acked, so no pad data straddles the switch.
+  bool m_netcode_switch_in_progress = false;
+  bool m_netcode_switch_target = false;
+  int m_netcode_switch_phase = 1;
+  u32 m_netcode_switch_seq = 0;
+  std::set<PlayerId> m_netcode_switch_pending_acks;
+  std::chrono::steady_clock::time_point m_netcode_switch_deadline;
+  bool m_auto_netcode_switch = false;
+  bool m_auto_netcode_last_want = false;
+  std::chrono::steady_clock::time_point m_auto_netcode_want_since;
 
   bool m_current_night_value = false;
   bool m_current_disable_replays_value = false;

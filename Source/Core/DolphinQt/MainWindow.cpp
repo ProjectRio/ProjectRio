@@ -1667,13 +1667,14 @@ bool MainWindow::NetPlayJoin()
 
   const std::string traversal_host = Config::Get(Config::NETPLAY_TRAVERSAL_SERVER);
   const u16 traversal_port = Config::Get(Config::NETPLAY_TRAVERSAL_PORT);
-  const std::string network_mode = Config::Get(Config::NETPLAY_NETWORK_MODE);
-  const bool host_input_authority = network_mode == "hostinputauthority" || network_mode == "golf";
 
   const bool is_hosting_netplay = server != nullptr;
   if (is_hosting_netplay)
   {
-    server->SetHostInputAuthority(host_input_authority);
+    // Sessions always run in golf mode. For Mario Baseball the server
+    // automatically drops to fair input delay outside of matches.
+    server->SetHostInputAuthority(true);
+    server->SetAutoNetcodeSwitch(true);
     server->AdjustPadBufferSize(Config::Get(Config::NETPLAY_BUFFER_SIZE));
     bool tagset_exists = m_netplay_setup_dialog->GetTagSet().has_value();
     int tagset_id = tagset_exists ? m_netplay_setup_dialog->GetTagSet().value().id : 0;

@@ -163,6 +163,12 @@ enum class MessageID : u8
   GolfAcquire = 0x92,
   GolfRelease = 0x93,
   GolfPrepare = 0x94,
+  // Mid-game netcode switch (fair input delay <-> golf/host input authority).
+  // The server broadcasts Prepare, every in-game client stalls input polling and
+  // replies with Ack, and once all acks are in the server broadcasts
+  // HostInputAuthority which flips the mode and resumes the clients.
+  NetcodeSwitchPrepare = 0x95,
+  NetcodeSwitchAck = 0x96,
 
   StartGame = 0xA0,
   ChangeGame = 0xA1,

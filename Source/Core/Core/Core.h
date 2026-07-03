@@ -64,6 +64,26 @@ enum class RelNumber : u16 {
   InGame = 5,
 };
 
+enum class GameType : u8 {
+    ExhibitionGame=0,
+    Practice=2,
+    Demo=4,
+    Challenge=5,
+    ToyField=6,
+    Minigames=7
+};
+
+enum class Minigame : u8 {
+  None=0,
+  BobOmbDerby=1,
+  WallBall=2,
+  BarrelBatter=3,
+  ChainChompSprint=4,
+  PiranhaPanic=5,
+  StarDash=6,
+  MarioGrandPrix=7
+};
+
 // Console type values based on:
 //  - YAGCD 4.2.1.1.2
 //  - OSInit (GameCube ELF from Finding Nemo)
@@ -244,6 +264,12 @@ void SetAvgPing(const Core::CPUThreadGuard& guard);
 void SetNetplayerUserInfo();
 void RunDraftTimer(const Core::CPUThreadGuard& guard);
 int GetNextGolferID();
+GameName GetGameBeingPlayed();
+// True while Mario Baseball's RelNumber/GameType say the current state should be
+// played in golf mode (in-game exhibition/practice/challenge/minigames) rather
+// than fair input delay (menus, demo, toy field). Updated each frame on the CPU
+// thread; safe to read from other threads.
+bool AutoGolfWanted();
 
 //enum class GameMode
 //{
@@ -293,6 +319,7 @@ static const u32 aWhoPaused = 0x8039D7D3; // 2 == fielder, 1 == batter
 static const u32 aSceneId = 0x800E877F;
 static const u32 aRelNumber = 0x800E877C;
 static const u32 aHasMatchStarted = 0x80892AB5;
+static const u32 aGameModeSelected = 0x800E8703;
 
 // toadstooltour addresses
 static const u32 aDistanceRemainingToHole = 0x802D7368;

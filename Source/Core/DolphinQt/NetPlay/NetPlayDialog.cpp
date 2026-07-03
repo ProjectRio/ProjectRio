@@ -192,27 +192,6 @@ void NetPlayDialog::CreateMainLayout()
          "uses the same video backend."));
   m_strict_settings_sync_action->setCheckable(true);
 
-  m_network_menu = m_menu_bar->addMenu(tr("Network"));
-  m_network_menu->setToolTipsVisible(true);
-  m_golf_mode_action = m_network_menu->addAction(tr("Auto Golf Mode"));
-  m_golf_mode_action->setToolTip(tr("One player will have 0 input delay (the golfer), while the "
-                                    "opponent will have a latency penalty.\n"
-                                    "With Auto Golf Mode, the Batter is always set to the golfer, "
-                                    "then when the ball is hit the golfer\n"
-                                    "will automatically switch to the fielder.\n\nThis is the standard for competitive NetPlay."));
-  m_golf_mode_action->setCheckable(true);
-  m_fixed_delay_action = m_network_menu->addAction(tr("Fair Input Delay"));
-  m_fixed_delay_action->setToolTip(
-      tr("Each player sends their own inputs to the game, with equal buffer size for all players, "
-         "configured by the host.\nRecommended only for casual games or when playing minigames."));
-  m_fixed_delay_action->setCheckable(true);
-
-  m_network_mode_group = new QActionGroup(this);
-  m_network_mode_group->setExclusive(true);
-  m_network_mode_group->addAction(m_fixed_delay_action);
-  m_network_mode_group->addAction(m_golf_mode_action);
-  m_fixed_delay_action->setChecked(true);
-
   m_game_digest_menu = m_menu_bar->addMenu(tr("Checksum"));
   m_game_digest_menu->addAction(tr("Current game"), this, [this] {
     Settings::Instance().GetNetPlayServer()->ComputeGameDigest(m_current_game_identifier);
@@ -445,18 +424,6 @@ void NetPlayDialog::ConnectWidgets()
   connect(m_random_9, &QPushButton::clicked, this, [this] { NetPlayDialog::OnRandomCourse(true); });
   connect(m_random_18, &QPushButton::clicked, this, [this] { NetPlayDialog::OnRandomCourse(false); });
   
-  const auto hia_function = [this](bool enable) {
-    if (m_host_input_authority != enable)
-    {
-      auto server = Settings::Instance().GetNetPlayServer();
-      if (server)
-        server->SetHostInputAuthority(enable);
-    }
-  };
-
-  connect(m_golf_mode_action, &QAction::toggled, this, [hia_function] { hia_function(true); });
-  connect(m_fixed_delay_action, &QAction::toggled, this, [hia_function] { hia_function(false); });
-
   connect(m_start_button, &QPushButton::clicked, this, &NetPlayDialog::OnStart);
   connect(m_quit_button, &QPushButton::clicked, this, &NetPlayDialog::reject);
 
@@ -501,9 +468,7 @@ void NetPlayDialog::ConnectWidgets()
   connect(m_record_input_action, &QAction::toggled, this, &NetPlayDialog::SaveSettings);
   connect(m_strict_settings_sync_action, &QAction::toggled, this, &NetPlayDialog::SaveSettings);
   //connect(m_host_input_authority_action, &QAction::toggled, this, &NetPlayDialog::SaveSettings);
-  connect(m_golf_mode_action, &QAction::toggled, this, &NetPlayDialog::SaveSettings);
   connect(m_golf_mode_overlay_action, &QAction::toggled, this, &NetPlayDialog::SaveSettings);
-  connect(m_fixed_delay_action, &QAction::toggled, this, &NetPlayDialog::SaveSettings);
   connect(m_hide_remote_gbas_action, &QAction::toggled, this, &NetPlayDialog::SaveSettings);
   //connect(m_night_stadium_action, &QAction::toggled, this, &NetPlayDialog::SaveSettings);
   //connect(m_disable_music_action, &QAction::toggled, this, &NetPlayDialog::SaveSettings);
@@ -784,7 +749,6 @@ void NetPlayDialog::show(bool use_traversal)
   }
 
   m_data_menu->menuAction()->setVisible(is_hosting);
-  m_network_menu->menuAction()->setVisible(is_hosting);
   m_game_digest_menu->menuAction()->setVisible(is_hosting);
 #ifdef HAS_LIBMGBA
   m_hide_remote_gbas_action->setVisible(is_hosting);
@@ -1163,8 +1127,6 @@ void NetPlayDialog::SetOptionsEnabled(bool enabled)
     m_assign_ports_button->setEnabled(enabled);
     m_strict_settings_sync_action->setEnabled(enabled);
     //m_host_input_authority_action->setEnabled(enabled);
-    m_golf_mode_action->setEnabled(enabled);
-    m_fixed_delay_action->setEnabled(enabled);
     m_night_stadium->setEnabled(enabled);
     m_disable_replays->setEnabled(enabled);
     m_fast_reset_from_HUD->setEnabled(enabled);
@@ -1196,7 +1158,10 @@ void NetPlayDialog::OnMsgStartGame()
   g_netplay_chat_ui =
       std::make_unique<NetPlayChatUI>([this](const std::string& message) { SendMessage(message); });
 
-  if (m_host_input_authority && Settings::Instance().GetNetPlayClient()->GetNetSettings().golf_mode)
+  // Checked against golf_mode alone (not host input authority) so auto netcode
+  // sessions, which start in fair input delay, still get the overlay when golf
+  // mode engages mid-game.
+  if (Settings::Instance().GetNetPlayClient()->GetNetSettings().golf_mode)
   {
     g_netplay_golf_ui = std::make_unique<NetPlayGolfUI>(Settings::Instance().GetNetPlayClient());
   }
@@ -1507,21 +1472,6 @@ void NetPlayDialog::LoadSettings()
   //m_highlight_ball_shadow_action->setChecked(highlight_ball_shadow);
   //m_never_cull_action->setChecked(never_cull);
 
-  const std::string network_mode = Config::Get(Config::NETPLAY_NETWORK_MODE);
-
-  if (network_mode == "fixeddelay")
-  {
-    m_fixed_delay_action->setChecked(true);
-  }
-  else if (network_mode == "golf")
-  {
-    m_golf_mode_action->setChecked(true);
-  }
-  else
-  {
-    WARN_LOG_FMT(NETPLAY, "Unknown network mode '{}', using 'fixeddelay'", network_mode);
-    m_fixed_delay_action->setChecked(true);
-  }
 }
 
 void NetPlayDialog::SaveSettings()
@@ -1550,17 +1500,6 @@ void NetPlayDialog::SaveSettings()
   //Config::SetBase(Config::NETPLAY_HIGHLIGHT_BALL_SHADOW, m_highlight_ball_shadow_action->isChecked());
   //Config::SetBase(Config::NETPLAY_NEVER_CULL, m_never_cull_action->isChecked());
 
-  std::string network_mode;
-  if (m_fixed_delay_action->isChecked())
-  {
-    network_mode = "fixeddelay";
-  }
-  else if (m_golf_mode_action->isChecked())
-  {
-    network_mode = "golf";
-  }
-
-  Config::SetBase(Config::NETPLAY_NETWORK_MODE, network_mode);
 }
 
 void NetPlayDialog::ShowGameDigestDialog(const std::string& title)

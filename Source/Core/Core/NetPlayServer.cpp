@@ -40,6 +40,7 @@
 #include "Core/Config/SessionSettings.h"
 #include "Core/ConfigLoaders/GameConfigLoader.h"
 #include "Core/ConfigManager.h"
+#include "Core/Core.h"
 #include "Core/GeckoCode.h"
 #include "Core/GeckoCodeConfig.h"
 #include "Core/HW/EXI/EXI.h"
@@ -313,6 +314,10 @@ void NetPlayServer::ThreadFunc()
       INFO_LOG_FMT(NETPLAY, "Processing async queue event done.");
       m_async_queue.Pop();
     }
+
+    // drives the automatic golf <-> fair input delay switching and its timeout
+    CheckNetcodeSwitch();
+
     if (net > 0)
     {
       switch (netEvent.type)
@@ -577,6 +582,9 @@ unsigned int NetPlayServer::OnDisconnect(const Client& player)
     m_start_pending = false;
   }
 
+  // don't wait on a netcode switch ack that will never come
+  HandleNetcodeSwitchAck(pid);
+
   sf::Packet spac;
   spac << MessageID::PlayerLeave;
   spac << pid;
@@ -789,6 +797,16 @@ void NetPlayServer::SetHostInputAuthority(const bool enable)
 {
   std::lock_guard lkg(m_crit.game);
 
+  if (m_is_running)
+  {
+    // While a game is running the mode can't just be flipped: clients keep
+    // producing pad data until they hear about the change, which would misalign
+    // the pad streams between clients and desync the game. Run the synchronized
+    // switch instead.
+    StartNetcodeSwitch(enable);
+    return;
+  }
+
   m_host_input_authority = enable;
 
   // tell clients about the new value
@@ -801,6 +819,199 @@ void NetPlayServer::SetHostInputAuthority(const bool enable)
   // resend pad buffer to clients when disabled
   if (!m_host_input_authority)
     AdjustPadBufferSize(m_target_buffer_size);
+}
+
+// called from ---GUI--- thread and ---NETPLAY--- thread
+bool NetPlayServer::StartNetcodeSwitch(const bool enable)
+{
+  std::lock_guard lkg(m_crit.game);
+
+  if (m_netcode_switch_in_progress || m_pending_golfer != 0)
+    return false;
+
+  if (enable == m_host_input_authority)
+    return true;
+
+  if (enable)
+  {
+    // If the golfer from an earlier golf period has left the game, hand golf to
+    // the host before enabling, so somebody actually produces input afterwards.
+    std::lock_guard lkp(m_crit.players);
+    const auto golfer_it = m_players.find(m_current_golfer);
+    if (golfer_it == m_players.end() || golfer_it->second.current_game != m_current_game)
+    {
+      m_current_golfer = 1;
+
+      sf::Packet spac;
+      spac << MessageID::GolfSwitch;
+      spac << PlayerId{1};
+      SendAsyncToClients(std::move(spac));
+    }
+  }
+
+  m_netcode_switch_in_progress = true;
+  m_netcode_switch_target = enable;
+  m_netcode_switch_phase = 1;
+  ++m_netcode_switch_seq;
+  m_netcode_switch_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+
+  BeginNetcodeSwitchPhase();
+  return true;
+}
+
+// called from ---NETPLAY--- thread (and StartNetcodeSwitch)
+//
+// The stall order matters. A client can only park at the stall at the top of
+// GetNetPads while the data it is waiting on keeps flowing, and a switch to
+// fair input delay requires everyone to resume from that stall (that is where
+// a client primes its own pad buffer). So when enabling golf mode the golfer
+// parks first (everyone else still produces, and they may ack from inside the
+// buffer wait since the golfer will feed them after the switch), and when
+// disabling it the non-golfers park first while the golfer keeps producing,
+// with the golfer parking last.
+void NetPlayServer::BeginNetcodeSwitchPhase()
+{
+  std::lock_guard lkg(m_crit.game);
+
+  while (true)
+  {
+    m_netcode_switch_pending_acks.clear();
+    const bool golfer_phase = m_netcode_switch_target == (m_netcode_switch_phase == 1);
+    {
+      std::lock_guard lkp(m_crit.players);
+      for (const auto& player_entry : m_players)
+      {
+        if (player_entry.second.current_game != m_current_game)
+          continue;
+        if ((player_entry.first == m_current_golfer) == golfer_phase)
+          m_netcode_switch_pending_acks.insert(player_entry.first);
+      }
+    }
+
+    if (!m_netcode_switch_pending_acks.empty())
+    {
+      for (const PlayerId pid : m_netcode_switch_pending_acks)
+      {
+        sf::Packet spac;
+        spac << MessageID::NetcodeSwitchPrepare;
+        spac << m_netcode_switch_target;
+        spac << m_netcode_switch_seq;
+        SendAsync(std::move(spac), pid);
+      }
+      return;
+    }
+
+    if (m_netcode_switch_phase == 2)
+    {
+      CompleteNetcodeSwitch();
+      return;
+    }
+    m_netcode_switch_phase = 2;
+  }
+}
+
+// called from ---NETPLAY--- thread
+void NetPlayServer::HandleNetcodeSwitchAck(const PlayerId pid)
+{
+  std::lock_guard lkg(m_crit.game);
+
+  if (!m_netcode_switch_in_progress)
+    return;
+
+  m_netcode_switch_pending_acks.erase(pid);
+  if (!m_netcode_switch_pending_acks.empty())
+    return;
+
+  if (m_netcode_switch_phase == 1)
+  {
+    m_netcode_switch_phase = 2;
+    BeginNetcodeSwitchPhase();
+  }
+  else
+  {
+    CompleteNetcodeSwitch();
+  }
+}
+
+// called from ---NETPLAY--- thread (and StartNetcodeSwitch)
+void NetPlayServer::CompleteNetcodeSwitch()
+{
+  std::lock_guard lkg(m_crit.game);
+
+  m_netcode_switch_in_progress = false;
+  m_netcode_switch_pending_acks.clear();
+  m_host_input_authority = m_netcode_switch_target;
+
+  NOTICE_LOG_FMT(NETPLAY, "Netcode switched to {}",
+                 m_host_input_authority ? "golf mode" : "fair input delay");
+
+  // Flips the mode on the clients and resumes their input polling.
+  sf::Packet spac;
+  spac << MessageID::HostInputAuthority;
+  spac << m_host_input_authority;
+  SendAsyncToClients(std::move(spac));
+
+  if (!m_host_input_authority)
+    AdjustPadBufferSize(m_target_buffer_size);
+}
+
+// called from ---NETPLAY--- thread
+void NetPlayServer::CheckNetcodeSwitch()
+{
+  std::lock_guard lkg(m_crit.game);
+
+  if (m_netcode_switch_in_progress)
+  {
+    if (!m_is_running)
+    {
+      // The game ended mid-switch; clients unblock on their own when stopping.
+      m_netcode_switch_in_progress = false;
+      m_netcode_switch_pending_acks.clear();
+    }
+    else if (std::chrono::steady_clock::now() > m_netcode_switch_deadline)
+    {
+      // A client never acked (e.g. its emulation is paused). Resume everyone
+      // without changing the mode; the auto logic will simply try again.
+      WARN_LOG_FMT(NETPLAY, "Netcode switch timed out, resuming without switching");
+      m_netcode_switch_target = m_host_input_authority;
+      CompleteNetcodeSwitch();
+    }
+    return;
+  }
+
+  if (!m_auto_netcode_switch || !m_is_running || m_pending_golfer != 0 || !m_settings.golf_mode)
+    return;
+
+  // The host runs the server and the emulation in the same process, so the
+  // game state can be read directly.
+  if (!Core::IsRunning() || Core::GetGameBeingPlayed() != Core::GameName::MarioBaseball)
+    return;
+
+  const auto now = std::chrono::steady_clock::now();
+  const bool want_golf = Core::AutoGolfWanted();
+  if (want_golf != m_auto_netcode_last_want)
+  {
+    m_auto_netcode_last_want = want_golf;
+    m_auto_netcode_want_since = now;
+  }
+
+  if (want_golf == m_host_input_authority)
+    return;
+
+  // Debounce so a briefly flickering rel value doesn't cause switch churn.
+  if (now - m_auto_netcode_want_since < std::chrono::seconds(1))
+    return;
+
+  StartNetcodeSwitch(want_golf);
+}
+
+// called from ---GUI--- thread
+void NetPlayServer::SetAutoNetcodeSwitch(const bool enable)
+{
+  std::lock_guard lkg(m_crit.game);
+  m_auto_netcode_switch = enable;
+  m_auto_netcode_last_want = m_host_input_authority;
+  m_auto_netcode_want_since = std::chrono::steady_clock::now();
 }
 
 void NetPlayServer::SendAsync(sf::Packet&& packet, const PlayerId pid, const u8 channel_id)
@@ -1158,7 +1369,8 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
       break;
 
     if (m_host_input_authority && m_settings.golf_mode && m_pending_golfer == 0 &&
-        m_current_golfer != pid && PlayerHasControllerMapped(pid))
+        !m_netcode_switch_in_progress && m_current_golfer != pid &&
+        PlayerHasControllerMapped(pid))
     {
       m_pending_golfer = pid;
 
@@ -1202,6 +1414,18 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
     spac << MessageID::GolfSwitch;
     spac << PlayerId{0};
     SendToClients(spac);
+  }
+  break;
+
+  case MessageID::NetcodeSwitchAck:
+  {
+    u32 seq = 0;
+    packet >> seq;
+
+    std::lock_guard lkg(m_crit.game);
+    // ignore stale acks from an aborted or completed switch
+    if (seq == m_netcode_switch_seq)
+      HandleNetcodeSwitchAck(player.pid);
   }
   break;
 
@@ -1701,7 +1925,10 @@ bool NetPlayServer::SetupNetSettings()
 
   settings.strict_settings_sync = Config::Get(Config::NETPLAY_STRICT_SETTINGS_SYNC);
   settings.sync_codes = true;
-  settings.golf_mode = Config::Get(Config::NETPLAY_NETWORK_MODE) == "golf";
+  // Sessions always run with the golf machinery enabled; for Mario Baseball the
+  // automatic netcode switch drops to fair input delay outside of matches, and
+  // all other games stay in golf mode permanently.
+  settings.golf_mode = true;
   settings.use_fma = DoAllPlayersHaveHardwareFMA();
   settings.hide_remote_gbas = Config::Get(Config::NETPLAY_HIDE_REMOTE_GBAS);
 
@@ -1814,12 +2041,32 @@ bool NetPlayServer::StartGame()
   // only used as an identifier, not time value, so truncation is fine
   m_current_game = static_cast<u32>(Common::Timer::NowMs());
 
+  // Mario Baseball starts in fair input delay: the game boots to the menus, and
+  // the auto netcode switch engages golf mode once actually in a match. Other
+  // games (e.g. Toadstool Tour) never auto-switch and stay in golf mode.
+  if (m_auto_netcode_switch && m_host_input_authority &&
+      m_selected_game_identifier.game_id == "GYQE01")
+  {
+    m_host_input_authority = false;
+
+    sf::Packet hia_spac;
+    hia_spac << MessageID::HostInputAuthority;
+    hia_spac << m_host_input_authority;
+    SendAsyncToClients(std::move(hia_spac));
+  }
+
   // no change, just update with clients
   if (!m_host_input_authority)
     AdjustPadBufferSize(m_target_buffer_size);
 
   m_current_golfer = 1;
   m_pending_golfer = 0;
+
+  m_netcode_switch_in_progress = false;
+  m_netcode_switch_pending_acks.clear();
+  ++m_netcode_switch_seq;  // invalidate acks from a previous game
+  m_auto_netcode_last_want = m_host_input_authority;
+  m_auto_netcode_want_since = std::chrono::steady_clock::now();
 
   const sf::Uint64 initial_rtc = GetInitialNetPlayRTC();
 

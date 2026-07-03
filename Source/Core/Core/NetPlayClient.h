@@ -270,6 +270,12 @@ protected:
   // without deadlocking. Use the correspondingly named Event to wake it up.
   bool m_wait_on_input;
   bool m_wait_on_input_received;
+  // Set while the server is switching between fair input delay and golf mode;
+  // GetNetPads acks it from the stall loop above (or, when switching to golf
+  // mode, from the pad buffer wait as well).
+  std::atomic<bool> m_netcode_switch_ack_pending{false};
+  std::atomic<bool> m_netcode_switch_to_golf{false};
+  std::atomic<u32> m_netcode_switch_seq{0};
 
   Player* m_local_player = nullptr;
 
@@ -337,6 +343,7 @@ private:
   void OnHostInputAuthority(sf::Packet& packet);
   void OnGolfSwitch(sf::Packet& packet);
   void OnGolfPrepare(sf::Packet& packet);
+  void OnNetcodeSwitchPrepare(sf::Packet& packet);
   void OnChangeGame(sf::Packet& packet);
   void OnGameStatus(sf::Packet& packet);
   void OnStartGame(sf::Packet& packet);

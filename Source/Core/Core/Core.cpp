@@ -139,6 +139,11 @@ static int previousPing = 50;
 
 static int draftTimer = 0;
 static int nextGolferID = 0;
+// True while the current game state should be played in golf mode rather than
+// fair input delay. Written on the CPU thread each frame from the game's
+// RelNumber/GameType, read from the netplay server thread to drive automatic
+// netcode switching.
+static std::atomic<bool> s_auto_golf_wanted{false};
 
 #ifdef USE_MEMORYWATCHER
 static std::unique_ptr<MemoryWatcher> s_memory_watcher;
@@ -304,27 +309,56 @@ void MSSBCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer)
 
   RelNumber rel = static_cast<RelNumber>(PowerPC::MMU::HostRead_U16(guard, aRelNumber));
   if (rel != RelNumber::InGame)
+  {
+    s_auto_golf_wanted.store(false, std::memory_order_relaxed);
     return;
+  }
 
   // makes the player who paused the golfer
   if (PowerPC::MMU::HostRead_U8(guard, aWhoPaused) == 2)
     isField = true;
 
-  // add minigame functionality
-  int minigameId = PowerPC::MMU::HostRead_U8(guard, aMinigameID);
-  if (minigameId == 3 || minigameId == 1)
-  {
-    BatterPort = PowerPC::MMU::HostRead_U8(guard, aBarrelBatterPort);
-    isField = false;
-  }
-  else if (minigameId == 2)
-  {
-    FielderPort = PowerPC::MMU::HostRead_U8(guard, aWallBallPort);
-    isField = true;
-  }
+  GameType gameMode = static_cast<GameType>(PowerPC::MMU::HostRead_U8(guard, aGameModeSelected));
+  switch (gameMode) {
+    case GameType::ExhibitionGame:
+      s_auto_golf_wanted.store(true, std::memory_order_relaxed);
+      nextGolfer = isField ? FielderPort : BatterPort;
+      break;
 
-  // evaluate which player should be golfer here
-  nextGolfer = isField ? FielderPort : BatterPort;
+    case GameType::Practice:
+    case GameType::Challenge:
+      s_auto_golf_wanted.store(true, std::memory_order_relaxed);
+      nextGolfer = 0;  // always port 1
+      break;
+
+    case GameType::Demo:
+    case GameType::ToyField:
+      s_auto_golf_wanted.store(false, std::memory_order_relaxed);
+      break;
+
+    case GameType::Minigames:
+    {
+      s_auto_golf_wanted.store(true, std::memory_order_relaxed);
+      Minigame minigameId = static_cast<Minigame>(PowerPC::MMU::HostRead_U8(guard, aMinigameID));
+      if (minigameId == Minigame::BarrelBatter || minigameId == Minigame::BobOmbDerby)
+      {
+        BatterPort = PowerPC::MMU::HostRead_U8(guard, aBarrelBatterPort);
+        isField = false;
+      }
+      else if (minigameId == Minigame::WallBall)
+      {
+        FielderPort = PowerPC::MMU::HostRead_U8(guard, aWallBallPort);
+        isField = true;
+      }
+      nextGolfer = isField ? FielderPort : BatterPort;
+      break;
+    }
+
+    default:
+      // unknown game type, play it safe with fair input delay
+      s_auto_golf_wanted.store(false, std::memory_order_relaxed);
+      break;
+  }
 }
 
 void MGTTCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer)
@@ -917,6 +951,7 @@ bool Init(Core::System& system, std::unique_ptr<BootParameters> boot, const Wind
     mGameBeingPlayed = GameName::UnknownGame;
   else
     mGameBeingPlayed = mGameMap.at(game_id);
+  s_auto_golf_wanted.store(false, std::memory_order_relaxed);
 
   return true;
 }
@@ -1867,6 +1902,16 @@ bool GameSupportsTagSets()
 int GetNextGolferID()
 {
   return nextGolferID;
+}
+
+GameName GetGameBeingPlayed()
+{
+  return mGameBeingPlayed;
+}
+
+bool AutoGolfWanted()
+{
+  return s_auto_golf_wanted.load(std::memory_order_relaxed);
 }
 
 }  // namespace Core

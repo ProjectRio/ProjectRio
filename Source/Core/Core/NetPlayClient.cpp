@@ -448,6 +448,10 @@ void NetPlayClient::OnData(sf::Packet& packet)
     OnGolfPrepare(packet);
     break;
 
+  case MessageID::NetcodeSwitchPrepare:
+    OnNetcodeSwitchPrepare(packet);
+    break;
+
   case MessageID::ChangeGame:
     OnChangeGame(packet);
     break;
@@ -843,6 +847,39 @@ void NetPlayClient::OnHostInputAuthority(sf::Packet& packet)
 {
   packet >> m_host_input_authority;
   m_dialog->OnHostInputAuthorityChanged(m_host_input_authority);
+
+  // A non-golfer may have been left running at unlimited speed by the buffer
+  // drain logic; make sure we return to normal speed in fair input delay.
+  if (!m_host_input_authority)
+    Config::SetCurrent(Config::MAIN_EMULATION_SPEED, 1.0f);
+
+  // If this message completes a mid-game netcode switch, resume input polling.
+  m_netcode_switch_ack_pending = false;
+  if (m_wait_on_input)
+  {
+    m_wait_on_input = false;
+    m_wait_on_input_event.Set();
+  }
+}
+
+void NetPlayClient::OnNetcodeSwitchPrepare(sf::Packet& packet)
+{
+  bool to_golf_mode;
+  u32 seq;
+  packet >> to_golf_mode;
+  packet >> seq;
+
+  // Stall input polling; GetNetPads will send the ack behind any pad data we
+  // have already queued, so the server knows our stream is flushed once it
+  // arrives. The matching HostInputAuthority message resumes us.
+  m_netcode_switch_to_golf = to_golf_mode;
+  m_netcode_switch_seq = seq;
+  m_netcode_switch_ack_pending = true;
+  m_wait_on_input = true;
+
+  // Wake the CPU thread if it is blocked waiting on pad data, so it can run
+  // the ack check inside that wait loop.
+  m_gc_pad_event.Set();
 }
 
 void NetPlayClient::OnGolfSwitch(sf::Packet& packet)
@@ -2117,6 +2154,7 @@ bool NetPlayClient::StartGame(const std::string& path)
   m_timebase_frame = 0;
   m_current_golfer = 1;
   m_wait_on_input = false;
+  m_netcode_switch_ack_pending = false;
 
   m_is_running.Set();
   NetPlay_Enable(this);
@@ -2403,6 +2441,17 @@ bool NetPlayClient::GetNetPads(const int pad_nb, const bool batching, GCPadStatu
       m_wait_on_input_received = false;
     }
 
+    if (m_netcode_switch_ack_pending.exchange(false))
+    {
+      // Sent async so it stays behind any pad data we queued before stalling;
+      // once the server has everyone's ack it can flip the netcode mode without
+      // any input packets straddling the switch.
+      sf::Packet spac;
+      spac << MessageID::NetcodeSwitchAck;
+      spac << m_netcode_switch_seq.load();
+      SendAsync(std::move(spac));
+    }
+
     m_wait_on_input_event.Wait();
   }
 
@@ -2490,10 +2539,40 @@ bool NetPlayClient::GetNetPads(const int pad_nb, const bool batching, GCPadStatu
       return false;
     }
 
+    // A client stuck here waiting on another player's data may never reach the
+    // netcode switch stall at the top of this function (in golf mode the
+    // non-golfers usually sit right here). Acking from here is safe when
+    // switching *to* golf mode: we produce nothing until the top stall, and the
+    // golfer's data unblocks us after the switch. Switching to fair input delay
+    // instead requires parking at the top, where this buffer is self-fed.
+    if (m_netcode_switch_to_golf && m_local_player->pid != m_current_golfer &&
+        m_netcode_switch_ack_pending.exchange(false))
+    {
+      sf::Packet spac;
+      spac << MessageID::NetcodeSwitchAck;
+      spac << m_netcode_switch_seq.load();
+      SendAsync(std::move(spac));
+    }
+
     m_gc_pad_event.Wait();
   }
 
   m_pad_buffer[pad_nb].Pop(*pad_status);
+
+  // Remember the last consumed state so that a mid-game switch into golf mode
+  // can seed the golfer's pad data instead of waiting on (or worse, emitting
+  // default values for) input from every client. Skipped in golf mode, where
+  // m_last_pad_status is the golfer's production source and must not be
+  // overwritten with older consumed states.
+  if (!m_host_input_authority)
+  {
+    m_last_pad_status[pad_nb] = *pad_status;
+    if (!m_first_pad_status_received[pad_nb])
+    {
+      m_first_pad_status_received[pad_nb] = true;
+      m_first_pad_status_received_event.Set();
+    }
+  }
 
   auto& movie = Core::System::GetInstance().GetMovie();
   if (movie.IsRecordingInput())
