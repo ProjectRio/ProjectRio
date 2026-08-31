@@ -105,6 +105,10 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
 
     MSBQuickMatchGameState state;
 
+    // Record who is playing for the boot code: a CPU opponent means a 1-player
+    // boot. The second human's controller port defaults inside the generator.
+    state.isCpuMatch = localOpponentIsCpu ? 1 : 0;
+
     // === PRE-GAME SETTINGS ===
     // === ROSTERS ===
     // Characters are stored in roster order in the HUD file, but your state
@@ -132,6 +136,9 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
             }
             uint8_t charID = static_cast<uint8_t>(roster.at("CharID").get<double>());
             uint8_t position = static_cast<uint8_t>(roster.at("Fielding Position").get<double>());
+            // draft-slot order: "Away/Home Roster i" is slot i as the game stores it
+            state.rosterCharP1BySlot[i] = charID;
+            state.positionByRosterSlotP1[i] = position;
             if (position < 9)
             {
                 state.charactersP1ByPosition[position] = charID;
@@ -158,6 +165,8 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
             }
             uint8_t charID = static_cast<uint8_t>(roster.at("CharID").get<double>());
             uint8_t position = static_cast<uint8_t>(roster.at("Fielding Position").get<double>());
+            state.rosterCharP2BySlot[i] = charID;
+            state.positionByRosterSlotP2[i] = position;
             if (position < 9)
             {
                 state.charactersP2ByPosition[position] = charID;
@@ -352,6 +361,11 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
         int awayStartingBatter = static_cast<int>(j.at("Away Batter Roster Loc").get<double>());
         int homeStartingBatter = static_cast<int>(j.at("Home Batter Roster Loc").get<double>());
 
+        // Keep the current batter's natural-order slot so the generator can
+        // un-rotate the batting order and set the current batter correctly.
+        state.awayBatterRosterLoc = static_cast<uint8_t>(((awayStartingBatter % 9) + 9) % 9);
+        state.homeBatterRosterLoc = static_cast<uint8_t>(((homeStartingBatter % 9) + 9) % 9);
+
         for (int i = 0; i < 9; i++)
         {
             std::string awayKey = "Away Roster " + std::to_string((i + awayStartingBatter) % 9);
@@ -397,9 +411,11 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
 
             if (runner.count("Runner Roster Loc"))
             {
-                uint16_t batterRosterLoc = static_cast<uint16_t>(j.at("Batter Roster Loc").get<double>()); // 1
-                uint16_t runnerRosterLocRaw = static_cast<uint16_t>(runner.at("Runner Roster Loc").get<double>()); // 0
-                state.runnerRosterSpot[i] = (runnerRosterLocRaw - batterRosterLoc + 9) % 9;
+                // Absolute natural batting slot of the runner (0 = leadoff), which
+                // is the index into the batting team's in-memory roster the boot
+                // code writes directly.
+                state.runnerRosterSpot[i] =
+                    static_cast<uint16_t>(runner.at("Runner Roster Loc").get<double>());
             }
 
             if (runner.count("Runner Char Id"))
