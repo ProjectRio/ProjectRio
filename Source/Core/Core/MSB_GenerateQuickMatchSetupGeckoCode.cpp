@@ -622,7 +622,12 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
             if (val > 0x2F)
                 WARN_LOG_FMT(COMMON, "P1 logo ID not valid: {}. No gecko code produced.", val);
             else
-                codes.push_back(ToGeckoCode(0x00, LOGO_P1_ADDR, val));
+                // since game hard codes logo assignment as "away logo is the first batter logo", need to assign logo to the opposite team if it's the bottom of the
+                // inning to ensure the logos display correctly when the match loads.
+                if(state.halfInning.has_value() && state.halfInning.value() == 0)
+                    codes.push_back(ToGeckoCode(0x00, LOGO_P1_ADDR, val)); 
+                else
+                    codes.push_back(ToGeckoCode(0x00, LOGO_P2_ADDR, val));
         }
 
         if (state.logoP2.has_value())
@@ -631,7 +636,12 @@ std::vector<Gecko::GeckoCode> MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSe
             if (val > 0x2F)
                 WARN_LOG_FMT(COMMON, "P2 logo ID not valid: {}. No gecko code produced.", val);
             else
-                codes.push_back(ToGeckoCode(0x00, LOGO_P2_ADDR, val));
+                // since game hard codes logo assignment as "away logo is the first batter logo", need to assign logo to the opposite team if it's the bottom of the
+                // inning to ensure the logos display correctly when the match loads.
+                if(state.halfInning.has_value() && state.halfInning.value() == 0)
+                    codes.push_back(ToGeckoCode(0x00, LOGO_P2_ADDR, val));
+                else
+                    codes.push_back(ToGeckoCode(0x00, LOGO_P1_ADDR, val));
         }
         
         GenerateRosterGeckoCodes(

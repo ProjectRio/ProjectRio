@@ -918,7 +918,8 @@ public:
         std::string netplay_opponent_alias;
 
         //Started mid-game using the fast reset from HUD code.
-        bool fastResetFromHUD = Gecko::isLoadingFromHUD;
+        //Set authoritatively at the PREGAME->INGAME transition in Run(); see MSB_StatTracker.cpp.
+        bool fastResetFromHUD = false;
 
         //TagSet info
         std::optional<int> tag_set_id = std::nullopt;
