@@ -26,6 +26,11 @@ void NetPlayGolfUI::Display()
   if (!client)
     return;
 
+  // With automatic netcode switching the overlay object exists for the whole
+  // game; only draw it while golf mode is actually active.
+  if (!client->isGolfMode())
+    return;
+
   const float scale = ImGui::GetIO().DisplayFramebufferScale.x;
 
   ImGui::SetNextWindowPos(ImVec2((20.0f + DEFAULT_WINDOW_WIDTH) * scale, 10.0f * scale),

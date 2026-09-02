@@ -213,6 +213,8 @@ private:
   u32 m_netcode_switch_seq = 0;
   std::set<PlayerId> m_netcode_switch_pending_acks;
   std::chrono::steady_clock::time_point m_netcode_switch_deadline;
+  // earliest time the auto logic may start another switch after a timeout
+  std::chrono::steady_clock::time_point m_netcode_switch_retry_after;
   bool m_auto_netcode_switch = false;
   bool m_auto_netcode_last_want = false;
   std::chrono::steady_clock::time_point m_auto_netcode_want_since;

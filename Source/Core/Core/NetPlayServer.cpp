@@ -971,9 +971,12 @@ void NetPlayServer::CheckNetcodeSwitch()
     else if (std::chrono::steady_clock::now() > m_netcode_switch_deadline)
     {
       // A client never acked (e.g. its emulation is paused). Resume everyone
-      // without changing the mode; the auto logic will simply try again.
+      // without changing the mode. Back off before the auto logic tries again,
+      // otherwise a single stuck client would freeze everyone else for the
+      // timeout duration over and over.
       WARN_LOG_FMT(NETPLAY, "Netcode switch timed out, resuming without switching");
       m_netcode_switch_target = m_host_input_authority;
+      m_netcode_switch_retry_after = std::chrono::steady_clock::now() + std::chrono::seconds(30);
       CompleteNetcodeSwitch();
     }
     return;
@@ -988,6 +991,9 @@ void NetPlayServer::CheckNetcodeSwitch()
     return;
 
   const auto now = std::chrono::steady_clock::now();
+  if (now < m_netcode_switch_retry_after)
+    return;
+
   const bool want_golf = Core::AutoGolfWanted();
   if (want_golf != m_auto_netcode_last_want)
   {
@@ -2043,11 +2049,13 @@ bool NetPlayServer::StartGame()
 
   // Mario Baseball starts in fair input delay: the game boots to the menus, and
   // the auto netcode switch engages golf mode once actually in a match. Other
-  // games (e.g. Toadstool Tour) never auto-switch and stay in golf mode.
-  if (m_auto_netcode_switch && m_host_input_authority &&
-      m_selected_game_identifier.game_id == "GYQE01")
+  // games (e.g. Toadstool Tour) never auto-switch and stay in golf mode, so
+  // always derive the starting mode from the selected game rather than
+  // inheriting whatever mode the previous game ended in.
+  const bool start_in_golf_mode = m_selected_game_identifier.game_id != "GYQE01";
+  if (m_auto_netcode_switch && m_host_input_authority != start_in_golf_mode)
   {
-    m_host_input_authority = false;
+    m_host_input_authority = start_in_golf_mode;
 
     sf::Packet hia_spac;
     hia_spac << MessageID::HostInputAuthority;
@@ -2067,6 +2075,7 @@ bool NetPlayServer::StartGame()
   ++m_netcode_switch_seq;  // invalidate acks from a previous game
   m_auto_netcode_last_want = m_host_input_authority;
   m_auto_netcode_want_since = std::chrono::steady_clock::now();
+  m_netcode_switch_retry_after = m_auto_netcode_want_since;
 
   const sf::Uint64 initial_rtc = GetInitialNetPlayRTC();
 
