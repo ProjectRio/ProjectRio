@@ -1,6 +1,7 @@
 
 #include "Core/MSB_StatTracker.h"
 
+#include <algorithm>
 #include <iomanip>
 #include <fstream>
 #include <ctime>
@@ -272,17 +273,9 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                     if (m_game_info.getCurrentEvent().write_hud_ab.first) {
                         if (!NetPlay::NetPlay_IsDesyncDetected())
                         {
-                            // decoded version
-                            std::string hud_file_path = File::GetUserPath(D_HUDFILES_IDX) + "decoded.hud.json";
-                            std::string json = getHUDJSON(std::to_string(m_game_info.event_num) + "a", m_game_info.getCurrentEvent(), m_game_info.previous_state, true);
-                            File::Delete(hud_file_path);
-                            File::WriteStringToFile(hud_file_path, json);
-
-                            // encoded version
-                            hud_file_path = File::GetUserPath(D_HUDFILES_IDX) + "hud.json";
-                            json = getHUDJSON(std::to_string(m_game_info.event_num) + "a", m_game_info.getCurrentEvent(), m_game_info.previous_state, false);
-                            File::Delete(hud_file_path);
-                            File::WriteStringToFile(hud_file_path, json);
+                            std::string event_num = std::to_string(m_game_info.event_num) + "a";
+                            writeHUDFiles(getHUDJSON(event_num, m_game_info.getCurrentEvent(), m_game_info.previous_state, true),
+                                          getHUDJSON(event_num, m_game_info.getCurrentEvent(), m_game_info.previous_state, false));
                         }
 
                         //No longer need to write HUD B
@@ -459,17 +452,9 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                     if (!NetPlay::NetPlay_IsDesyncDetected())
                     {
-                        // decoded version
-                        std::string hud_file_path = File::GetUserPath(D_HUDFILES_IDX) + "decoded.hud.json";
-                        std::string json = getHUDJSON(std::to_string(m_game_info.event_num) + "b", m_game_info.getCurrentEvent(), m_game_info.previous_state, true);
-                        File::Delete(hud_file_path);
-                        File::WriteStringToFile(hud_file_path, json);
-
-                        // encoded version
-                        hud_file_path = File::GetUserPath(D_HUDFILES_IDX) + "hud.json";
-                        json = getHUDJSON(std::to_string(m_game_info.event_num) + "b", m_game_info.getCurrentEvent(), m_game_info.previous_state, false);
-                        File::Delete(hud_file_path);
-                        File::WriteStringToFile(hud_file_path, json);
+                        std::string event_num = std::to_string(m_game_info.event_num) + "b";
+                        writeHUDFiles(getHUDJSON(event_num, m_game_info.getCurrentEvent(), m_game_info.previous_state, true),
+                                      getHUDJSON(event_num, m_game_info.getCurrentEvent(), m_game_info.previous_state, false));
                     }
 
                     //No longer need to write HUD B
@@ -522,7 +507,57 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
     }
 
     //Game State Machine
-    switch (m_game_state){ // crashed here in debugging "Access violation reading location 0xFFFFFFFFFFFFFFFF"
+    bool game_state_changed = (m_game_state != m_game_state_prev);
+    m_game_state_prev = m_game_state;
+
+    switch (m_game_state){ 
+        case (GAME_STATE::DRAFT):
+        {
+            bool draft_changed = false;
+            for (u8 team = 0; team < cNumOfTeams; ++team){
+                if (updateDraftOrder(guard, team)) {
+                    draft_changed = true;
+                }
+            }
+
+            MENU_SCREEN menu_screen = static_cast<MENU_SCREEN>(PowerPC::MMU::HostRead_U16(guard, aMenuScreenCode));
+            // write hud if a draft action happened. 
+            // Only starts to change on roster screen to allow the old HUD to persist from prior game.
+            if (draft_changed || (game_state_changed && menu_screen == MENU_SCREEN::ROSTER_SELECT)) {
+                writeHUDFiles(getPreGameHUDJSON(guard, true), getPreGameHUDJSON(guard, false));
+            }
+
+            if (menu_screen == MENU_SCREEN::BATTING_ORDER_SELECT) {
+                m_game_state = GAME_STATE::BATTING_ORDER;
+                std::cout << "DRAFT->BATTING_ORDER\n";
+            }
+            break;
+        }
+        case (GAME_STATE::BATTING_ORDER):
+            //Nothing on this screen changes per frame, so one write on entry is enough
+            if (game_state_changed) {
+                writeHUDFiles(getPreGameHUDJSON(guard, true), getPreGameHUDJSON(guard, false));
+            }
+            if (PowerPC::MMU::HostRead_U16(guard, aMenuScreenCode) == static_cast<u16>(MENU_SCREEN::ROSTER_SELECT)) {
+                m_game_state = GAME_STATE::DRAFT;
+                std::cout << "BATTING_ORDER->DRAFT\n";
+            }
+            else if (PowerPC::MMU::HostRead_U16(guard, aMenuScreenCode) == static_cast<u16>(MENU_SCREEN::STADIUM_SELECT)) {
+                m_game_state = GAME_STATE::GAME_SETTINGS;
+                std::cout << "BATTING_ORDER->GAME_SETTINGS\n";
+            }
+            break;
+        case (GAME_STATE::GAME_SETTINGS):
+            if (game_state_changed) {
+                writeHUDFiles(getPreGameHUDJSON(guard, true), getPreGameHUDJSON(guard, false));
+            }
+            //The menu REL hands off to the in-game REL once the match is starting
+            if (PowerPC::MMU::HostRead_U16(guard, aRelNumber) == static_cast<u16>(REL_NUMBER::IN_GAME)) {
+                m_game_state = GAME_STATE::PREGAME;
+                std::cout << "GAME_SETTINGS->PREGAME\n";
+                // TODO: the hud doesn't write pregame, does it need to?
+            }
+            break;
         case (GAME_STATE::PREGAME):
             //Start recording when GameId is set AND record button is pressed AND game has started
             //std::cout << std::hex << "GameId=" << PowerPC::MMU::HostRead_U32(guard, aGameId) << "GameState=" <<  PowerPC::MMU::HostRead_U8(aGameControlStateCurr) << '\n';
@@ -603,7 +638,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
         case (GAME_STATE::ENDGAME_LOGGED):
             init();
 
-            std::cout << "ENDGAME->PREGAME\n";
+            std::cout << "ENDGAME->DRAFT\n";
             break;
         case (GAME_STATE::UNDEFINED):
             std::cout << "UNDEFINED GAME STATE\n";
@@ -1009,6 +1044,9 @@ std::string StatTracker::getStatJSON(bool inDecode, bool hide_riokey){
     json_stream << "  \"Lag Spikes\": " << std::to_string(m_game_info.lag_spikes) << ",\n";
     json_stream << "  \"Version\": \"" << Common::GetRioRevStr() << "\",\n";
 
+    json_stream << "  \"Away Draft Order\": " << draftOrderToJSONArray(getDraftOrderForTeam(0), inDecode) << ",\n";
+    json_stream << "  \"Home Draft Order\": " << draftOrderToJSONArray(getDraftOrderForTeam(1), inDecode) << ",\n";
+
     json_stream << "  \"Character Game Stats\": {\n";
 
     //Defensive Stats
@@ -1331,6 +1369,7 @@ std::string StatTracker::getHUDJSON(std::string in_event_num, Event& in_curr_eve
 
     json_stream << "{\n";
 
+    json_stream << "  \"Game State\": " << decode("GameState", static_cast<u8>(m_game_state), inDecode) << ",\n";
     json_stream << "  \"GameID\": \"" << m_game_info.game_id << "\",\n";
     std::string tag_set_id_str = "-1";
     if (m_game_info.tag_set_id.has_value()){
@@ -1354,6 +1393,9 @@ std::string StatTracker::getHUDJSON(std::string in_event_num, Event& in_curr_eve
     json_stream << "  \"Half Inning\": "             << std::to_string(in_curr_event.half_inning) << ",\n";
     json_stream << "  \"Away Score\": "              << std::dec << in_curr_event.away_score << ",\n";
     json_stream << "  \"Home Score\": "              << std::dec << in_curr_event.home_score << ",\n";
+
+    json_stream << "  \"Away Draft Order\": "        << draftOrderToJSONArray(getDraftOrderForTeam(0), inDecode) << ",\n";
+    json_stream << "  \"Home Draft Order\": "        << draftOrderToJSONArray(getDraftOrderForTeam(1), inDecode) << ",\n";
 
     json_stream << "  \"Away Inning Scores\": [";
     for (u8 i = 0; i < in_curr_event.inning && i < 18; ++i) {
@@ -1623,6 +1665,146 @@ std::string StatTracker::getHUDJSON(std::string in_event_num, Event& in_curr_eve
     }
     json_stream << "  }\n"; //Close Previous Event
     json_stream << "}";
+    return json_stream.str();
+}
+
+std::string StatTracker::getPreGameHUDJSON(const Core::CPUThreadGuard& guard, bool inDecode){
+    std::stringstream json_stream;
+
+    json_stream << "{\n";
+    json_stream << "  \"Game State\": " << decode("GameState", static_cast<u8>(m_game_state), inDecode) << ",\n";
+
+    for (u8 team = 0; team < cNumOfTeams; ++team){
+        std::string team_string = (team == 0) ? "P1" : "P2";
+        const std::vector<u8>& draft_order = m_game_info.draft_order[team];
+
+        json_stream << "  \"" << team_string << " Draft Order\": " << draftOrderToJSONArray(draft_order, inDecode);
+
+        json_stream << ((team + 1 < cNumOfTeams) ? ",\n" : "\n");
+    }
+
+    json_stream << "}";
+    return json_stream.str();
+}
+
+//Writes both the decoded and encoded HUD files, replacing whatever is there
+void StatTracker::writeHUDFiles(const std::string& decoded_json, const std::string& encoded_json){
+    std::string decoded_path = File::GetUserPath(D_HUDFILES_IDX) + "decoded.hud.json";
+    File::Delete(decoded_path);
+    File::WriteStringToFile(decoded_path, decoded_json);
+
+    std::string encoded_path = File::GetUserPath(D_HUDFILES_IDX) + "hud.json";
+    File::Delete(encoded_path);
+    File::WriteStringToFile(encoded_path, encoded_json);
+}
+
+//Char ids of the player's filled roster spots, in baseball position order
+std::vector<u8> StatTracker::readRosterCharIds(const Core::CPUThreadGuard& guard, u8 in_team){
+    u32 char_base   = (in_team == 0) ? aP1RosterCharIDs     : aP2RosterCharIDs;
+    u32 filled_base = (in_team == 0) ? aP1RosterSpotsFilled : aP2RosterSpotsFilled;
+
+    std::vector<u8> char_ids;
+    for (u8 slot = 0; slot < cRosterSize; ++slot){
+        // If spot is filled, push back the character id.
+        // For captains, the roster spot filled bool isn't reliable, so check if the first char isn't null.
+        u8 char_id = PowerPC::MMU::HostRead_U8(guard, char_base + slot);
+        if (PowerPC::MMU::HostRead_U8(guard, filled_base + slot) || (slot == 0 && char_id != 0xFF)){
+            char_ids.push_back(char_id);
+        }
+    }
+    return char_ids;
+}
+
+//Elements of in_lhs with no match in in_rhs, counting duplicates. Preserves in_lhs order.
+//Linear scan rather than a sort because cRosterSize is 9 and the input order is what we want to keep.
+std::vector<u8> StatTracker::multisetDifference(const std::vector<u8>& in_lhs, const std::vector<u8>& in_rhs){
+    std::vector<u8> unmatched_rhs = in_rhs;
+    std::vector<u8> difference;
+
+    for (u8 value : in_lhs){
+        auto match = std::find(unmatched_rhs.begin(), unmatched_rhs.end(), value);
+        if (match == unmatched_rhs.end()){
+            difference.push_back(value);
+        }
+        else{
+            unmatched_rhs.erase(match);
+        }
+    }
+    return difference;
+}
+
+//On the roster but not yet in the draft order, so they were just picked
+std::vector<u8> StatTracker::findAddedChars(const std::vector<u8>& in_roster, const std::vector<u8>& in_drafted){
+    return multisetDifference(in_roster, in_drafted);
+}
+
+//In the draft order but no longer on the roster, so the pick was cancelled
+std::vector<u8> StatTracker::findRemovedChars(const std::vector<u8>& in_roster, const std::vector<u8>& in_drafted){
+    return multisetDifference(in_drafted, in_roster);
+}
+
+//Duplicate characters are legal, so drop the most recent pick of this character
+bool StatTracker::removeFromDraftOrder(u8 in_team, u8 in_char_id){
+    auto& order = m_game_info.draft_order[in_team];
+
+    auto it = std::find(order.rbegin(), order.rend(), in_char_id);
+    if (it == order.rend()){
+        return false;
+    }
+
+    order.erase(std::next(it).base());
+    return true;
+}
+
+//Reconciles draft_order against the live roster. draft_order holds the same multiset of char ids
+//as the last roster we saw, so anything that differs is this frame's picks and cancellations.
+bool StatTracker::updateDraftOrder(const Core::CPUThreadGuard& guard, u8 in_team){
+    std::vector<u8> roster = readRosterCharIds(guard, in_team);
+
+    std::vector<u8> added   = findAddedChars(roster, m_game_info.draft_order[in_team]);
+    std::vector<u8> removed = findRemovedChars(roster, m_game_info.draft_order[in_team]);
+
+    if (added.empty() && removed.empty()){
+        return false;
+    }
+
+    //Removals first so the vector stays bounded when a pick is swapped in the same frame
+    for (u8 char_id : removed){
+        if (removeFromDraftOrder(in_team, char_id)){
+            std::cout << "Draft: P" << std::to_string(in_team + 1) << " removed char id "
+                      << std::to_string(char_id) << "\n";
+        }
+    }
+
+    //Several at once means the roster was written in bulk (random, quick match setup) rather than drafted.
+    //There's no pick order to recover in that case, so position order is the best we can do.
+    for (u8 char_id : added){
+        m_game_info.draft_order[in_team].push_back(char_id);
+        std::cout << "Draft: P" << std::to_string(in_team + 1) << " picked char id "
+                  << std::to_string(char_id) << " (pick "
+                  << std::to_string(m_game_info.draft_order[in_team].size()) << ")\n";
+    }
+
+    return true;
+}
+
+//draft_order is indexed by P1/P2. The captain struct at 0x80353080 is P1 and 0x80353084 is P2,
+//the same words aTeam0_Captain/aTeam1_Captain point into, so P1 is team0 and P2 is team1.
+const std::vector<u8>& StatTracker::getDraftOrderForTeam(u8 in_away_home_idx){
+    u8 team_port = (in_away_home_idx == 0) ? m_game_info.away_port : m_game_info.home_port;
+    return m_game_info.draft_order[(team_port == m_game_info.team0_port) ? 0 : 1];
+}
+
+std::string StatTracker::draftOrderToJSONArray(const std::vector<u8>& in_draft_order, bool inDecode){
+    std::stringstream json_stream;
+
+    json_stream << "[";
+    for (size_t i = 0; i < in_draft_order.size(); ++i){
+        json_stream << decode("Character", in_draft_order[i], inDecode);
+        if (i + 1 < in_draft_order.size()) { json_stream << ", "; }
+    }
+    json_stream << "]";
+
     return json_stream.str();
 }
 
@@ -2129,6 +2311,12 @@ std::string StatTracker::decode(std::string type, u8 value, bool decode){
         }
         else if (value == 0xFF){
             retVal = "None";
+        }
+    }
+    else if (type == "GameState"){
+        GAME_STATE state = static_cast<GAME_STATE>(value);
+        if (c_game_state.count(state)){
+            retVal = c_game_state.at(state);
         }
     }
     else{

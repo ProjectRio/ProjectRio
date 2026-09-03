@@ -1,6 +1,8 @@
 #pragma once
 
 #include <string>
+#include <algorithm>
+#include <iterator>
 #include <array>
 #include <vector>
 #include <map>
@@ -28,8 +30,28 @@ namespace Tag {
 class TagSet;
 }
 
+enum class REL_NUMBER
+{
+    MAIN_MENU = 4,
+    IN_GAME = 5
+};
+
+enum class MENU_SCREEN
+{
+    TITLE_SCREEN = 0x1,
+    MAIN_MENU = 0x5,
+    CAPTAIN_SELECT = 0x9,
+    ROSTER_SELECT = 0xA,
+    BATTING_ORDER_SELECT = 0xB,
+    STADIUM_SELECT = 0xC,
+    GAME_SETTINGS = 0xD
+};
+
 enum class GAME_STATE
 {
+  DRAFT,
+  BATTING_ORDER,
+  GAME_SETTINGS,
   PREGAME,
   INGAME,
   ENDGAME_LOGGED,
@@ -37,6 +59,9 @@ enum class GAME_STATE
 };
 
 static std::map<GAME_STATE, std::string> c_game_state = {
+    {GAME_STATE::DRAFT, "DRAFT"},
+    {GAME_STATE::BATTING_ORDER, "BATTING_ORDER"},
+    {GAME_STATE::GAME_SETTINGS, "GAME_SETTINGS"},
     {GAME_STATE::PREGAME, "PREGAME"},
     {GAME_STATE::INGAME, "INGAME"},
     {GAME_STATE::ENDGAME_LOGGED, "ENDGAME_LOGGED"},
@@ -407,6 +432,14 @@ static const std::map<u8, std::string> cGameControlState = {
 static const int cRosterSize = 9;
 static const int cNumOfTeams = 2;
 static const int cNumOfPositions = 9;
+
+//Addrs for pre-game HUD
+static const u32 aRelNumber = 0x800e877c; // short
+static const u32 aMenuScreenCode = 0x800e877e; // short
+static const u32 aP1RosterCharIDs = 0x803c6726; // 9 bytes
+static const u32 aP2RosterCharIDs = 0x803c672f; // 9 bytes
+static const u32 aP1RosterSpotsFilled = 0x803c676e; // 9 bytes
+static const u32 aP2RosterSpotsFilled = 0x803c6777; // 9 bytes
 
 //Addrs for triggering evts
 static const u32 aGameId           = 0x802EBF8C;
@@ -938,6 +971,11 @@ public:
         bool update_ongoing_game = true;
         bool post_ongoing_game = true;
 
+        //Draft order per player, in the order characters were picked. Index 0=P1, 1=P2.
+        //Not away/home indexed: which player is away isn't known until first_batting_team
+        //is read in GAME_SETTINGS, which happens after the draft.
+        std::array<std::vector<u8>, cNumOfTeams> draft_order;
+
         //Array of both teams' character summaries
         std::array<std::array<CharacterSummary, cRosterSize>, cNumOfTeams> character_summaries;
 
@@ -1121,16 +1159,16 @@ public:
 
     void init(){
         //Reset all game info
-        m_game_info = GameInfo(); // crashed here when enabling night stadium on netplay in debugging
+        m_game_info = GameInfo();
         m_fielder_tracker[0] = FielderTracker();
         m_fielder_tracker[1] = FielderTracker();
 
         //Reset state machines
-        m_game_state  = GAME_STATE::PREGAME;
+        m_game_state  = GAME_STATE::DRAFT;
         m_event_state = EVENT_STATE::INIT_EVENT;
     }
 
-    GAME_STATE  m_game_state  = GAME_STATE::PREGAME;
+    GAME_STATE  m_game_state  = GAME_STATE::DRAFT;
     GAME_STATE  m_game_state_prev = GAME_STATE::UNDEFINED;
     EVENT_STATE m_event_state = EVENT_STATE::INIT_EVENT;
     EVENT_STATE m_event_state_prev = EVENT_STATE::UNDEFINED;
@@ -1255,8 +1293,27 @@ public:
     std::string getStatJSON(bool inDecode, bool hide_riokey = true);
     std::string getEventJSON(u16 in_event_num, Event& in_event, bool inDecode);
     std::string getHUDJSON(std::string in_event_num, Event& in_curr_event, std::optional<Event> in_prev_event, bool inDecode);
+    std::string getPreGameHUDJSON(const Core::CPUThreadGuard& guard, bool inDecode);
     //Returns path to save json
     std::string getStatJsonPath(std::string prefix);
+
+    //Writes both the decoded and encoded HUD files, replacing whatever is there
+    void writeHUDFiles(const std::string& decoded_json, const std::string& encoded_json);
+
+    //Draft tracking. in_team is 0=P1, 1=P2, matching the roster memory layout
+    std::vector<u8> readRosterCharIds(const Core::CPUThreadGuard& guard, u8 in_team);
+    //Elements of in_lhs that have no match in in_rhs, counting duplicates. Preserves in_lhs order
+    std::vector<u8> multisetDifference(const std::vector<u8>& in_lhs, const std::vector<u8>& in_rhs);
+    std::vector<u8> findAddedChars(const std::vector<u8>& in_roster, const std::vector<u8>& in_drafted);
+    std::vector<u8> findRemovedChars(const std::vector<u8>& in_roster, const std::vector<u8>& in_drafted);
+    //Drops the rightmost occurrence of in_char_id. Returns false if it wasn't there
+    bool removeFromDraftOrder(u8 in_team, u8 in_char_id);
+    //Reconciles draft_order with the live roster. Returns true if anything changed
+    bool updateDraftOrder(const Core::CPUThreadGuard& guard, u8 in_team);
+    //draft_order is indexed by P1/P2, which is team0/team1. Remaps to the away/home index the
+    //in-game HUD and statfile use. 0=Away, 1=Home
+    const std::vector<u8>& getDraftOrderForTeam(u8 in_away_home_idx);
+    std::string draftOrderToJSONArray(const std::vector<u8>& in_draft_order, bool inDecode);
 
     void postOngoingGame(Event& in_event);
     void updateOngoingGame(Event& in_event);
