@@ -513,17 +513,30 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
     switch (m_game_state){ 
         case (GAME_STATE::DRAFT):
         {
-            bool draft_changed = false;
-            for (u8 team = 0; team < cNumOfTeams; ++team){
-                if (updateDraftOrder(guard, team)) {
-                    draft_changed = true;
+            MENU_SCREEN menu_screen = static_cast<MENU_SCREEN>(PowerPC::MMU::HostRead_U16(guard, aMenuScreenCode));
+
+            // The roster memory is only meaningful on the roster screen. Before the game reaches it
+            // the char id slots read 0, which is a valid char id (Mario), so every read has to be
+            // gated on the screen rather than on the value.
+
+            // Used to control when the HUD files are written.
+            // Set by a pick or drop, by a fielding position swap, or by a captain swap.
+            bool pregame_changed = false;
+            if (menu_screen == MENU_SCREEN::ROSTER_SELECT){
+                for (u8 team = 0; team < cNumOfTeams; ++team){
+                    if (updateDraftOrder(guard, team)) {
+                        pregame_changed = true;
+                    }
+                }
+
+                if (logPreGamePlayerInfo(guard)) {
+                    pregame_changed = true;
                 }
             }
 
-            MENU_SCREEN menu_screen = static_cast<MENU_SCREEN>(PowerPC::MMU::HostRead_U16(guard, aMenuScreenCode));
-            // write hud if a draft action happened. 
+            // write hud if a draft action happened.
             // Only starts to change on roster screen to allow the old HUD to persist from prior game.
-            if (draft_changed || (game_state_changed && menu_screen == MENU_SCREEN::ROSTER_SELECT)) {
+            if (pregame_changed || (game_state_changed && menu_screen == MENU_SCREEN::ROSTER_SELECT)) {
                 writeHUDFiles(getPreGameHUDJSON(guard, true), getPreGameHUDJSON(guard, false));
             }
 
@@ -1032,6 +1045,8 @@ std::string StatTracker::getStatJSON(bool inDecode, bool hide_riokey){
     json_stream << "  \"StadiumID\": " << decode("Stadium", m_game_info.stadium, inDecode) << ",\n";
     json_stream << "  \"Away Player\": \"" << away_player_info << "\",\n"; //TODO MAKE THIS AN ID
     json_stream << "  \"Home Player\": \"" << home_player_info << "\",\n";
+    json_stream << "  \"Away Port\": " << std::to_string(m_game_info.away_port) << ",\n";
+    json_stream << "  \"Home Port\": " << std::to_string(m_game_info.home_port) << ",\n";
 
     json_stream << "  \"Away Score\": " << std::dec << m_game_info.away_score << ",\n";
     json_stream << "  \"Home Score\": " << std::dec << m_game_info.home_score << ",\n";
@@ -1674,9 +1689,43 @@ std::string StatTracker::getPreGameHUDJSON(const Core::CPUThreadGuard& guard, bo
     json_stream << "{\n";
     json_stream << "  \"Game State\": " << decode("GameState", static_cast<u8>(m_game_state), inDecode) << ",\n";
 
+    //0xFF until someone picks, and the character comes from that team's current back() so a
+    //cancel rolls it back on its own
+    u8 last_pick_team = m_game_info.last_pick_team;
+    bool last_pick_vld = (last_pick_team < cNumOfTeams) && !m_game_info.draft_order[last_pick_team].empty();
+
+    if (last_pick_vld){
+        json_stream << "  \"Last Pick\": " << decode("Character", m_game_info.draft_order[last_pick_team].back(), inDecode) << ",\n";
+        json_stream << "  \"Last Pick Player\": " << std::to_string(last_pick_team + 1) << ",\n";
+    }
+    else{
+        json_stream << "  \"Last Pick\": null,\n";
+        json_stream << "  \"Last Pick Player\": null,\n";
+    }
+
     for (u8 team = 0; team < cNumOfTeams; ++team){
         std::string team_string = (team == 0) ? "P1" : "P2";
         const std::vector<u8>& draft_order = m_game_info.draft_order[team];
+
+        json_stream << "  \"" << team_string << " Player\": \"" << m_game_info.pregame_player[team].GetUsername() << "\",\n";
+        json_stream << "  \"" << team_string << " Port\": " << std::to_string(m_game_info.pregame_port[team]) << ",\n";
+        json_stream << "  \"" << team_string << " Captain\": " << decode("Character", m_game_info.captain_char_id[team], inDecode) << ",\n";
+        json_stream << "  \"" << team_string << " Logo\": " << decode("Logo", m_game_info.pregame_logo[team], inDecode) << ",\n";
+        json_stream << "  \"" << team_string << " Team Stars\": " << std::to_string(m_game_info.team_stars[team]) << ",\n";
+        json_stream << "  \"" << team_string << " Average Chemistry\": " << std::fixed << std::setprecision(2) << m_game_info.avg_chemistry[team] << ",\n";
+
+        //Indexed by fielding position, matching cPosition: 0=P, 1=C, 2=1B ... 8=RF.
+        //An empty position is -1 encoded, and decodes through cCharIdToCharName as "None".
+        json_stream << "  \"" << team_string << " Positions\": [";
+        for (u8 position = 0; position < cNumOfPositions; ++position){
+            u8 char_id = m_game_info.position_to_char_id[team][position];
+
+            if (char_id == 0xFF && !inDecode) { json_stream << "-1"; }
+            else { json_stream << decode("Character", char_id, inDecode); }
+
+            if (position + 1 < cNumOfPositions) { json_stream << ", "; }
+        }
+        json_stream << "],\n";
 
         json_stream << "  \"" << team_string << " Draft Order\": " << draftOrderToJSONArray(draft_order, inDecode);
 
@@ -1699,17 +1748,24 @@ void StatTracker::writeHUDFiles(const std::string& decoded_json, const std::stri
 }
 
 //Char ids of the player's filled roster spots, in baseball position order
+// The captain's spot-filled flag is never set, so slot 0 counts whenever it holds a real char id.
+// Only trustworthy on the roster screen: off it the whole table reads 0, which is a valid char id.
+bool StatTracker::rosterSlotOccupied(const Core::CPUThreadGuard& guard, u8 in_team, u8 in_slot){
+    u32 team_offset = in_team * cRosterSize;
+
+    if (PowerPC::MMU::HostRead_U8(guard, aRosterSpotsFilled + team_offset + in_slot)){
+        return true;
+    }
+    return (in_slot == 0) && (PowerPC::MMU::HostRead_U8(guard, aRosterCharIDs + team_offset) != 0xFF);
+}
+
 std::vector<u8> StatTracker::readRosterCharIds(const Core::CPUThreadGuard& guard, u8 in_team){
-    u32 char_base   = (in_team == 0) ? aP1RosterCharIDs     : aP2RosterCharIDs;
-    u32 filled_base = (in_team == 0) ? aP1RosterSpotsFilled : aP2RosterSpotsFilled;
+    u32 team_offset = in_team * cRosterSize;
 
     std::vector<u8> char_ids;
     for (u8 slot = 0; slot < cRosterSize; ++slot){
-        // If spot is filled, push back the character id.
-        // For captains, the roster spot filled bool isn't reliable, so check if the first char isn't null.
-        u8 char_id = PowerPC::MMU::HostRead_U8(guard, char_base + slot);
-        if (PowerPC::MMU::HostRead_U8(guard, filled_base + slot) || (slot == 0 && char_id != 0xFF)){
-            char_ids.push_back(char_id);
+        if (rosterSlotOccupied(guard, in_team, slot)){
+            char_ids.push_back(PowerPC::MMU::HostRead_U8(guard, aRosterCharIDs + team_offset + slot));
         }
     }
     return char_ids;
@@ -1785,6 +1841,9 @@ bool StatTracker::updateDraftOrder(const Core::CPUThreadGuard& guard, u8 in_team
                   << std::to_string(m_game_info.draft_order[in_team].size()) << ")\n";
     }
 
+    //Set on cancels too, so the emitted last pick rolls back to this team's new final entry
+    m_game_info.last_pick_team = in_team;
+
     return true;
 }
 
@@ -1806,6 +1865,109 @@ std::string StatTracker::draftOrderToJSONArray(const std::vector<u8>& in_draft_o
     json_stream << "]";
 
     return json_stream.str();
+}
+
+//Mirrors readPlayerNames' mapping without touching it. That function's local branch is asymmetric
+//(team0 only accepts port 0), so generalizing it would change in-game behavior.
+LocalPlayers::LocalPlayers::Player StatTracker::getPlayerForPort(u8 in_port, bool in_local_game){
+    if (!in_local_game){
+        return m_game_info.NetplayerUserInfo[in_port + 1];
+    }
+
+    switch (in_port){
+        case 0:  return LocalPlayers::m_local_player_1;
+        case 1:  return LocalPlayers::m_local_player_2;
+        case 2:  return LocalPlayers::m_local_player_3;
+        case 3:  return LocalPlayers::m_local_player_4;
+        default: break;
+    }
+
+    LocalPlayers::LocalPlayers::Player cpu;
+    cpu.username = "CPU";
+    cpu.userid = "CPU";
+    return cpu;
+}
+
+//Captains, logos, ports and players for the pre-game HUD. The caller gates this on the roster
+//screen: off it, the char id slots read 0, which is indistinguishable from a real Mario pick.
+bool StatTracker::logPreGamePlayerInfo(const Core::CPUThreadGuard& guard){
+    bool changed = false;
+
+    for (u8 team = 0; team < cNumOfTeams; ++team){
+        u32 team_offset = team * cRosterSize;
+
+        //Slot 0 changing is how a captain swap shows up: the roster keeps the same characters,
+        //so the draft diff sees nothing and this is the only signal the HUD is stale.
+        u8 captain_char_id = PowerPC::MMU::HostRead_U8(guard, aRosterCharIDs + team_offset);
+        if (captain_char_id != m_game_info.captain_char_id[team]){
+            m_game_info.captain_char_id[team] = captain_char_id;
+            changed = true;
+        }
+
+        m_game_info.team_stars[team] = PowerPC::MMU::HostRead_U8(guard, aTeamStars + team);
+
+        //The logo address reads 0x00 (a valid logo id) until a team has drafted someone alongside
+        //its captain, so leave the field at its default until the roster is 2 deep.
+        if (m_game_info.draft_order[team].size() >= 2){
+            m_game_info.pregame_logo[team] = PowerPC::MMU::HostRead_U8(guard, aLogos + team);
+        }
+
+        //Built into a temporary so it can be compared against last frame. Rebuilt from scratch
+        //each pass so a cancelled pick vacates its position.
+        std::array<u8, cNumOfPositions> positions;
+        positions.fill(0xFF);
+
+        u16 chemistry_total = 0;
+        u8 drafted_count = 0;
+
+        for (u8 slot = 0; slot < cRosterSize; ++slot){
+            if (!rosterSlotOccupied(guard, team, slot)){
+                continue;
+            }
+
+            u8 char_id  = PowerPC::MMU::HostRead_U8(guard, aRosterCharIDs + team_offset + slot);
+            u8 position = PowerPC::MMU::HostRead_U8(guard, aPositionMapping + team_offset + slot);
+
+            //The game stores slot -> position; the HUD wants position -> character
+            if (position < cNumOfPositions){
+                positions[position] = char_id;
+            }
+
+            //Slot 0 is the captain, whose chemistry entry is with itself. Counting it would skew
+            //the average, so the mean is over the drafted characters only.
+            if (slot != 0){
+                chemistry_total += PowerPC::MMU::HostRead_U8(guard, aChemistryWithCaptain + team_offset + slot);
+                ++drafted_count;
+            }
+        }
+
+        //A position swap leaves the roster untouched, so this is the only thing that catches it
+        if (positions != m_game_info.position_to_char_id[team]){
+            m_game_info.position_to_char_id[team] = positions;
+            changed = true;
+        }
+
+        m_game_info.avg_chemistry[team] =
+            (drafted_count > 0) ? (static_cast<float>(chemistry_total) / drafted_count) : 0.0f;
+    }
+
+    u8 p1_port = PowerPC::MMU::HostRead_U8(guard, aPlayer1Port);
+    u8 p2_port = PowerPC::MMU::HostRead_U8(guard, aPlayer2Port);
+
+    //TODO remove once the menu-time validity of aPlayer1Port/aPlayer2Port is confirmed on hardware
+    if (p1_port != m_game_info.pregame_port[0] || p2_port != m_game_info.pregame_port[1]){
+        std::cout << "Draft: ports read as P1=" << std::to_string(p1_port)
+                  << ", P2=" << std::to_string(p2_port) << "\n";
+    }
+
+    m_game_info.pregame_port[0] = p1_port;
+    m_game_info.pregame_port[1] = p2_port;
+
+    bool local_game = !m_state.m_netplay_session;
+    m_game_info.pregame_player[0] = getPlayerForPort(p1_port, local_game);
+    m_game_info.pregame_player[1] = getPlayerForPort(p2_port, local_game);
+
+    return changed;
 }
 
 //Scans player for possession
@@ -2352,6 +2514,8 @@ void StatTracker::postOngoingGame(Event& in_curr_event){
     json_stream << "  \"Home Logo\": "  << decode("Logo", m_game_info.home_logo, false) << ",\n";
     json_stream << "  \"Away Player\": \""  << m_game_info.getAwayTeamPlayer().GetUserID() << "\",\n";
     json_stream << "  \"Home Player\": \""  << m_game_info.getHomeTeamPlayer().GetUserID() << "\",\n";
+    json_stream << "  \"Away Port\": "  << std::to_string(m_game_info.away_port) << ",\n";
+    json_stream << "  \"Home Port\": "  << std::to_string(m_game_info.home_port) << ",\n";
 
     u8 away_captain_roster_loc = (m_game_info.away_port == m_game_info.team0_port) ? m_game_info.team0_captain_roster_loc : m_game_info.team1_captain_roster_loc;
     u8 home_captain_roster_loc = (m_game_info.home_port == m_game_info.team0_port) ? m_game_info.team0_captain_roster_loc : m_game_info.team1_captain_roster_loc;

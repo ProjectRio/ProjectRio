@@ -160,7 +160,8 @@ static const std::map<u8, std::string> cCharIdToCharName = {
     {0x32, "Dry Bones(R)"},
     {0x33, "Dry Bones(B)"},
     {0x34, "Bro(F)"},
-    {0x35, "Bro(B)"}
+    {0x35, "Bro(B)"},
+    {0xFF, "None"} //Empty slot. Encoded output uses -1 for the same case
 };
 
 static const std::set<u8> cCaptainTypeCharIds = {
@@ -237,6 +238,7 @@ static const std::map<u32, std::string> cLogoIdToTeamName = {
     {0x2D, "Jr Rookies"},
     {0x2E, "Jr Bombers"},
     {0x2F, "Jr Fangs"},
+    {0xFF, "None"}, //Not selected yet. Pre-game logos stay here until a roster is 2 deep
 };
 
 static const std::map<u8, std::string> cTypeOfContactToHR = {
@@ -436,10 +438,13 @@ static const int cNumOfPositions = 9;
 //Addrs for pre-game HUD
 static const u32 aRelNumber = 0x800e877c; // short
 static const u32 aMenuScreenCode = 0x800e877e; // short
-static const u32 aP1RosterCharIDs = 0x803c6726; // 9 bytes
-static const u32 aP2RosterCharIDs = 0x803c672f; // 9 bytes
-static const u32 aP1RosterSpotsFilled = 0x803c676e; // 9 bytes
-static const u32 aP2RosterSpotsFilled = 0x803c6777; // 9 bytes
+//P2 sits directly after P1 in each table, so index with (team * cRosterSize) or (team) as noted
+static const u32 aRosterCharIDs = 0x803c6726; // 2x9 bytes, P1/P2
+static const u32 aPositionMapping = 0x803c6738; // 2x9 bytes, P1/P2
+static const u32 aChemistryWithCaptain = 0x803c674a; // 2x9 bytes, P1/P2
+static const u32 aRosterSpotsFilled = 0x803c676e; // 2x9 bytes, P1/P2
+static const u32 aLogos = 0x803530ad; // 2x1 byte, P1/P2, menu-side. In-game uses aAway_Logo/aHome_Logo
+static const u32 aTeamStars = 0x803530af; // 2x1 byte, P1/P2, menu-side. In-game uses aAB_P1_Stars/aAB_P2_Stars
 
 //Addrs for triggering evts
 static const u32 aGameId           = 0x802EBF8C;
@@ -976,6 +981,28 @@ public:
         //is read in GAME_SETTINGS, which happens after the draft.
         std::array<std::vector<u8>, cNumOfTeams> draft_order;
 
+        //Which player most recently picked or cancelled. The character is derived from that team's
+        //draft_order back(), so a cancel rolls it back with no extra bookkeeping. 0xFF = nothing yet
+        u8 last_pick_team = 0xFF;
+
+        //Pre-game info, all P1/P2 indexed like draft_order and only valid on the roster screen.
+        //Kept separate from team0/team1 so initPlayerInfo's in-game init is left untouched.
+        std::array<u8, cNumOfTeams> captain_char_id = {0xFF, 0xFF};
+        std::array<u8, cNumOfTeams> pregame_logo = {0xFF, 0xFF};
+        std::array<u8, cNumOfTeams> pregame_port = {0xFF, 0xFF};
+        std::array<u8, cNumOfTeams> team_stars = {0xFF, 0xFF};
+        std::array<LocalPlayers::LocalPlayers::Player, cNumOfTeams> pregame_player;
+
+        //Inverted from the game's roster-slot->position table into position->char id, which is
+        //the direction the HUD wants. 0xFF means nobody is playing that position yet
+        std::array<std::array<u8, cNumOfPositions>, cNumOfTeams> position_to_char_id = {{
+            {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+            {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+        }};
+
+        //Mean chemistry with the captain across the characters currently on that roster
+        std::array<float, cNumOfTeams> avg_chemistry = {0.0f, 0.0f};
+
         //Array of both teams' character summaries
         std::array<std::array<CharacterSummary, cRosterSize>, cNumOfTeams> character_summaries;
 
@@ -1301,6 +1328,7 @@ public:
     void writeHUDFiles(const std::string& decoded_json, const std::string& encoded_json);
 
     //Draft tracking. in_team is 0=P1, 1=P2, matching the roster memory layout
+    bool rosterSlotOccupied(const Core::CPUThreadGuard& guard, u8 in_team, u8 in_slot);
     std::vector<u8> readRosterCharIds(const Core::CPUThreadGuard& guard, u8 in_team);
     //Elements of in_lhs that have no match in in_rhs, counting duplicates. Preserves in_lhs order
     std::vector<u8> multisetDifference(const std::vector<u8>& in_lhs, const std::vector<u8>& in_rhs);
@@ -1314,6 +1342,11 @@ public:
     //in-game HUD and statfile use. 0=Away, 1=Home
     const std::vector<u8>& getDraftOrderForTeam(u8 in_away_home_idx);
     std::string draftOrderToJSONArray(const std::vector<u8>& in_draft_order, bool inDecode);
+    //Captains, logos, ports and player names for the pre-game HUD. Only call on the roster screen.
+    //Returns true if the captain or a fielding position changed, neither of which moves draft_order
+    bool logPreGamePlayerInfo(const Core::CPUThreadGuard& guard);
+    //Port to profile, mirroring readPlayerNames without disturbing the in-game team0/team1 path
+    LocalPlayers::LocalPlayers::Player getPlayerForPort(u8 in_port, bool in_local_game);
 
     void postOngoingGame(Event& in_event);
     void updateOngoingGame(Event& in_event);
