@@ -547,19 +547,36 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
             break;
         }
         case (GAME_STATE::BATTING_ORDER):
-            //Nothing on this screen changes per frame, so one write on entry is enough
-            if (game_state_changed) {
+        {
+            MENU_SCREEN menu_screen = static_cast<MENU_SCREEN>(PowerPC::MMU::HostRead_U16(guard, aMenuScreenCode));
+
+            // Same screen gate as the draft: only read while the values are actually meaningful.
+            // The roster fields are still live here, and a batting order swap reorders the roster
+            // structure, so both of these can report a change.
+            bool pregame_changed = false;
+            if (menu_screen == MENU_SCREEN::BATTING_ORDER_SELECT){
+                if (logPreGamePlayerInfo(guard)) {
+                    pregame_changed = true;
+                }
+                if (logBattingOrderInfo(guard)) {
+                    pregame_changed = true;
+                }
+            }
+
+            if (pregame_changed || game_state_changed) {
                 writeHUDFiles(getPreGameHUDJSON(guard, true), getPreGameHUDJSON(guard, false));
             }
-            if (PowerPC::MMU::HostRead_U16(guard, aMenuScreenCode) == static_cast<u16>(MENU_SCREEN::ROSTER_SELECT)) {
+
+            if (menu_screen == MENU_SCREEN::ROSTER_SELECT) {
                 m_game_state = GAME_STATE::DRAFT;
                 std::cout << "BATTING_ORDER->DRAFT\n";
             }
-            else if (PowerPC::MMU::HostRead_U16(guard, aMenuScreenCode) == static_cast<u16>(MENU_SCREEN::STADIUM_SELECT)) {
+            else if (menu_screen == MENU_SCREEN::STADIUM_SELECT) {
                 m_game_state = GAME_STATE::GAME_SETTINGS;
                 std::cout << "BATTING_ORDER->GAME_SETTINGS\n";
             }
             break;
+        }
         case (GAME_STATE::GAME_SETTINGS):
             if (game_state_changed) {
                 writeHUDFiles(getPreGameHUDJSON(guard, true), getPreGameHUDJSON(guard, false));
@@ -710,7 +727,7 @@ void StatTracker::logDefensiveStats(const Core::CPUThreadGuard& guard, int in_te
     
     auto& stat = m_game_info.character_summaries[idx][roster_id].end_game_defensive_stats;
 
-    m_game_info.character_summaries[idx][roster_id].is_starred = PowerPC::MMU::HostRead_U8(guard, aPitcher_IsStarred + is_starred_offset);
+    m_game_info.character_summaries[idx][roster_id].is_starred = PowerPC::MMU::HostRead_U8(guard, aIsStarred + is_starred_offset);
 
     stat.batters_faced       = PowerPC::MMU::HostRead_U8(guard, aPitcher_BattersFaced + offset);
     stat.runs_allowed        = PowerPC::MMU::HostRead_U16(guard, aPitcher_RunsAllowed + offset);
@@ -728,9 +745,9 @@ void StatTracker::logDefensiveStats(const Core::CPUThreadGuard& guard, int in_te
     stat.star_pitches_thrown = PowerPC::MMU::HostRead_U8(guard, aPitcher_StarPitchesThrown + offset);
 
     //Get inherent values. Doesn't strictly belong here but we need the adjusted_team_id
-    m_game_info.character_summaries[idx][roster_id].char_id = PowerPC::MMU::HostRead_U8(guard, aInGame_CharAttributes_CharId + ingame_attribute_table_offset);
-    m_game_info.character_summaries[idx][roster_id].fielding_hand = PowerPC::MMU::HostRead_U8(guard, aInGame_CharAttributes_FieldingHand + ingame_attribute_table_offset);
-    m_game_info.character_summaries[idx][roster_id].batting_hand = PowerPC::MMU::HostRead_U8(guard, aInGame_CharAttributes_BattingHand + ingame_attribute_table_offset);
+    m_game_info.character_summaries[idx][roster_id].char_id = PowerPC::MMU::HostRead_U8(guard, aCharAttributes_CharId + ingame_attribute_table_offset);
+    m_game_info.character_summaries[idx][roster_id].fielding_hand = PowerPC::MMU::HostRead_U8(guard, aCharAttributes_FieldingHand + ingame_attribute_table_offset);
+    m_game_info.character_summaries[idx][roster_id].batting_hand = PowerPC::MMU::HostRead_U8(guard, aCharAttributes_BattingHand + ingame_attribute_table_offset);
 
 }
 
@@ -1694,13 +1711,16 @@ std::string StatTracker::getPreGameHUDJSON(const Core::CPUThreadGuard& guard, bo
     u8 last_pick_team = m_game_info.last_pick_team;
     bool last_pick_vld = (last_pick_team < cNumOfTeams) && !m_game_info.draft_order[last_pick_team].empty();
 
-    if (last_pick_vld){
-        json_stream << "  \"Last Pick\": " << decode("Character", m_game_info.draft_order[last_pick_team].back(), inDecode) << ",\n";
-        json_stream << "  \"Last Pick Player\": " << std::to_string(last_pick_team + 1) << ",\n";
-    }
-    else{
-        json_stream << "  \"Last Pick\": null,\n";
-        json_stream << "  \"Last Pick Player\": null,\n";
+    //Only meaningful while drafting, so the batting order screen drops them entirely
+    if (m_game_state == GAME_STATE::DRAFT){
+        if (last_pick_vld){
+            json_stream << "  \"Last Pick\": " << decode("Character", m_game_info.draft_order[last_pick_team].back(), inDecode) << ",\n";
+            json_stream << "  \"Last Pick Player\": " << std::to_string(last_pick_team + 1) << ",\n";
+        }
+        else{
+            json_stream << "  \"Last Pick\": null,\n";
+            json_stream << "  \"Last Pick Player\": null,\n";
+        }
     }
 
     for (u8 team = 0; team < cNumOfTeams; ++team){
@@ -1728,6 +1748,15 @@ std::string StatTracker::getPreGameHUDJSON(const Core::CPUThreadGuard& guard, bo
         json_stream << "],\n";
 
         json_stream << "  \"" << team_string << " Draft Order\": " << draftOrderToJSONArray(draft_order, inDecode);
+
+        //Only created on the batting order screen, so don't show until after the draft stage.
+        if (m_game_state != GAME_STATE::DRAFT){
+            json_stream << ",\n";
+            json_stream << "  \"" << team_string << " Superstars\": " << rosterArrayToJSONArray(m_game_info.is_superstar[team], "", inDecode) << ",\n";
+            json_stream << "  \"" << team_string << " Batting Order\": " << rosterArrayToJSONArray(m_game_info.batting_order_char_id[team], "Character", inDecode) << ",\n";
+            json_stream << "  \"" << team_string << " Fielding Hands\": " << rosterArrayToJSONArray(m_game_info.fielding_hand[team], "Hand", inDecode) << ",\n";
+            json_stream << "  \"" << team_string << " Batting Hands\": " << rosterArrayToJSONArray(m_game_info.batting_hand[team], "Hand", inDecode);
+        }
 
         json_stream << ((team + 1 < cNumOfTeams) ? ",\n" : "\n");
     }
@@ -1865,6 +1894,77 @@ std::string StatTracker::draftOrderToJSONArray(const std::vector<u8>& in_draft_o
     json_stream << "]";
 
     return json_stream.str();
+}
+
+std::string StatTracker::rosterArrayToJSONArray(const std::array<u8, cRosterSize>& in_values,
+                                                const std::string& in_decode_type, bool inDecode){
+    std::stringstream json_stream;
+
+    json_stream << "[";
+    for (size_t i = 0; i < in_values.size(); ++i){
+        u8 value = in_values[i];
+
+        if (in_decode_type.empty()){
+            //Raw passthrough, for values the game already stores in the form the HUD wants
+            json_stream << std::to_string(value);
+        }
+        else if (value == 0xFF && !inDecode){
+            json_stream << "-1";
+        }
+        else{
+            json_stream << decode(in_decode_type, value, inDecode);
+        }
+
+        if (i + 1 < in_values.size()) { json_stream << ", "; }
+    }
+    json_stream << "]";
+
+    return json_stream.str();
+}
+
+//Superstars, batting order and handedness for the batting order screen. Reordering the batting
+//order swaps two characters' slots in the roster structure, so every one of these arrays moves
+//with it and comparing them is what tells us the HUD is stale.
+bool StatTracker::logBattingOrderInfo(const Core::CPUThreadGuard& guard){
+    bool changed = false;
+
+    for (u8 team = 0; team < cNumOfTeams; ++team){
+        std::array<u8, cRosterSize> superstars;
+        std::array<u8, cRosterSize> char_ids;
+        std::array<u8, cRosterSize> fielding_hands;
+        std::array<u8, cRosterSize> batting_hands;
+
+        for (u8 slot = 0; slot < cRosterSize; ++slot){
+            //The attribute table is one block per character, 2 teams by 9, c_roster_table_offset apart
+            u32 attribute_offset = (team * cRosterSize * c_roster_table_offset) + (slot * c_roster_table_offset);
+
+            char_ids[slot]       = PowerPC::MMU::HostRead_U8(guard, aCharAttributes_CharId + attribute_offset);
+            fielding_hands[slot] = PowerPC::MMU::HostRead_U8(guard, aCharAttributes_FieldingHand + attribute_offset);
+            batting_hands[slot]  = PowerPC::MMU::HostRead_U8(guard, aCharAttributes_BattingHand + attribute_offset);
+
+            //Superstar flags are their own packed 2x9 byte table, so they stride by 1 instead
+            superstars[slot] = PowerPC::MMU::HostRead_U8(guard, aIsStarred + (team * cRosterSize) + slot);
+        }
+
+        if (superstars != m_game_info.is_superstar[team]){
+            m_game_info.is_superstar[team] = superstars;
+            changed = true;
+        }
+        if (char_ids != m_game_info.batting_order_char_id[team]){
+            m_game_info.batting_order_char_id[team] = char_ids;
+            changed = true;
+        }
+        if (fielding_hands != m_game_info.fielding_hand[team]){
+            m_game_info.fielding_hand[team] = fielding_hands;
+            changed = true;
+        }
+        if (batting_hands != m_game_info.batting_hand[team]){
+            m_game_info.batting_hand[team] = batting_hands;
+            changed = true;
+        }
+    }
+
+    return changed;
 }
 
 //Mirrors readPlayerNames' mapping without touching it. That function's local branch is asymmetric

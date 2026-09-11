@@ -252,7 +252,8 @@ static const std::map<u8, std::string> cTypeOfContactToHR = {
 
 static const std::map<u8, std::string> cHandToHR = {
     {0, "Right"},
-    {1, "Left"}
+    {1, "Left"},
+    {0xFF, "None"} //Empty slot. Encoded output uses -1 for the same case
 };
 
 static const std::map<u8, std::string> cInputDirectionToHR = {
@@ -445,6 +446,8 @@ static const u32 aChemistryWithCaptain = 0x803c674a; // 2x9 bytes, P1/P2
 static const u32 aRosterSpotsFilled = 0x803c676e; // 2x9 bytes, P1/P2
 static const u32 aLogos = 0x803530ad; // 2x1 byte, P1/P2, menu-side. In-game uses aAway_Logo/aHome_Logo
 static const u32 aTeamStars = 0x803530af; // 2x1 byte, P1/P2, menu-side. In-game uses aAB_P1_Stars/aAB_P2_Stars
+//The batting order screen reads the superstar flags and the character attribute table too.
+//Those are shared with the in-game path: see aIsStarred and aCharAttributes_* below.
 
 //Addrs for triggering evts
 static const u32 aGameId           = 0x802EBF8C;
@@ -484,9 +487,10 @@ static const u32 aMercyOn = 0x803c5f43;
 
 static const u8 c_roster_table_offset = 0xa0;
 
-static const u32 aInGame_CharAttributes_CharId       = 0x80353C05;
-static const u32 aInGame_CharAttributes_FieldingHand = 0x80353C06;
-static const u32 aInGame_CharAttributes_BattingHand  = 0x80353C07;
+//One block per character, 2 teams (P1/P2 format) by 9, c_roster_table_offset apart. Valid pre-game and in-game
+static const u32 aCharAttributes_CharId       = 0x80353C05;
+static const u32 aCharAttributes_FieldingHand = 0x80353C06; //1 = left
+static const u32 aCharAttributes_BattingHand  = 0x80353C07; //1 = left
 
 static const u32 aPlayer1Port                        = 0x800E874C;
 static const u32 aPlayer2Port                        = 0x800E874D;
@@ -508,7 +512,8 @@ static const u32 aPitcher_BatterOuts        = 0x803535E1;
 static const u32 aPitcher_OutsPitched       = 0x803535E2;
 static const u32 aPitcher_StrikeOuts        = 0x803535E4;
 static const u32 aPitcher_StarPitchesThrown = 0x803535E5;
-static const u32 aPitcher_IsStarred         = 0x8035323B;
+//Its own packed 2x9 byte table, so this one strides by 1 rather than c_roster_table_offset
+static const u32 aIsStarred         = 0x8035323B;
 
 static const u8 c_defensive_stat_offset = 0x1E;
 
@@ -1003,6 +1008,26 @@ public:
         //Mean chemistry with the captain across the characters currently on that roster
         std::array<float, cNumOfTeams> avg_chemistry = {0.0f, 0.0f};
 
+        //Batting order screen. Indexed [team][batting order slot], P1/P2 like the rest of the
+        //pre-game fields. A batting order swap exchanges two characters' slots in the roster
+        //structure, so these arrays reorder rather than change contents.
+        std::array<std::array<u8, cRosterSize>, cNumOfTeams> is_superstar = {{
+            {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+            {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+        }};
+        std::array<std::array<u8, cRosterSize>, cNumOfTeams> batting_order_char_id = {{
+            {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+            {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+        }};
+        std::array<std::array<u8, cRosterSize>, cNumOfTeams> fielding_hand = {{
+            {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+            {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+        }};
+        std::array<std::array<u8, cRosterSize>, cNumOfTeams> batting_hand = {{
+            {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+            {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
+        }};
+
         //Array of both teams' character summaries
         std::array<std::array<CharacterSummary, cRosterSize>, cNumOfTeams> character_summaries;
 
@@ -1342,9 +1367,17 @@ public:
     //in-game HUD and statfile use. 0=Away, 1=Home
     const std::vector<u8>& getDraftOrderForTeam(u8 in_away_home_idx);
     std::string draftOrderToJSONArray(const std::vector<u8>& in_draft_order, bool inDecode);
-    //Captains, logos, ports and player names for the pre-game HUD. Only call on the roster screen.
-    //Returns true if the captain or a fielding position changed, neither of which moves draft_order
+    //A 9-entry roster array. An empty in_decode_type prints raw values; otherwise 0xFF prints as
+    //-1 encoded and decodes through in_decode_type's map, matching the Positions list
+    std::string rosterArrayToJSONArray(const std::array<u8, cRosterSize>& in_values,
+                                       const std::string& in_decode_type, bool inDecode);
+    //Captains, logos, ports and player names for the pre-game HUD. Only call on the roster or
+    //batting order screen. Returns true if the captain or a fielding position changed, neither
+    //of which moves draft_order
     bool logPreGamePlayerInfo(const Core::CPUThreadGuard& guard);
+    //Superstars, batting order, and handedness. Only call on the batting order screen.
+    //Returns true if any of them changed
+    bool logBattingOrderInfo(const Core::CPUThreadGuard& guard);
     //Port to profile, mirroring readPlayerNames without disturbing the in-game team0/team1 path
     LocalPlayers::LocalPlayers::Player getPlayerForPort(u8 in_port, bool in_local_game);
 
