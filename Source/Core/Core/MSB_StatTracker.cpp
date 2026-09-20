@@ -828,26 +828,32 @@ void StatTracker::logPitch(const Core::CPUThreadGuard& guard, Event& in_event){
 
     //First slap,charge,star,bunt
     u8 swing_type = PowerPC::MMU::HostRead_U8(guard, aAB_TypeOfSwing);  // 0=Slap, 1=charge, 3=bunt
+    u8 miss_type = PowerPC::MMU::HostRead_U8(guard, aAB_Miss_SwingOrBunt); // 0=NoSwing, 1=Swing, 2=Bunt
     u8 star_swing = PowerPC::MMU::HostRead_U8(guard, aAB_StarSwing);
     u8 adjusted_swing = 0; //0=miss, 1=slap, 2=charge, 3=star, 4=bunt
     //Adjust swing to definition
     if (star_swing != 0 && hasEnoughStarsForStarSwing(guard, in_event)){
         adjusted_swing = 3;
     }
+    else if (miss_type == 2) { // non-contact bunts don't set swing type, causing the need for this extra check
+        adjusted_swing = 4;
+    }
     else {
         adjusted_swing = swing_type + 1;
     }
 
-    //Use adjusted swing if swing and miss, else 0 (or 4 for bunt)
+    //Use adjusted swing if the batter swung, else 0. Bunts are the exception: aAB_AnySwing
+    //only reports slap/charge/star swings, so every bunt reads 0 there and must be kept.
     u8 any_swing = PowerPC::MMU::HostRead_U8(guard, aAB_AnySwing);  // 0=No swing, 1=swing
-    if (any_swing == 0) {
-        in_event.pitch->type_of_swing = 0;
-    }
-    else if (any_swing >= 1){
+    if (any_swing >= 1 || adjusted_swing == 4) {
         in_event.pitch->type_of_swing = adjusted_swing;
+    }
+    else {
+        in_event.pitch->type_of_swing = 0;
     }
 
     std::cout << "SWING: Swing Type=" << std::to_string(swing_type) << " Star Swing=" << std::to_string(star_swing) 
+              << " Miss type=" << std::to_string(miss_type) 
               << " AnySwing=" << std::to_string(PowerPC::MMU::HostRead_U8(guard, aAB_AnySwing)) << " Final=" << std::to_string(in_event.pitch->type_of_swing) << "\n";
 }
 
