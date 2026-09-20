@@ -242,6 +242,7 @@ static const std::map<u8, std::string> cPitchTypeToHR = {
 
 static const std::map<u8, std::string> cChargePitchTypeToHR = {
     {0, "N/A"},
+    {1, "Charged Captain Star"},
     {2, "Slider"},
     {3, "Perfect"}
 };
@@ -519,8 +520,8 @@ static const u32 aAB_HomeBatter     = 0x80892a6c; //always valid; will show up t
 static const u32 aAB_PitcherRosterID       = 0x80890AD9;
 static const u32 aAB_PitcherID             = 0x80890ADB;
 static const u32 aAB_PitcherHandedness     = 0x80890B01;
-static const u32 aAB_PitchType             = 0x80890B21; //0=Curve, Charge=1, ChangeUp=2
-static const u32 aAB_ChargePitchType       = 0x80890B1F; //2=Slider, 3=Perfect
+static const u32 aAB_PitchType             = 0x80890B21; //0=Curve, Charge=1, ChangeUp=2. On charge star, remains as the default 0.
+static const u32 aAB_ChargePitchType       = 0x80890B1F; //1=Charged Captain Star Pitch, 2=Slider, 3=Perfect
 static const u32 aAB_StarPitch_Captain     = 0x80890B25;
 static const u32 aAB_StarPitch_NonCaptain  = 0x80890B34;
 static const u32 aAB_PitchSpeed            = 0x80890B0A;
