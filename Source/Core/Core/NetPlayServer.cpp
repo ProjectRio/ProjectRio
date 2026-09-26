@@ -1670,7 +1670,10 @@ bool NetPlayServer::SetupNetSettings()
   settings.sync_gpu_min_distance = Config::Get(Config::MAIN_SYNC_GPU_MIN_DISTANCE);
   settings.sync_gpu_overclock = Config::Get(Config::MAIN_SYNC_GPU_OVERCLOCK);
   settings.jit_follow_branch = Config::Get(Config::MAIN_JIT_FOLLOW_BRANCH);
-  settings.fast_disc_speed = Config::Get(Config::MAIN_FAST_DISC_SPEED);
+  // Project Rio: always on. Emulated disc read timing otherwise depends on where each file sits
+  // on the disc, which differs between a good ISO, an NKit image and an extracted folder (all
+  // accepted as the same game), and the players would drift apart on every load.
+  settings.fast_disc_speed = true;
   settings.mmu = Config::Get(Config::MAIN_MMU);
   settings.fastmem = Config::Get(Config::MAIN_FASTMEM);
   settings.skip_ipl = Config::Get(Config::MAIN_SKIP_IPL) || !DoAllPlayersHaveIPLDump();
