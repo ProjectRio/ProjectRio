@@ -71,8 +71,8 @@ bool InitWindow()
     return false;
 
   window_handle =
-      CreateWindow(L"UPDATER", L"Dolphin Updater", WINDOW_FLAGS, CW_USEDEFAULT, CW_USEDEFAULT, 500,
-                   100, nullptr, nullptr, GetModuleHandle(nullptr), 0);
+      CreateWindow(L"UPDATER", L"Project Rio Updater", WINDOW_FLAGS, CW_USEDEFAULT, CW_USEDEFAULT,
+                   500, 100, nullptr, nullptr, GetModuleHandle(nullptr), 0);
 
   if (!window_handle)
     return false;
@@ -183,9 +183,9 @@ void Error(const std::string& text)
 {
   auto message = L"A fatal error occurred and the updater cannot continue:\n " +
                  UTF8ToWString(text) + L"\n" +
-                 L"If the issue persists, please manually download the latest version from "
-                 L"dolphin-emu.org/download and extract it overtop your existing installation.\n" +
-                 L"Also consider filing a bug at bugs.dolphin-emu.org/projects/emulator";
+                 L"If the issue persists, please download the latest version manually from "
+                 L"projectrio.online and install it over your existing installation.\n" +
+                 L"Also consider filing a bug at github.com/ProjectRio/ProjectRio/issues";
 
   MessageBox(nullptr, message.c_str(), L"Error", MB_ICONERROR);
 

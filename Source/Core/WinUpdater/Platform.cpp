@@ -3,8 +3,11 @@
 #include <filesystem>
 #include <map>
 #include <optional>
+#include <sstream>
+#include <string>
 
 #include "Common/CommonPaths.h"
+#include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
 #include "Common/HttpRequest.h"
 #include "Common/IOFile.h"
@@ -246,36 +249,28 @@ static VersionCheckResult OSVersionCheck(const BuildInfo& build_info)
   return result;
 }
 
-std::optional<BuildInfos> InitBuildInfos(const std::vector<TodoList::UpdateOp>& to_update,
-                                         const std::string& install_base_path,
-                                         const std::string& temp_dir)
+std::optional<BuildInfos> InitBuildInfos(const std::string& install_base_path,
+                                         const std::string& package_path)
 {
-  const auto op_it = std::find_if(to_update.cbegin(), to_update.cend(),
-                                  [&](const auto& op) { return op.filename == "build_info.txt"; });
-  if (op_it == to_update.cend())
-    return {};
-
-  const auto op = *op_it;
-  std::string build_info_path =
-      temp_dir + DIR_SEP + HexEncode(op.new_hash.data(), op.new_hash.size());
   std::string build_info_content;
-  if (!File::ReadFileToString(build_info_path, build_info_content) ||
-      op.new_hash != ComputeHash(build_info_content))
+  if (!File::ReadFileToString(package_path + DIR_SEP + "build_info.txt", build_info_content))
   {
-    LogToFile("Failed to read %s\n.", build_info_path.c_str());
+    LogToFile("Package contains no build_info.txt, skipping the platform check.\n");
     return {};
   }
+
   BuildInfos build_infos;
   build_infos.next = Platform::BuildInfo(build_info_content);
 
-  build_info_path = install_base_path + DIR_SEP + "build_info.txt";
+  // The installed build_info.txt may be missing or edited; treat whatever we can't read as "no
+  // information" rather than failing the update over it.
   build_infos.current = Platform::BuildInfo();
-  if (File::ReadFileToString(build_info_path, build_info_content))
-  {
-    if (op.old_hash != ComputeHash(build_info_content))
-      LogToFile("Using modified existing BuildInfo %s.\n", build_info_path.c_str());
+  const std::string installed_path = install_base_path + DIR_SEP + "build_info.txt";
+  if (File::ReadFileToString(installed_path, build_info_content))
     build_infos.current = Platform::BuildInfo(build_info_content);
-  }
+  else
+    LogToFile("Could not read the installed %s.\n", installed_path.c_str());
+
   return build_infos;
 }
 
@@ -316,10 +311,9 @@ bool CheckBuildInfo(const BuildInfos& build_infos)
   return true;
 }
 
-bool VersionCheck(const std::vector<TodoList::UpdateOp>& to_update,
-                  const std::string& install_base_path, const std::string& temp_dir)
+bool VersionCheck(const std::string& install_base_path, const std::string& package_path)
 {
-  auto build_infos = InitBuildInfos(to_update, install_base_path, temp_dir);
+  auto build_infos = InitBuildInfos(install_base_path, package_path);
   // If there's no build info, it means the check should be skipped.
   if (!build_infos.has_value())
   {

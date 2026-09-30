@@ -145,19 +145,12 @@ bool UI::IsTestMode()
   return false;
 }
 
-bool Platform::VersionCheck(const std::vector<TodoList::UpdateOp>& to_update,
-                            const std::string& install_base_path, const std::string& temp_dir)
+bool Platform::VersionCheck(const std::string& /*install_base_path*/,
+                            const std::string& package_path)
 {
-  const auto op_it = std::find_if(to_update.cbegin(), to_update.cend(), [&](const auto& op) {
-    return op.filename == "Dolphin.app/Contents/Info.plist";
-  });
-  if (op_it == to_update.cend())
-    return true;
+  const std::string plist_path = package_path + "/" + MAC_APP_BUNDLE + "/Contents/Info.plist";
 
-  const auto op = *op_it;
-  std::string plist_path = temp_dir + "/" + HexEncode(op.new_hash.data(), op.new_hash.size());
-
-  NSData* data = [NSData dataWithContentsOfFile:[NSString stringWithCString:plist_path.c_str()]];
+  NSData* data = [NSData dataWithContentsOfFile:[NSString stringWithUTF8String:plist_path.c_str()]];
   if (!data)
   {
     LogToFile("Failed to read %s, skipping platform version check.\n", plist_path.c_str());
@@ -182,16 +175,23 @@ bool Platform::VersionCheck(const std::vector<TodoList::UpdateOp>& to_update,
     return true;
   }
 
+  // LSMinimumSystemVersion is often only "major.minor", so read the components that are there
+  // rather than indexing past the end of the array.
   NSArray* components = [min_version_str componentsSeparatedByString:@"."];
-  NSOperatingSystemVersion next_version{
-      [components[0] integerValue], [components[1] integerValue], [components[2] integerValue]};
+  NSOperatingSystemVersion next_version{};
+  if (components.count > 0)
+    next_version.majorVersion = [components[0] integerValue];
+  if (components.count > 1)
+    next_version.minorVersion = [components[1] integerValue];
+  if (components.count > 2)
+    next_version.patchVersion = [components[2] integerValue];
 
   LogToFile("Platform version check: next_version=%ld.%ld.%ld\n", (long)next_version.majorVersion,
             (long)next_version.minorVersion, (long)next_version.patchVersion);
 
   if (![[NSProcessInfo processInfo] isOperatingSystemAtLeastVersion:next_version])
   {
-    UI::Error("Please update macOS in order to update Dolphin.");
+    UI::Error("Please update macOS in order to update Project Rio.");
     return false;
   }
   return true;

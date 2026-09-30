@@ -26,6 +26,10 @@ mkdir -p build
 pushd build
 cmake ${CMAKE_FLAGS} ..
 cmake --build . --target dolphin-emu -- -j$(sysctl -n hw.logicalcpu)
+# The auto-updater. It ships as its own bundle next to ProjectRio.app, because that is where
+# AutoUpdateChecker::UpdaterPath() looks for it (GetExeDirectory() is the directory *containing*
+# the bundle on macOS). Both have to be in the release archive for updates to work.
+cmake --build . --target MacUpdater -- -j$(sysctl -n hw.logicalcpu)
 popd
 
 echo "Copying Sys files into the bundle"
@@ -199,3 +203,15 @@ codesign --force --sign - "${APP}"
 # missed signature on the main binary). --deep would re-hash every nested
 # Mach-O a second time — not worth the time on CI for ad-hoc builds.
 codesign --verify --strict --verbose=2 "${APP}"
+
+# Sign the updater too. It is a separate bundle beside ProjectRio.app rather than something nested
+# inside it, so the seal above does not cover it. It links everything statically and has no
+# embedded frameworks, so one pass over the bundle is enough.
+UPDATER="./build/Binaries/Project Rio Updater.app"
+if [ -d "${UPDATER}" ]; then
+    echo "Ad-hoc signing updater bundle..."
+    codesign --force --sign - "${UPDATER}"
+    codesign --verify --strict --verbose=2 "${UPDATER}"
+else
+    echo "Updater bundle not found, skipping (auto-update will fall back to a download prompt)."
+fi

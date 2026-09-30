@@ -4,6 +4,9 @@
 #include "DolphinQt/Updater.h"
 
 #include <cstdlib>
+#include <optional>
+#include <sstream>
+#include <string>
 #include <utility>
 
 #include <QCheckBox>
@@ -11,9 +14,10 @@
 #include <QDialogButtonBox>
 #include <QLabel>
 #include <QPushButton>
-#include <QTextBrowser>
+#include <QTextEdit>
 #include <QVBoxLayout>
 
+#include "Common/Config/Config.h"
 #include "Common/Version.h"
 
 #include "DolphinQt/QtUtils/RunOnObject.h"
@@ -152,10 +156,9 @@ std::string Updater::MarkDownToRichText(std::string str)
   return out;
 }
 
-void Updater::OnUpdateAvailable(const NewVersionInformation& info)
+void Updater::ShowDownloadPrompt(const NewVersionInformation& info, const std::string& changes)
 {
-  std::string changes = MarkDownToRichText(info.changelog_html);
-  std::optional<int> choice = RunOnObject(m_parent, [&] {
+  RunOnObject(m_parent, [&] {
     QDialog* dialog = new QDialog(m_parent);
     dialog->setWindowTitle(tr("Update available"));
     dialog->setWindowFlags(dialog->windowFlags() & ~Qt::WindowContextHelpButtonHint);
@@ -191,82 +194,84 @@ void Updater::OnUpdateAvailable(const NewVersionInformation& info)
     changelog->setMinimumHeight(350);
     return dialog->exec();
   });
+}
 
-  /*
+void Updater::OnUpdateAvailable(const NewVersionInformation& info)
+{
+  const std::string changes = MarkDownToRichText(info.changelog_html);
+
+  // Without an updater binary or a release asset for this platform we can only point the user at
+  // the download page.
+  if (info.package_url.empty() || !AutoUpdateChecker::SystemSupportsAutoUpdates())
   {
-    if (std::getenv("DOLPHIN_UPDATE_SERVER_URL"))
-    {
-      TriggerUpdate(info, AutoUpdateChecker::RestartMode::RESTART_AFTER_UPDATE);
-      RunOnObject(m_parent, [this] {
-        m_parent->close();
-        return 0;
-      });
-      return;
-    }
+    ShowDownloadPrompt(info, changes);
+    return;
+  }
 
-    bool later = false;
+  bool later = false;
 
-    std::optional<int> choice = RunOnObject(m_parent, [&] {
-      QDialog* dialog = new QDialog(m_parent);
-      dialog->setWindowTitle(tr("Update available"));
-      dialog->setWindowFlags(dialog->windowFlags() & ~Qt::WindowContextHelpButtonHint);
+  std::optional<int> choice = RunOnObject(m_parent, [&] {
+    QDialog* dialog = new QDialog(m_parent);
+    dialog->setWindowTitle(tr("Update available"));
+    dialog->setWindowFlags(dialog->windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
-      auto* label = new QLabel(
-          tr("<h2>A new version of Dolphin is available!</h2>Dolphin %1 is available for "
-            "download. "
-            "You are running %2.<br> Would you like to update?<br><h4>Release Notes:</h4>")
-              .arg(QString::fromStdString(info.new_shortrev))
-              .arg(QString::fromStdString(Common::GetScmDescStr())));
-      label->setTextFormat(Qt::RichText);
+    auto* label =
+        new QLabel(tr("<h2>A new version of Rio is available!</h2>"
+                      "<u>New Version:</u><strong> %1</strong><br/>"
+                      "<u>Your Version:</u><strong> %2</strong><br/>"
+                      "<br/>Would you like to update now?"
+                      "<h3>Changelog</h3>")
+                       .arg(QString::fromStdString(info.new_shortrev))
+                       .arg(QString::fromStdString(Common::GetRioRevStr())));
+    label->setTextFormat(Qt::RichText);
 
-      auto* changelog = new QTextBrowser;
+    auto* changelog = new QTextEdit;
+    changelog->setHtml(QString::fromStdString(changes));
+    changelog->setReadOnly(true);
+    changelog->setMinimumHeight(350);
 
-      changelog->setHtml(QString::fromStdString(info.changelog_html));
-      changelog->setOpenExternalLinks(true);
-      changelog->setMinimumWidth(400);
+    auto* update_later_check = new QCheckBox(tr("Update after closing Rio"));
+    connect(update_later_check, &QCheckBox::toggled, [&](bool checked) { later = checked; });
 
-      auto* update_later_check = new QCheckBox(tr("Update after closing Dolphin"));
+    auto* buttons = new QDialogButtonBox;
+    auto* never_btn =
+        buttons->addButton(tr("Never Auto-Update"), QDialogButtonBox::DestructiveRole);
+    buttons->addButton(tr("Remind Me Later"), QDialogButtonBox::RejectRole);
+    buttons->addButton(tr("Install Update"), QDialogButtonBox::AcceptRole);
 
-      connect(update_later_check, &QCheckBox::toggled, [&](bool checked) { later = checked; });
-
-      auto* buttons = new QDialogButtonBox;
-
-      auto* never_btn =
-          buttons->addButton(tr("Never Auto-Update"), QDialogButtonBox::DestructiveRole);
-      buttons->addButton(tr("Remind Me Later"), QDialogButtonBox::RejectRole);
-      buttons->addButton(tr("Install Update"), QDialogButtonBox::AcceptRole);
-
-      auto* layout = new QVBoxLayout;
-      dialog->setLayout(layout);
-
-      layout->addWidget(label);
-      layout->addWidget(changelog);
-      layout->addWidget(update_later_check);
-      layout->addWidget(buttons);
-
-      connect(never_btn, &QPushButton::clicked, [dialog] {
-        Settings::Instance().SetAutoUpdateTrack(QString{});
-        dialog->reject();
-      });
-
-      connect(buttons, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
-      connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
-
-      return dialog->exec();
+    connect(never_btn, &QPushButton::clicked, [dialog] {
+      Settings::Instance().SetAutoUpdateTrack(QString{});
+      // Write it out now so "never" sticks even if Rio doesn't get to shut down cleanly.
+      Config::Save();
+      dialog->reject();
     });
+    connect(buttons, &QDialogButtonBox::accepted, dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, dialog, &QDialog::reject);
 
-    if (choice && *choice == QDialog::Accepted)
-    {
-      TriggerUpdate(info, later ? AutoUpdateChecker::RestartMode::NO_RESTART_AFTER_UPDATE :
-                                  AutoUpdateChecker::RestartMode::RESTART_AFTER_UPDATE);
+    auto* layout = new QVBoxLayout;
+    layout->addWidget(label);
+    layout->addWidget(changelog);
+    layout->addWidget(update_later_check);
+    layout->addWidget(buttons);
+    dialog->setLayout(layout);
+    SetQWidgetWindowDecorations(dialog);
+    dialog->resize(500, 600);
 
-      if (!later)
-      {
-        RunOnObject(m_parent, [this] {
-          m_parent->close();
-          return 0;
-        });
-      }
-    }
-  }*/
+    return dialog->exec();
+  });
+
+  if (!choice || *choice != QDialog::Accepted)
+    return;
+
+  TriggerUpdate(info, later ? AutoUpdateChecker::RestartMode::NO_RESTART_AFTER_UPDATE :
+                              AutoUpdateChecker::RestartMode::RESTART_AFTER_UPDATE);
+
+  // The updater waits for us to exit before it touches any files.
+  if (!later)
+  {
+    RunOnObject(m_parent, [this] {
+      m_parent->close();
+      return 0;
+    });
+  }
 }

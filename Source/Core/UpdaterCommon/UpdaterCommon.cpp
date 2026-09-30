@@ -4,45 +4,39 @@
 #include "UpdaterCommon/UpdaterCommon.h"
 
 #include <array>
-#include <memory>
 #include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #include <OptionParser.h>
-#include <ed25519.h>
-#include <mbedtls/base64.h>
 #include <mbedtls/sha256.h>
-#include <zlib.h>
+#include <mz_compat.h>
 
 #include "Common/CommonFuncs.h"
 #include "Common/CommonPaths.h"
+#include "Common/CommonTypes.h"
 #include "Common/FileUtil.h"
 #include "Common/HttpRequest.h"
 #include "Common/IOFile.h"
+#include "Common/MinizipUtil.h"
 #include "Common/ScopeGuard.h"
 #include "Common/StringUtil.h"
 #include "UpdaterCommon/Platform.h"
 #include "UpdaterCommon/UI.h"
 
-#ifndef _WIN32
-#include <sys/stat.h>
-#include <sys/types.h>
-#endif
-
 #ifdef _WIN32
 #include <Windows.h>
-#include <filesystem>
+#endif
+
+#ifdef __APPLE__
+#include <spawn.h>
+#include <sys/wait.h>
+
+extern char** environ;
 #endif
 
 // Refer to docs/autoupdate_overview.md for a detailed overview of the autoupdate process
-
-// Public key used to verify update manifests.
-const std::array<u8, 32> UPDATE_PUB_KEY = {
-    0x2a, 0xb3, 0xd1, 0xdc, 0x6e, 0xf5, 0x07, 0xf6, 0xa0, 0x6c, 0x7c, 0x54, 0xdf, 0x54, 0xf4, 0x42,
-    0x80, 0xa6, 0x28, 0x8b, 0x6d, 0x70, 0x14, 0xb5, 0x4c, 0x34, 0x95, 0x20, 0x4d, 0xd4, 0xd3, 0x5d};
-// The private key for UPDATE_PUB_KEY_TEST is in Tools/test-updater.py
-const std::array<u8, 32> UPDATE_PUB_KEY_TEST = {
-    0x0c, 0x5f, 0xdc, 0xd1, 0x15, 0x71, 0xfb, 0x86, 0x4f, 0x9e, 0x6d, 0xe6, 0x65, 0x39, 0x43, 0xe1,
-    0x9e, 0xe0, 0x9b, 0x28, 0xc9, 0x1a, 0x60, 0xb7, 0x67, 0x1c, 0xf3, 0xf6, 0xca, 0x1b, 0xdd, 0x1a};
 
 // Where to log updater output.
 static File::IOFile log_file;
@@ -57,6 +51,20 @@ void LogToFile(const char* fmt, ...)
 
   va_end(args);
 }
+
+namespace
+{
+struct Options
+{
+  std::string package_url;
+  std::string package_filename;
+  // "sha256:<hex>" as reported by the GitHub API, empty if the release did not provide one.
+  std::string package_digest;
+  std::string install_base_path;
+  std::optional<std::string> binary_to_restart;
+  std::optional<u32> parent_pid;
+  std::optional<std::string> log_file;
+};
 
 bool ProgressCallback(s64 total, s64 now, s64, s64)
 {
@@ -77,431 +85,10 @@ std::string HexEncode(const u8* buffer, size_t size)
   return out;
 }
 
-bool HexDecode(const std::string& hex, u8* buffer, size_t size)
-{
-  if (hex.size() != size * 2)
-    return false;
-
-  auto DecodeNibble = [](char c) -> std::optional<u8> {
-    if (c >= '0' && c <= '9')
-      return static_cast<u8>(c - '0');
-    else if (c >= 'a' && c <= 'f')
-      return static_cast<u8>(c - 'a' + 10);
-    else if (c >= 'A' && c <= 'F')
-      return static_cast<u8>(c - 'A' + 10);
-    else
-      return {};
-  };
-  for (size_t i = 0; i < size; ++i)
-  {
-    std::optional<u8> high = DecodeNibble(hex[2 * i]);
-    std::optional<u8> low = DecodeNibble(hex[2 * i + 1]);
-
-    if (!high || !low)
-      return false;
-
-    buffer[i] = (*high << 4) | *low;
-  }
-
-  return true;
-}
-
-std::optional<std::string> GzipInflate(const std::string& data)
-{
-  z_stream zstrm;
-  zstrm.zalloc = nullptr;
-  zstrm.zfree = nullptr;
-  zstrm.opaque = nullptr;
-  zstrm.avail_in = static_cast<u32>(data.size());
-  zstrm.next_in = reinterpret_cast<u8*>(const_cast<char*>(data.data()));
-
-  // 16 + MAX_WBITS means gzip. Don't ask me.
-  inflateInit2(&zstrm, 16 + MAX_WBITS);
-
-  std::string out;
-  const size_t buf_len = 20 * 1024 * 1024;
-  auto buffer = std::make_unique<char[]>(buf_len);
-  int ret;
-
-  do
-  {
-    zstrm.avail_out = buf_len;
-    zstrm.next_out = reinterpret_cast<u8*>(buffer.get());
-
-    ret = inflate(&zstrm, 0);
-    out.append(buffer.get(), buf_len - zstrm.avail_out);
-  } while (ret == Z_OK);
-
-  inflateEnd(&zstrm);
-
-  if (ret != Z_STREAM_END)
-  {
-    LogToFile("Could not read the data as gzip: error %d.\n", ret);
-    return {};
-  }
-
-  return out;
-}
-
-Manifest::Hash ComputeHash(const std::string& contents)
-{
-  std::array<u8, 32> full;
-  mbedtls_sha256_ret(reinterpret_cast<const u8*>(contents.data()), contents.size(), full.data(),
-                     false);
-
-  Manifest::Hash out;
-  std::copy(full.begin(), full.begin() + 16, out.begin());
-  return out;
-}
-
-bool VerifySignature(const std::string& data, const std::string& b64_signature)
-{
-  u8 signature[64];  // ed25519 sig size.
-  size_t sig_size;
-
-  if (mbedtls_base64_decode(signature, sizeof(signature), &sig_size,
-                            reinterpret_cast<const u8*>(b64_signature.data()),
-                            b64_signature.size()) ||
-      sig_size != sizeof(signature))
-  {
-    LogToFile("Invalid base64: %s\n", b64_signature.c_str());
-    return false;
-  }
-
-  const auto& pub_key = UI::IsTestMode() ? UPDATE_PUB_KEY_TEST : UPDATE_PUB_KEY;
-  return ed25519_verify(signature, reinterpret_cast<const u8*>(data.data()), data.size(),
-                        pub_key.data());
-}
-
 void FlushLog()
 {
   log_file.Flush();
   log_file.Close();
-}
-
-void TodoList::Log() const
-{
-  if (to_update.size())
-  {
-    LogToFile("Updating:\n");
-    for (const auto& op : to_update)
-    {
-      std::string old_desc =
-          op.old_hash ? HexEncode(op.old_hash->data(), op.old_hash->size()) : "(new)";
-      LogToFile("  - %s: %s -> %s\n", op.filename.c_str(), old_desc.c_str(),
-                HexEncode(op.new_hash.data(), op.new_hash.size()).c_str());
-    }
-  }
-  if (to_delete.size())
-  {
-    LogToFile("Deleting:\n");
-    for (const auto& op : to_delete)
-    {
-      LogToFile("  - %s (%s)\n", op.filename.c_str(),
-                HexEncode(op.old_hash.data(), op.old_hash.size()).c_str());
-    }
-  }
-}
-
-bool DownloadContent(const std::vector<TodoList::DownloadOp>& to_download,
-                     const std::string& content_base_url, const std::string& temp_path)
-{
-  Common::HttpRequest req(std::chrono::seconds(30), ProgressCallback);
-
-  UI::SetTotalMarquee(false);
-
-  for (size_t i = 0; i < to_download.size(); i++)
-  {
-    UI::SetTotalProgress(static_cast<int>(i + 1), static_cast<int>(to_download.size()));
-
-    auto& download = to_download[i];
-
-    std::string hash_filename = HexEncode(download.hash.data(), download.hash.size());
-
-    // File already exists, skipping
-    if (File::Exists(temp_path + DIR_SEP + hash_filename))
-      continue;
-
-    UI::SetDescription("Downloading " + download.filename + "... (File " + std::to_string(i + 1) +
-                       " of " + std::to_string(to_download.size()) + ")");
-    UI::SetCurrentMarquee(false);
-
-    // Add slashes where needed.
-    std::string content_store_path = hash_filename;
-    content_store_path.insert(4, "/");
-    content_store_path.insert(2, "/");
-
-    std::string url = content_base_url + content_store_path;
-    LogToFile("Downloading %s ...\n", url.c_str());
-
-    auto resp = req.Get(url);
-    if (!resp)
-      return false;
-
-    UI::SetCurrentMarquee(true);
-    UI::SetDescription("Verifying " + download.filename + "...");
-
-    std::string contents(reinterpret_cast<char*>(resp->data()), resp->size());
-    std::optional<std::string> maybe_decompressed = GzipInflate(contents);
-    if (!maybe_decompressed)
-      return false;
-    const std::string decompressed = std::move(*maybe_decompressed);
-
-    // Check that the downloaded contents have the right hash.
-    Manifest::Hash contents_hash = ComputeHash(decompressed);
-    if (contents_hash != download.hash)
-    {
-      LogToFile("Wrong hash on downloaded content %s.\n", url.c_str());
-      return false;
-    }
-
-    const std::string out = temp_path + DIR_SEP + hash_filename;
-    if (!File::WriteStringToFile(out, decompressed))
-    {
-      LogToFile("Could not write cache file %s.\n", out.c_str());
-      return false;
-    }
-  }
-  return true;
-}
-
-bool PlatformVersionCheck(const std::vector<TodoList::UpdateOp>& to_update,
-                          const std::string& install_base_path, const std::string& temp_dir)
-{
-  UI::SetDescription("Checking platform...");
-  return Platform::VersionCheck(to_update, install_base_path, temp_dir);
-}
-
-TodoList ComputeActionsToDo(Manifest this_manifest, Manifest next_manifest)
-{
-  TodoList todo;
-
-  // Delete if present in this manifest but not in next manifest.
-  for (const auto& entry : this_manifest.entries)
-  {
-    if (next_manifest.entries.find(entry.first) == next_manifest.entries.end())
-    {
-      TodoList::DeleteOp del;
-      del.filename = entry.first;
-      del.old_hash = entry.second;
-      todo.to_delete.push_back(std::move(del));
-    }
-  }
-
-  // Download and update if present in next manifest with different hash from this manifest.
-  for (const auto& entry : next_manifest.entries)
-  {
-    std::optional<Manifest::Hash> old_hash;
-
-    const auto& old_entry = this_manifest.entries.find(entry.first);
-    if (old_entry != this_manifest.entries.end())
-      old_hash = old_entry->second;
-
-    if (!old_hash || *old_hash != entry.second)
-    {
-      TodoList::DownloadOp download;
-      download.filename = entry.first;
-      download.hash = entry.second;
-
-      todo.to_download.push_back(std::move(download));
-
-      TodoList::UpdateOp update;
-      update.filename = entry.first;
-      update.old_hash = old_hash;
-      update.new_hash = entry.second;
-      todo.to_update.push_back(std::move(update));
-    }
-  }
-
-  return todo;
-}
-
-void CleanUpTempDir(const std::string& temp_dir, const TodoList& todo)
-{
-  // This is best-effort cleanup, we ignore most errors.
-  for (const auto& download : todo.to_download)
-    File::Delete(temp_dir + DIR_SEP + HexEncode(download.hash.data(), download.hash.size()));
-  File::DeleteDir(temp_dir);
-}
-
-bool BackupFile(const std::string& path)
-{
-  std::string backup_path = path + ".bak";
-  LogToFile("Backing up existing %s to .bak.\n", path.c_str());
-  if (!File::Rename(path, backup_path))
-  {
-    LogToFile("Cound not rename %s to %s for backup.\n", path.c_str(), backup_path.c_str());
-    return false;
-  }
-  return true;
-}
-
-bool DeleteObsoleteFiles(const std::vector<TodoList::DeleteOp>& to_delete,
-                         const std::string& install_base_path)
-{
-  for (const auto& op : to_delete)
-  {
-    std::string path = install_base_path + DIR_SEP + op.filename;
-
-    if (!File::Exists(path))
-    {
-      LogToFile("File %s is already missing.\n", op.filename.c_str());
-      continue;
-    }
-    else
-    {
-      std::string contents;
-      if (!File::ReadFileToString(path, contents))
-      {
-        LogToFile("Could not read file planned for deletion: %s.\n", op.filename.c_str());
-        return false;
-      }
-      Manifest::Hash contents_hash = ComputeHash(contents);
-      if (contents_hash != op.old_hash)
-      {
-        if (!BackupFile(path))
-          return false;
-      }
-
-      File::Delete(path);
-    }
-  }
-  return true;
-}
-
-bool UpdateFiles(const std::vector<TodoList::UpdateOp>& to_update,
-                 const std::string& install_base_path, const std::string& temp_path)
-{
-#ifdef _WIN32
-  const auto self_path = std::filesystem::path(Common::GetModuleName(nullptr).value());
-  const auto self_filename = self_path.filename();
-#endif
-
-  for (const auto& op : to_update)
-  {
-    std::string path = install_base_path + DIR_SEP + op.filename;
-    if (!File::CreateFullPath(path))
-    {
-      LogToFile("Could not create directory structure for %s.\n", op.filename.c_str());
-      return false;
-    }
-
-#ifndef _WIN32
-    // TODO: A new updater protocol version is required to properly mark executable files. For
-    // now, copy executable bits from existing files. This will break for newly added executables.
-    std::optional<mode_t> permission;
-#endif
-
-    if (File::Exists(path))
-    {
-#ifndef _WIN32
-      struct stat file_stats;
-
-      if (lstat(path.c_str(), &file_stats) != 0)
-        continue;
-
-      if (S_ISLNK(file_stats.st_mode))
-      {
-        LogToFile("%s is symlink, skipping\n", path.c_str());
-        continue;
-      }
-
-      permission = file_stats.st_mode;
-#endif
-
-#ifdef _WIN32
-      // If incoming file would overwrite the currently executing file, rename ourself to allow the
-      // overwrite to complete. Renaming ourself while executing is fine, but deleting ourself is
-      // rather tricky. The best way to handle that would be to execute the newly-placed Updater.exe
-      // after entire update has completed, and have it delete our relocated executable. For now we
-      // just let the relocated file hang around.
-      // It is enough to match based on filename, don't need File/VolumeId etc.
-      const bool is_self = op.filename == self_filename;
-#else
-      // On other platforms, the renaming is handled by Dolphin before running the Updater.
-      const bool is_self = false;
-#endif
-
-      std::string contents;
-      if (!File::ReadFileToString(path, contents))
-      {
-        LogToFile("Could not read existing file %s.\n", op.filename.c_str());
-        return false;
-      }
-      Manifest::Hash contents_hash = ComputeHash(contents);
-      if (contents_hash == op.new_hash)
-      {
-        LogToFile("File %s was already up to date. Partial update?\n", op.filename.c_str());
-        continue;
-      }
-      else if (!op.old_hash || contents_hash != *op.old_hash || is_self)
-      {
-        if (!BackupFile(path))
-          return false;
-      }
-    }
-
-    // Now we can safely move the new contents to the location.
-    std::string content_filename = HexEncode(op.new_hash.data(), op.new_hash.size());
-    LogToFile("Updating file %s from content %s...\n", op.filename.c_str(),
-              content_filename.c_str());
-#ifdef __APPLE__
-    // macOS caches the code signature of Mach-O executables when they're first loaded.
-    // Unfortunately, there is a quirk in the kernel with how it handles the cache: if the file is
-    // simply overwritten, the cache isn't invalidated and the old code signature is used to verify
-    // the new file. This causes macOS to kill the process with a code signing error. To workaround
-    // this, we use File::Rename() instead of File::CopyRegularFile(). However, this also means that
-    // if two files have the same hash, the first file will succeed, but the second file will fail
-    // because the source file no longer exists. To deal with this, we copy the content file to a
-    // temporary file and then rename the temporary file to the destination path.
-    const std::string temporary_file = temp_path + DIR_SEP + "temporary_file";
-    if (!File::CopyRegularFile(temp_path + DIR_SEP + content_filename, temporary_file))
-    {
-      LogToFile("Could not copy %s to %s.\n", content_filename.c_str(), temporary_file.c_str());
-      return false;
-    }
-
-    if (!File::Rename(temporary_file, path))
-#else
-    if (!File::CopyRegularFile(temp_path + DIR_SEP + content_filename, path))
-#endif
-    {
-      LogToFile("Could not update file %s.\n", op.filename.c_str());
-      return false;
-    }
-
-#ifndef _WIN32
-    if (permission.has_value() && chmod(path.c_str(), permission.value()) != 0)
-      return false;
-#endif
-  }
-  return true;
-}
-
-bool PerformUpdate(const TodoList& todo, const std::string& install_base_path,
-                   const std::string& content_base_url, const std::string& temp_path)
-{
-  LogToFile("Starting download step...\n");
-  if (!DownloadContent(todo.to_download, content_base_url, temp_path))
-    return false;
-  LogToFile("Download step completed.\n");
-
-  LogToFile("Starting platform version check step...\n");
-  if (!PlatformVersionCheck(todo.to_update, install_base_path, temp_path))
-    return false;
-  LogToFile("Platform version check step completed.\n");
-
-  LogToFile("Starting update step...\n");
-  if (!UpdateFiles(todo.to_update, install_base_path, temp_path))
-    return false;
-  LogToFile("Update step completed.\n");
-
-  LogToFile("Starting deletion step...\n");
-  if (!DeleteObsoleteFiles(todo.to_delete, install_base_path))
-    return false;
-  LogToFile("Deletion step completed.\n");
-
-  return true;
 }
 
 void FatalError(const std::string& message)
@@ -512,129 +99,466 @@ void FatalError(const std::string& message)
   UI::Error(message);
 }
 
-std::optional<Manifest> ParseManifest(const std::string& manifest)
+// The GitHub API reports a sha256 for every release asset. That is not a signature - it arrives in
+// the same TLS-protected response as the download URL - but it does catch a truncated or corrupted
+// download before we unpack or execute it.
+bool VerifyDigest(const std::vector<u8>& data, const std::string& digest)
 {
-  Manifest parsed;
-  size_t pos = 0;
+  constexpr std::string_view SHA256_PREFIX = "sha256:";
 
-  while (pos < manifest.size())
+  if (digest.empty())
   {
-    size_t filename_end_pos = manifest.find('\t', pos);
-    if (filename_end_pos == std::string::npos)
-    {
-      LogToFile("Manifest entry %zu: could not find filename end.\n", parsed.entries.size());
-      return {};
-    }
-    size_t hash_end_pos = manifest.find('\n', filename_end_pos);
-    if (hash_end_pos == std::string::npos)
-    {
-      LogToFile("Manifest entry %zu: could not find hash end.\n", parsed.entries.size());
-      return {};
-    }
-
-    std::string filename = manifest.substr(pos, filename_end_pos - pos);
-    std::string hash = manifest.substr(filename_end_pos + 1, hash_end_pos - filename_end_pos - 1);
-    if (hash.size() != 32)
-    {
-      LogToFile("Manifest entry %zu: invalid hash: \"%s\".\n", parsed.entries.size(), hash.c_str());
-      return {};
-    }
-
-    Manifest::Hash decoded_hash;
-    if (!HexDecode(hash, decoded_hash.data(), decoded_hash.size()))
-    {
-      LogToFile("Manifest entry %zu: invalid hash: \"%s\".\n", parsed.entries.size(), hash.c_str());
-      return {};
-    }
-
-    parsed.entries[filename] = decoded_hash;
-    pos = hash_end_pos + 1;
+    LogToFile("Release provided no digest for this package, skipping verification.\n");
+    return true;
+  }
+  if (!digest.starts_with(SHA256_PREFIX))
+  {
+    LogToFile("Unsupported package digest \"%s\".\n", digest.c_str());
+    return false;
   }
 
-  return parsed;
+  std::array<u8, 32> hash;
+  mbedtls_sha256_ret(data.data(), data.size(), hash.data(), false);
+  const std::string computed = HexEncode(hash.data(), hash.size());
+
+  std::string expected(digest.substr(SHA256_PREFIX.size()));
+  Common::ToLower(&expected);
+  if (computed != expected)
+  {
+    LogToFile("Package hash mismatch: expected %s, got %s.\n", expected.c_str(), computed.c_str());
+    return false;
+  }
+
+  LogToFile("Package hash %s verified.\n", computed.c_str());
+  return true;
 }
 
-// Not showing a progress bar here because this part is just too quick
-std::optional<Manifest> FetchAndParseManifest(const std::string& url)
+bool DownloadPackage(const Options& opts, const std::string& destination)
 {
-  Common::HttpRequest http;
+  UI::SetDescription("Downloading " + opts.package_filename + "...");
+  UI::SetTotalMarquee(true);
+  UI::SetCurrentMarquee(false);
 
-  Common::HttpRequest::Response resp = http.Get(url);
+  LogToFile("Downloading %s ...\n", opts.package_url.c_str());
+
+  Common::HttpRequest req(std::chrono::seconds(30), ProgressCallback);
+  req.FollowRedirects(10);  // Release assets redirect to GitHub's asset host.
+  const auto resp = req.Get(opts.package_url);
   if (!resp)
   {
-    LogToFile("Manifest download failed.\n");
-    return {};
+    LogToFile("Download of %s failed.\n", opts.package_url.c_str());
+    return false;
   }
 
-  std::string contents(reinterpret_cast<char*>(resp->data()), resp->size());
-  std::optional<std::string> maybe_decompressed = GzipInflate(contents);
-  if (!maybe_decompressed)
-    return {};
-  std::string decompressed = std::move(*maybe_decompressed);
+  UI::SetDescription("Verifying " + opts.package_filename + "...");
+  UI::SetCurrentMarquee(true);
+  if (!VerifyDigest(*resp, opts.package_digest))
+    return false;
 
-  // Split into manifest and signature.
-  size_t boundary = decompressed.rfind("\n\n");
-  if (boundary == std::string::npos)
+  File::IOFile out(destination, "wb");
+  if (!out || !out.WriteBytes(resp->data(), resp->size()))
   {
-    LogToFile("No signature was found in manifest.\n");
-    return {};
+    LogToFile("Could not write %s.\n", destination.c_str());
+    return false;
   }
-
-  std::string signature_block = decompressed.substr(boundary + 2);  // 2 for "\n\n".
-  decompressed.resize(boundary + 1);                                // 1 to keep the final "\n".
-
-  std::vector<std::string> signatures = SplitString(signature_block, '\n');
-  bool found_valid_signature = false;
-  for (const auto& signature : signatures)
-  {
-    if (VerifySignature(decompressed, signature))
-    {
-      found_valid_signature = true;
-      break;
-    }
-  }
-  if (!found_valid_signature)
-  {
-    LogToFile("Could not verify signature of the manifest.\n");
-    return {};
-  }
-
-  return ParseManifest(decompressed);
+  return true;
 }
 
-struct Options
+#ifdef __APPLE__
+// Runs a command with an explicit argument vector, so no shell is involved and paths with spaces
+// need no quoting. Returns true only if it exited with status 0.
+bool RunProcess(const std::vector<std::string>& args)
 {
-  std::string this_manifest_url;
-  std::string next_manifest_url;
-  std::string content_store_url;
-  std::string install_base_path;
-  std::optional<std::string> binary_to_restart;
-  std::optional<u32> parent_pid;
-  std::optional<std::string> log_file;
-};
+  std::vector<char*> argv;
+  for (const std::string& arg : args)
+    argv.push_back(const_cast<char*>(arg.c_str()));
+  argv.push_back(nullptr);
+
+  pid_t pid;
+  if (posix_spawn(&pid, argv[0], nullptr, nullptr, argv.data(), environ) != 0)
+  {
+    LogToFile("Could not run %s.\n", args[0].c_str());
+    return false;
+  }
+
+  int status = 0;
+  if (waitpid(pid, &status, 0) != pid)
+  {
+    LogToFile("Could not wait for %s.\n", args[0].c_str());
+    return false;
+  }
+  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+  {
+    LogToFile("%s did not succeed (status %d).\n", args[0].c_str(), status);
+    return false;
+  }
+  return true;
+}
+#endif
+
+#ifndef __APPLE__
+// Rejects archive entries that would write outside of the directory we extract into.
+bool IsSafeArchivePath(const std::string& name)
+{
+  if (name.empty() || name.front() == '/' || name.front() == '\\')
+    return false;
+  if (name.size() >= 2 && name[1] == ':')  // Drive letter.
+    return false;
+  for (const std::string& component : SplitString(ReplaceAll(name, "\\", "/"), '/'))
+  {
+    if (component == "..")
+      return false;
+  }
+  return true;
+}
+
+bool ExtractPackageWithMinizip(const std::string& package_path, const std::string& destination)
+{
+  unzFile zip = unzOpen(package_path.c_str());
+  if (zip == nullptr)
+  {
+    LogToFile("Could not open %s as a zip archive.\n", package_path.c_str());
+    return false;
+  }
+  Common::ScopeGuard zip_guard{[&] { unzClose(zip); }};
+
+  unz_global_info64 global_info{};
+  if (unzGetGlobalInfo64(zip, &global_info) != MZ_OK)
+  {
+    LogToFile("Could not read the archive's directory.\n");
+    return false;
+  }
+  const int total_entries = static_cast<int>(global_info.number_entry);
+
+  if (unzGoToFirstFile(zip) != MZ_OK)
+  {
+    LogToFile("Archive is empty.\n");
+    return false;
+  }
+
+  int entry_index = 0;
+  do
+  {
+    std::string entry_name(UINT16_MAX + 1, '\0');
+    unz_file_info64 entry_info{};
+    if (unzGetCurrentFileInfo64(zip, &entry_info, entry_name.data(), UINT16_MAX, nullptr, 0,
+                                nullptr, 0) != MZ_OK)
+    {
+      LogToFile("Could not read the info of archive entry %d.\n", entry_index);
+      return false;
+    }
+    TruncateToCString(&entry_name);
+
+    UI::SetTotalProgress(++entry_index, total_entries);
+
+    if (!IsSafeArchivePath(entry_name))
+    {
+      LogToFile("Refusing to extract archive entry \"%s\".\n", entry_name.c_str());
+      return false;
+    }
+
+    const std::string out_path = destination + DIR_SEP + entry_name;
+    // For a directory entry this creates the directory itself; for a file it creates its parents.
+    if (!File::CreateFullPath(out_path))
+    {
+      LogToFile("Could not create the directory structure for %s.\n", entry_name.c_str());
+      return false;
+    }
+    if (entry_name.ends_with('/') || entry_name.ends_with('\\'))
+      continue;
+
+    const size_t size = static_cast<size_t>(entry_info.uncompressed_size);
+    std::vector<u8> contents(size);
+    if (!Common::ReadFileFromZip(zip, contents.data(), size))
+    {
+      LogToFile("Could not read %s out of the archive.\n", entry_name.c_str());
+      return false;
+    }
+
+    File::IOFile out(out_path, "wb");
+    if (!out || (size != 0 && !out.WriteBytes(contents.data(), size)))
+    {
+      LogToFile("Could not write %s.\n", out_path.c_str());
+      return false;
+    }
+  } while (unzGoToNextFile(zip) == MZ_OK);
+
+  LogToFile("Extracted %d entries.\n", entry_index);
+  return true;
+}
+#endif  // !__APPLE__
+
+bool ExtractPackage(const std::string& package_path, const std::string& destination)
+{
+#ifdef __APPLE__
+  // An app bundle is held together by symlinks (every framework's Versions/Current, plus the
+  // versioned dylib aliases) and by permission bits. Our own unzip restores neither, which leaves
+  // a bundle macOS reports as damaged, so hand the job to ditto instead.
+  UI::SetCurrentMarquee(true);
+  return RunProcess({"/usr/bin/ditto", "-x", "-k", package_path, destination});
+#else
+  return ExtractPackageWithMinizip(package_path, destination);
+#endif
+}
+
+// Where the package is unpacked before being moved into place. On macOS this has to sit next to
+// the install: the bundles are moved in with a rename, and a rename across volumes fails.
+std::string StagingPath([[maybe_unused]] const Options& opts,
+                        [[maybe_unused]] const std::string& temp_dir)
+{
+#ifdef __APPLE__
+  return opts.install_base_path + DIR_SEP + ".projectrio-update";
+#else
+  return temp_dir + DIR_SEP + "package";
+#endif
+}
+
+#ifdef __APPLE__
+// Moves each top level item of the package (the app bundle and the updater next to it) into place.
+// Bundles are replaced wholesale rather than merged, because macOS caches a Mach-O's code
+// signature against its inode: writing new bytes over an existing executable makes the kernel
+// check the new binary against the old signature and kill it on launch.
+bool SwapInPackage(const std::string& source_path, const std::string& install_base_path)
+{
+  const File::FSTEntry contents = File::ScanDirectoryTree(source_path, false);
+  if (contents.children.empty())
+  {
+    LogToFile("Package is empty.\n");
+    return false;
+  }
+
+  for (const auto& child : contents.children)
+  {
+    const std::string destination = install_base_path + DIR_SEP + child.virtualName;
+    LogToFile("Replacing %s.\n", destination.c_str());
+
+    if (File::IsDirectory(destination))
+    {
+      if (!File::DeleteDirRecursively(destination))
+      {
+        LogToFile("Could not remove the existing %s.\n", destination.c_str());
+        return false;
+      }
+    }
+    else if (File::Exists(destination) && !File::Delete(destination))
+    {
+      LogToFile("Could not remove the existing %s.\n", destination.c_str());
+      return false;
+    }
+
+    if (!File::Rename(child.physicalName, destination))
+    {
+      LogToFile("Could not move %s into place.\n", child.virtualName.c_str());
+      return false;
+    }
+  }
+  return true;
+}
+#endif
+
+// Where MakeWayForNewUpdater() moved the running updater, so a failed install can put it back.
+std::string s_original_self;
+std::string s_relocated_self;
+
+// Windows will not overwrite a running executable, but it will happily rename one. Move ourselves
+// aside so the incoming package can drop in a new Updater.exe; Dolphin deletes the leftover the
+// next time it starts.
+bool MakeWayForNewUpdater()
+{
+#ifdef _WIN32
+  const auto self_path = Common::GetModuleName(nullptr);
+  if (!self_path)
+  {
+    LogToFile("Could not determine the updater's own path.\n");
+    return false;
+  }
+
+  const std::string self = WStringToUTF8(*self_path);
+  const std::string backup = self + ".bak";
+  if (File::Exists(backup))
+    File::Delete(backup);
+  if (!File::Rename(self, backup))
+  {
+    LogToFile("Could not rename %s out of the way.\n", self.c_str());
+    return false;
+  }
+  LogToFile("Renamed %s to %s.\n", self.c_str(), backup.c_str());
+
+  s_original_self = self;
+  s_relocated_self = backup;
+#endif
+  return true;
+}
+
+// Undoes MakeWayForNewUpdater() after a failed install, so one bad update doesn't leave the
+// install with no updater to try again with.
+void RestoreUpdater()
+{
+  // If the install got far enough to write a new updater, leave that one in place.
+  if (s_relocated_self.empty() || File::Exists(s_original_self))
+    return;
+
+  if (File::Rename(s_relocated_self, s_original_self))
+    LogToFile("Moved %s back to %s.\n", s_relocated_self.c_str(), s_original_self.c_str());
+}
+
+// Unpacks a build over the existing install. Files the new version no longer ships are left behind
+// rather than deleted, which is the tradeoff for not needing a file manifest. The archive has to
+// be rooted at the install directory, i.e. built from inside it rather than from its parent.
+bool InstallArchive(const Options& opts, const std::string& package_path,
+                    const std::string& temp_dir)
+{
+  const std::string source_path = StagingPath(opts, temp_dir);
+
+  // Anything left over from an interrupted attempt would get mixed into this one.
+  if (File::IsDirectory(source_path))
+    File::DeleteDirRecursively(source_path);
+  if (!File::CreateFullPath(source_path + DIR_SEP))
+  {
+    LogToFile("Could not create %s.\n", source_path.c_str());
+    return false;
+  }
+  Common::ScopeGuard staging_guard{[&] { File::DeleteDirRecursively(source_path); }};
+
+  UI::SetDescription("Extracting update...");
+  UI::SetTotalMarquee(false);
+  UI::SetCurrentMarquee(true);
+  if (!ExtractPackage(package_path, source_path))
+    return false;
+
+  // Make sure this really is a build before letting any of it near the install directory.
+#ifdef __APPLE__
+  if (!File::IsDirectory(source_path + DIR_SEP + MAC_APP_BUNDLE))
+  {
+    LogToFile("Package does not contain %s, aborting.\n", MAC_APP_BUNDLE);
+    return false;
+  }
+#elif defined(_WIN32)
+  // A genuine portable build ships build_info.txt next to the executable. Some releases have
+  // attached a zip that merely wraps the installer instead; unpacking one of those over the
+  // install directory would just leave junk behind.
+  if (!File::Exists(source_path + DIR_SEP + "build_info.txt"))
+  {
+    LogToFile("Package does not look like a portable build (no build_info.txt), aborting.\n");
+    return false;
+  }
+#endif
+
+  UI::SetDescription("Checking platform...");
+  if (!Platform::VersionCheck(opts.install_base_path, source_path))
+    return false;
+
+  UI::SetDescription("Installing update...");
+  UI::SetTotalMarquee(true);
+  UI::SetCurrentMarquee(true);
+  if (!MakeWayForNewUpdater())
+    return false;
+
+#ifdef __APPLE__
+  if (!SwapInPackage(source_path, opts.install_base_path))
+    return false;
+#else
+  if (!File::Copy(source_path, opts.install_base_path, true))
+  {
+    LogToFile("Could not copy %s over %s.\n", source_path.c_str(),
+              opts.install_base_path.c_str());
+    return false;
+  }
+#endif
+  return true;
+}
+
+#ifdef _WIN32
+// Runs the release's NSIS installer silently, pointed at the directory we are already installed in.
+// /D is only honoured because Installer.nsi restores $INSTDIR after MULTIUSER_INIT clobbers it.
+bool InstallWithInstaller(const Options& opts, const std::string& package_path)
+{
+  UI::SetDescription("Installing update...");
+  UI::SetTotalMarquee(true);
+  UI::SetCurrentMarquee(true);
+
+  if (!MakeWayForNewUpdater())
+    return false;
+
+  std::wstring install_dir = UTF8ToWString(opts.install_base_path);
+  while (!install_dir.empty() && (install_dir.back() == L'\\' || install_dir.back() == L'/'))
+    install_dir.pop_back();
+
+  // /D must come last, must not be quoted, and must not end in a separator.
+  const std::wstring installer = UTF8ToWString(package_path);
+  std::wstring command_line = L"\"" + installer + L"\" /S /D=" + install_dir;
+  LogToFile("Running installer: %s\n", WStringToUTF8(command_line).c_str());
+
+  // Without this, a package that isn't a runnable executable makes Windows put up its own modal
+  // error box behind our window instead of letting CreateProcessW just fail.
+  DWORD previous_error_mode = 0;
+  const bool error_mode_set = SetThreadErrorMode(SEM_FAILCRITICALERRORS, &previous_error_mode);
+  Common::ScopeGuard error_mode_guard{[&] {
+    if (error_mode_set)
+      SetThreadErrorMode(previous_error_mode, nullptr);
+  }};
+
+  STARTUPINFOW startup_info{.cb = sizeof(startup_info)};
+  PROCESS_INFORMATION process_info;
+  if (!CreateProcessW(installer.c_str(), command_line.data(), nullptr, nullptr, FALSE, 0, nullptr,
+                      nullptr, &startup_info, &process_info))
+  {
+    LogToFile("Could not start the installer: %s\n", Common::GetLastErrorString().c_str());
+    return false;
+  }
+  CloseHandle(process_info.hThread);
+
+  WaitForSingleObject(process_info.hProcess, INFINITE);
+  DWORD exit_code = 1;
+  const bool has_exit_code = GetExitCodeProcess(process_info.hProcess, &exit_code);
+  CloseHandle(process_info.hProcess);
+
+  if (!has_exit_code || exit_code != 0)
+  {
+    LogToFile("Installer exited with code %lu.\n", exit_code);
+    return false;
+  }
+  return true;
+}
+#endif
+
+bool InstallPackage(const Options& opts, const std::string& package_path,
+                    const std::string& temp_dir)
+{
+  if (opts.package_filename.ends_with(".zip"))
+    return InstallArchive(opts, package_path, temp_dir);
+
+#ifdef _WIN32
+  if (opts.package_filename.ends_with(".exe"))
+    return InstallWithInstaller(opts, package_path);
+#endif
+
+  LogToFile("Don't know how to install %s.\n", opts.package_filename.c_str());
+  return false;
+}
 
 std::optional<Options> ParseCommandLine(std::vector<std::string>& args)
 {
   using optparse::OptionParser;
 
   OptionParser parser =
-      OptionParser().prog("Dolphin Updater").description("Dolphin Updater binary");
+      OptionParser().prog("Project Rio Updater").description("Project Rio Updater binary");
 
-  parser.add_option("--this-manifest-url")
-      .dest("this-manifest-url")
-      .help("URL to the update manifest for the currently installed version.")
+  parser.add_option("--package-url")
+      .dest("package-url")
+      .help("URL of the release asset to install.")
       .metavar("URL");
-  parser.add_option("--next-manifest-url")
-      .dest("next-manifest-url")
-      .help("URL to the update manifest for the to-be-installed version.")
-      .metavar("URL");
-  parser.add_option("--content-store-url")
-      .dest("content-store-url")
-      .help("Base URL of the content store where files to download are stored.")
-      .metavar("URL");
+  parser.add_option("--package-filename")
+      .dest("package-filename")
+      .help("Filename of the release asset. Its extension decides how it gets installed.")
+      .metavar("NAME");
+  parser.add_option("--package-digest")
+      .dest("package-digest")
+      .help("(optional) \"sha256:<hex>\" digest the downloaded package must match.")
+      .metavar("DIGEST");
   parser.add_option("--install-base-path")
       .dest("install-base-path")
-      .help("Base path of the Dolphin install to be updated.")
+      .help("Base path of the Project Rio install to be updated.")
       .metavar("PATH");
   parser.add_option("--binary-to-restart")
       .dest("binary-to-restart")
@@ -656,22 +580,32 @@ std::optional<Options> ParseCommandLine(std::vector<std::string>& args)
   Options opts;
 
   // Required arguments.
-  std::vector<std::string> required{"this-manifest-url", "next-manifest-url", "content-store-url",
-                                    "install-base-path"};
+  std::vector<std::string> required{"package-url", "package-filename", "install-base-path"};
   for (const auto& req : required)
   {
-    if (!options.is_set(req))
+    if (!options.is_set(req) || options[req].empty())
     {
       parser.print_help();
       return {};
     }
   }
-  opts.this_manifest_url = options["this-manifest-url"];
-  opts.next_manifest_url = options["next-manifest-url"];
-  opts.content_store_url = options["content-store-url"];
+  opts.package_url = options["package-url"];
+  opts.package_filename = options["package-filename"];
   opts.install_base_path = options["install-base-path"];
 
+  // The filename is used to build a path in our temp directory, so make sure it is only a name.
+  if (opts.package_filename.find('/') != std::string::npos ||
+      opts.package_filename.find('\\') != std::string::npos)
+  {
+    return {};
+  }
+  // The URL comes from the GitHub API, which only ever serves assets over https from github.com.
+  if (!opts.package_url.starts_with("https://github.com/"))
+    return {};
+
   // Optional arguments.
+  if (options.is_set("package-digest"))
+    opts.package_digest = options["package-digest"];
   if (options.is_set("binary-to-restart"))
     opts.binary_to_restart = options["binary-to-restart"];
   if (options.is_set("parent-pid"))
@@ -681,6 +615,7 @@ std::optional<Options> ParseCommandLine(std::vector<std::string>& args)
 
   return opts;
 }
+}  // namespace
 
 bool RunUpdater(std::vector<std::string> args)
 {
@@ -705,9 +640,8 @@ bool RunUpdater(std::vector<std::string> args)
       atexit(FlushLog);
   }
 
-  LogToFile("Updating from: %s\n", opts.this_manifest_url.c_str());
-  LogToFile("Updating to:   %s\n", opts.next_manifest_url.c_str());
-  LogToFile("Install path:  %s\n", opts.install_base_path.c_str());
+  LogToFile("Updating to:  %s\n", opts.package_filename.c_str());
+  LogToFile("Install path: %s\n", opts.install_base_path.c_str());
 
   if (!File::IsDirectory(opts.install_base_path))
   {
@@ -728,45 +662,24 @@ bool RunUpdater(std::vector<std::string> args)
 
   UI::SetVisible(true);
 
-  UI::SetDescription("Fetching and parsing manifests...");
-
-  Manifest this_manifest, next_manifest;
-  {
-    std::optional<Manifest> maybe_manifest = FetchAndParseManifest(opts.this_manifest_url);
-    if (!maybe_manifest)
-    {
-      FatalError("Could not fetch current manifest. Aborting.");
-      return false;
-    }
-    this_manifest = std::move(*maybe_manifest);
-
-    maybe_manifest = FetchAndParseManifest(opts.next_manifest_url);
-    if (!maybe_manifest)
-    {
-      FatalError("Could not fetch next manifest. Aborting.");
-      return false;
-    }
-    next_manifest = std::move(*maybe_manifest);
-  }
-
-  UI::SetDescription("Computing what to do...");
-
-  TodoList todo = ComputeActionsToDo(this_manifest, next_manifest);
-  todo.Log();
-
-  std::string temp_dir = File::CreateTempDir();
+  const std::string temp_dir = File::CreateTempDir();
   if (temp_dir.empty())
   {
     FatalError("Could not create temporary directory. Aborting.");
     return false;
   }
+  Common::ScopeGuard temp_dir_guard{[&] { File::DeleteDirRecursively(temp_dir); }};
 
-  UI::SetDescription("Performing Update...");
-
-  bool ok = PerformUpdate(todo, opts.install_base_path, opts.content_store_url, temp_dir);
-  CleanUpTempDir(temp_dir, todo);
-  if (!ok)
+  const std::string package_path = temp_dir + DIR_SEP + opts.package_filename;
+  if (!DownloadPackage(opts, package_path))
   {
+    FatalError("Failed to download the update.");
+    return false;
+  }
+
+  if (!InstallPackage(opts, package_path, temp_dir))
+  {
+    RestoreUpdater();
     FatalError("Failed to apply the update.");
     return false;
   }

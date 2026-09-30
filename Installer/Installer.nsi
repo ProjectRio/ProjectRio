@@ -14,6 +14,9 @@
 !endif
 
 !define PRODUCT_NAME "Project Rio"
+; Must match <ProjectName> in Source/Core/DolphinQt/DolphinQt.vcxproj, which is what the build
+; names the executable.
+!define PRODUCT_EXE "Project Rio.exe"
 !define PRODUCT_PUBLISHER "Dolphin Team"
 !define PRODUCT_WEB_SITE "https://projectrio.online/"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\${PRODUCT_NAME}.exe"
@@ -133,8 +136,20 @@ ShowUnInstDetails show
 ; Declare the installer itself as win10/win11 compatible, so WinVer.nsh works correctly.
 ManifestSupportedOS {8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}
 
+; NSIS fills $INSTDIR from a /D= argument before .onInit runs, but MULTIUSER_INIT then overwrites
+; it with its own default. Stash the value across that call so the auto-updater's silent
+; "/S /D=<current install dir>" reinstalls over the existing install instead of creating a second
+; one somewhere else.
+Var PreselectedInstDir
+
 Function .onInit
+  StrCpy $PreselectedInstDir $INSTDIR
+
   !insertmacro MULTIUSER_INIT
+
+  ${If} $PreselectedInstDir != ""
+    StrCpy $INSTDIR $PreselectedInstDir
+  ${EndIf}
 
   ; Keep in sync with build_info.txt
   !define MIN_WIN10_VERSION 1703
@@ -178,10 +193,10 @@ Section "Base"
   !insertmacro UPDATE_DISPLAYNAME
 
   ; Create start menu and desktop shortcuts
-  ; This needs to be done after Dolphin.exe is copied
+  ; This needs to be done after the Rio executable is copied
   CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
-  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\$DisplayName.lnk" "$INSTDIR\Dolphin.exe"
-  CreateShortCut "$DESKTOP\$DisplayName.lnk" "$INSTDIR\Dolphin.exe"
+  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\$DisplayName.lnk" "$INSTDIR\${PRODUCT_EXE}"
+  CreateShortCut "$DESKTOP\$DisplayName.lnk" "$INSTDIR\${PRODUCT_EXE}"
 
   ; ??
   SetOutPath "$TEMP"
@@ -197,12 +212,12 @@ SectionEnd
 Section -Post
   WriteUninstaller "$INSTDIR\uninst.exe"
 
-  WriteRegStr SHCTX "${PRODUCT_DIR_REGKEY}" "" "$INSTDIR\Dolphin.exe"
+  WriteRegStr SHCTX "${PRODUCT_DIR_REGKEY}" "" "$INSTDIR\${PRODUCT_EXE}"
 
   ; Write metadata for add/remove programs applet
   WriteRegStr SHCTX "${PRODUCT_UNINST_KEY}" "DisplayName" "$DisplayName"
   WriteRegStr SHCTX "${PRODUCT_UNINST_KEY}" "UninstallString" "$INSTDIR\uninst.exe /$MultiUser.InstallMode"
-  WriteRegStr SHCTX "${PRODUCT_UNINST_KEY}" "DisplayIcon" "$INSTDIR\Dolphin.exe"
+  WriteRegStr SHCTX "${PRODUCT_UNINST_KEY}" "DisplayIcon" "$INSTDIR\${PRODUCT_EXE}"
   WriteRegStr SHCTX "${PRODUCT_UNINST_KEY}" "DisplayVersion" "${PRODUCT_VERSION}"
   WriteRegStr SHCTX "${PRODUCT_UNINST_KEY}" "URLInfoAbout" "${PRODUCT_WEB_SITE}"
   WriteRegStr SHCTX "${PRODUCT_UNINST_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
@@ -225,7 +240,8 @@ Section Uninstall
   ; Be a bit careful to not delete files a user may have put into the install directory.
   Delete "$INSTDIR\*.dll"
   Delete "$INSTDIR\build_info.txt"
-  Delete "$INSTDIR\Dolphin.exe"
+  Delete "$INSTDIR\${PRODUCT_EXE}"
+  Delete "$INSTDIR\Dolphin.exe"  ; Left over from installs made before the rename.
   Delete "$INSTDIR\DolphinTool.exe"
   Delete "$INSTDIR\DSPTool.exe"
   Delete "$INSTDIR\license.txt"

@@ -1,69 +1,120 @@
 # AutoUpdate Overview
-Dolphin's autoupdate procedure is spread through a number of files; this overview describes the
-update flow.
+Project Rio updates itself straight from the GitHub releases page of
+[ProjectRio/ProjectRio](https://github.com/ProjectRio/ProjectRio). This overview describes the
+update flow, which is spread across a number of files.
 
 ## General notes:
-* The updater is only supported on Windows and MacOS.
-* There are four update frequency tracks: Dev (updated every commit), Beta (a few times a year),
-  Stable (very rarely), and Disabled.
+* Update *checks* run on every platform. Actually *installing* an update needs the separate
+  updater application, which is built and shipped on Windows and macOS. Where it is missing (a
+  Linux AppImage, a Flatpak, or a build made without it), the user is told a new version exists
+  and is pointed at the Project Rio website instead.
+* The tag name of the latest GitHub release is the version number, compared against
+  `RIO_REV_STR` in Common/Version.cpp. Tags are ordered numerically ("2.10.0" > "2.9.1"), so
+  running a build newer than the latest release never prompts.
+* The release asset to install is picked from the release's asset list by matching the filename
+  against the platform (see `ScoreAssetName` in UICommon/AutoUpdate.cpp). On Windows the NSIS
+  installer is preferred; a `.zip` is only used when a release ships no installer.
 * Applications can't overwrite themselves so a separate application is responsible for actually
-  updating the Dolphin executable and other files.
-* The updater application needs to be able to also update itself, so it creates a copy which
-  updates both Dolphin and the original updater. Every time Dolphin launches it deletes the
-  updater copy (if it exists).
+  updating the Rio executable and other files. The updater can't overwrite itself either, so on
+  Windows it renames itself out of the way before installing and on macOS Rio runs a copy of it;
+  either way Rio deletes the leftover on its next launch.
+* The install base path is the directory the updater unpacks a package over. On Windows that is
+  the directory holding the executable. On macOS `File::GetExePath()` returns the bundle itself,
+  so it is the directory *containing* `ProjectRio.app` — which is also where `Project Rio Updater.app`
+  lives, and why both have to be in the archive.
+
+## Release requirements
+For auto-update to work, a release needs:
+* A tag name that is just the version number, e.g. `2.3.0` (a leading `v` is also accepted). It has
+  to match `RIO_REV_STR` in Common/Version.cpp in the build being released — if the tag is bumped
+  but `RIO_REV_STR` isn't, the updated build still reports the old version and prompts to install
+  the same release on every launch.
+* A Windows asset whose name contains "win" (any casing) — the NSIS installer built from
+  Installer/Installer.nsi, e.g. `Project_Rio_Windows_Installer.exe`.
+* A macOS asset per architecture, named so that it contains "mac" plus one of "arm"/"silicon"/
+  "apple" or "intel"/"x86"/"x64", e.g. `Project_Rio_macOS-Apple_silicon.zip`. It has to be the zip
+  the build produces, holding **both** `ProjectRio.app` and `Project Rio Updater.app` at its root —
+  the updater lives beside the app, not inside it, and the archive is unpacked over the directory
+  containing them.
+* Assets must be the archive itself, not a GitHub Actions artifact download (which wraps whatever
+  you built in another zip). Every macOS asset published so far has been double-zipped this way,
+  and the updater cannot see through that.
+* If a portable `.zip` is attached instead, it has to contain the actual build (the files that sit
+  next to the executable, including `build_info.txt`), not an installer wrapped in a zip. The
+  updater refuses a zip without `build_info.txt` rather than unpacking junk over the install.
+
+GitHub reports a `sha256` digest for each asset, which the updater checks after downloading. That
+is not a signature — it arrives in the same TLS-protected API response as the download URL — but it
+catches a corrupted or truncated download before anything is unpacked or executed.
 
 ## Class and file responsibilities:
 * AutoUpdateChecker (UICommon/AutoUpdate.h): Checks if an update is available.
-    * Verifies the updater is supported on the user's platform and hasn't been disabled.
-    * Retrieves new version information from the update server.
-    * Copies the updater application and launches the copy.
+    * Deletes the leftover updater from a previous update.
+    * Fetches `/releases/latest` from the GitHub API and compares the tag against this build.
+    * Picks the release asset matching this platform and verifies its URL is a GitHub release
+      asset URL.
+    * Launches the updater application with the chosen asset.
 * Updater (DolphinQt/Updater.h): Serves as the interface between AutoUpdateChecker and Qt.
-    * Spawns a background thread when Dolphin launches that calls AutoUpdateChecker.
-    * Creates the update prompt window when an update is available.
-    * If the user wants to update now, closes Dolphin.
-* MacUpdater/main.m and MacUpdater/AppDelegate.mm: Entry point to MacOS updater.
+    * Spawns a background thread when Rio launches that calls AutoUpdateChecker.
+    * Converts the release's Markdown body to rich text and creates the update prompt window.
+    * If the user wants to update now, closes Rio.
+* MacUpdater/main.m and MacUpdater/AppDelegate.mm: Entry point to the macOS updater.
     * Converts command line arguments to vector\<string\> and passes them to
       UpdaterCommon::RunUpdate().
+* MacUpdater/MacUI.mm: The updater's macOS UI, plus its platform check.
+    * Reads `LSMinimumSystemVersion` out of the new bundle's Info.plist and refuses the update if
+      this Mac is running something older.
 * WinUpdater/main.cpp: Entry point to Windows updater.
     * Converts command line arguments to vector\<string\>.
-    * Checks if updater has write access to the Dolphin executable directory. If not, attempts
+    * Checks if updater has write access to the Rio executable directory. If not, attempts
       to relaunch itself with admin privileges (creating a User Account Control prompt).
-    * Passes argument vector to UpdaterCommon::RunUpdate().
+    * Passes argument vector to RunUpdater() in UpdaterCommon.h.
+* WinUpdater/Platform.cpp: Checks that the machine can run the new build.
+    * Compares the Windows version and the installed VC++ runtime against the `build_info.txt`
+      shipped inside the package, and installs the VC++ redistributable if it is too old.
 * UpdaterCommon/UpdaterCommon.cpp: Performs the actual update process.
     * Manages updater UI.
-    * Fetches file manifests from update server for current and new versions.
-    * Calculates file diff between versions.
-    * Downloads and adds/replaces changed files and deletes removed files.
-    * Verifies file hashes.
-    * If the user updated immediately (rather than waiting for Dolphin to close before starting
-       the update), starts Dolphin again when the update is complete.
+    * Downloads the release asset and verifies its sha256 against the digest from the API.
+    * Installs it. On Windows an `.exe` is run as a silent NSIS install against the current
+      install directory, and a `.zip` is unpacked and copied over it. On macOS the zip is unpacked
+      with `ditto` (our own unzip restores neither the symlinks holding the framework layout
+      together nor the permission bits, which leaves a bundle macOS calls damaged), and each
+      bundle in it is then moved into place with a rename — replacing a Mach-O's bytes in place
+      makes the kernel check the new binary against the cached old code signature and kill it.
+    * If the user updated immediately (rather than waiting for Rio to close before starting
+      the update), starts Rio again when the update is complete.
+* Installer/Installer.nsi: The NSIS installer, also used as the update package on Windows.
+    * `.onInit` stashes `$INSTDIR` across `MULTIUSER_INIT`, which would otherwise overwrite the
+      directory given on the command line. Without that, the updater's `/S /D=<install dir>` is
+      silently ignored and the update lands in a second, default location.
 
 ## Update flow:
 * An update check is started in one of two ways:
-    * When Dolphin is launched (unless in NoGUI or batch mode):
+    * When Rio is launched (unless in NoGUI or batch mode):
          * In main.cpp an instance of Updater is created and invokes start(), which is inherited
            from QThread and creates a new thread which performs the check off the main thread.
          * QThread::start() calls run() which is overridden in Updater and calls
            AutoUpdateChecker::CheckForUpdate().
+         * The check is skipped if the update track config value is empty, which is what the
+           "Check for Updates on Startup" setting and the "Never Auto-Update" button clear.
     * When the user selects Help -> "Check for Updates..." in the main menu:
          * The menu option runs a callback to MenuBar::InstallUpdateManually().
-         * The Config value for the update track is backed up to a temporary variable, then
-           overwritten with "dev" to force a check for the latest version. After the check
-           completes the original Config value is restored.
-         * Updater::CheckForUpdate() is called, which calls AutoUpdateChecker::CheckForUpdate().
-* AutoUpdateChecker::CheckForUpdate() checks if the selected track has a new version available.
-    * If not the check ends. If the user started it, returns to Updater::CheckForUpdate() which
-      tells the user they're up to date.
+         * Updater::CheckForUpdate() is called, which calls AutoUpdateChecker::CheckForUpdate()
+           with CheckType::Manual. A manual check runs even when the startup check is off, and
+           reports when there is nothing to install.
+* AutoUpdateChecker::CheckForUpdate() checks if the latest release is newer than this build.
+    * If not the check ends. If the user started it, they are told they are up to date.
 * Information about the update is passed to OnUpdateAvailable(), which is overridden by Updater.
-* OnUpdateAvailable() creates a window displaying the update changelog and asks the user if they
-  want to update now, update after Dolphin closes, not update, or never auto-update.
+* OnUpdateAvailable() creates a window displaying the release notes.
+    * If there is no updater or no asset for this platform, it just points at the Rio website.
+    * Otherwise it asks the user if they want to update now, update after Rio closes, not update,
+      or never auto-update.
 * If the user wants to update AutoUpdateChecker::TriggerUpdate() is called.
-* TriggerUpdate() builds the command line arguments for the updater process, creates a copy of
-  the updater executable, then runs the copy in a new process.
-* TriggerUpdate() returns to OnUpdateAvailable().  If the user chose to update now, Dolphin's
-  main window is closed which results in the Dolphin process ending.
+* TriggerUpdate() builds the command line arguments for the updater process and runs it.
+* TriggerUpdate() returns to OnUpdateAvailable(). If the user chose to update now, Rio's
+  main window is closed which results in the Rio process ending.
 * The updater process begins.
-    * On MacOS (starts main() in MacUpdater/main.m):
+    * On macOS (starts main() in MacUpdater/main.m):
          * Checks that the process received command line arguments. If not it tells the user the
            updater can't be launched directly and quits.
          * Calls NSApplicationMain(), which passes control to the AppDelegate defined in
@@ -73,8 +124,8 @@ update flow.
     * On Windows (starts wWinMain() in WinUpdater/Main.cpp):
          * Checks that the process received command line arguments. If not it tells the user the
            updater can't be launched directly and quits.
-         * Attempts to open Updater.log in the same directory as Dolphin.exe. If this fails,
-           checks to see if the process has admin privileges.
+         * Attempts to open Updater.log in the same directory as the Rio executable. If this
+           fails, checks to see if the process has admin privileges.
              * If not, attempts to relaunch the updater as admin. This will spawn a User Account
                Control prompt.
              * If the user declines the UAC prompt, or if the updater already has admin status,
@@ -82,12 +133,24 @@ update flow.
          * Converts the command line arguments to a vector\<string\> and passes them to RunUpdater()
            in UpdaterCommon.h.
 * RunUpdater() parses and validates the command line arguments, hides the updater UI, then waits
-  for the Dolphin process to quit.
+  for the Rio process to quit.
 * RunUpdater() begins the actual update.
-    * Fetches file manifests from update server for current and new versions.
-    * Decompresses manifests and verifies their signatures.
-    * Downloads and adds/replaces changed files and deletes removed files.
-    * Verifies downloaded files match manifest hashes.
-* If the user updated immediately (rather than waiting for Dolphin to close before starting
-  the update), Dolphin restarts.
-* As part of Dolphin's normal startup process, the Updater copy is deleted.
+    * Downloads the release asset into a temporary directory and verifies its digest.
+    * Renames the running updater out of the way, then installs the package. If the install fails
+      the updater is moved back so the next attempt still has one.
+    * The temporary directory is deleted whether the update succeeded or not.
+* If the user updated immediately (rather than waiting for Rio to close before starting
+  the update), Rio restarts.
+* As part of Rio's normal startup process, the renamed updater is deleted.
+
+## Testing an update
+Point a build at a release newer than itself by lowering `RIO_REV_STR` in Common/Version.cpp, or
+publish a test release. The updater can also be run directly:
+
+```
+Updater.exe --package-url=<asset url> --package-filename=<asset name> \
+            --package-digest=sha256:<hex> --install-base-path=<dir> --log-file=<path>
+```
+
+It refuses any URL that isn't a `https://github.com/` one. Add `--parent-pid` to make it wait for
+a process to exit first, and `--binary-to-restart` to have it relaunch Rio afterwards.

@@ -8,7 +8,7 @@ target_link_libraries(updatercommon PRIVATE
   uicommon
   MbedTLS::mbedtls
   ZLIB::ZLIB
-  ed25519
+  minizip::minizip
   cpp-optparse
 )
 

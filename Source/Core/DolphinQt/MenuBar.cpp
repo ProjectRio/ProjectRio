@@ -581,9 +581,10 @@ void MenuBar::AddOptionsMenu()
 
 void MenuBar::InstallUpdateManually()
 {
-  const std::string autoupdate_track = Config::Get(Config::MAIN_AUTOUPDATE_UPDATE_TRACK);
-  const std::string manual_track = autoupdate_track.empty() ? "dev" : autoupdate_track;
-  auto* const updater = new Updater(this->parentWidget(), manual_track,
+  // A manually started check runs even when the startup check has been turned off, so whatever
+  // track is configured doesn't matter here.
+  auto* const updater = new Updater(this->parentWidget(),
+                                    Config::Get(Config::MAIN_AUTOUPDATE_UPDATE_TRACK),
                                     Config::Get(Config::MAIN_AUTOUPDATE_HASH_OVERRIDE));
 
   updater->CheckForUpdate();
@@ -617,12 +618,11 @@ void MenuBar::AddHelpMenu()
         QUrl(QStringLiteral("https://bugs.dolphin-emu.org/projects/emulator")));
   });
 
-  if (AutoUpdateChecker::SystemSupportsAutoUpdates())
-  {
-    help_menu->addSeparator();
+  // The check works on every platform; whether we can install what it finds is decided once we
+  // know what the latest release ships.
+  help_menu->addSeparator();
 
-    help_menu->addAction(tr("&Check for Updates..."), this, &MenuBar::InstallUpdateManually);
-  }
+  help_menu->addAction(tr("&Check for Updates..."), this, &MenuBar::InstallUpdateManually);
 
 #ifndef __APPLE__
   help_menu->addSeparator();

@@ -23,21 +23,25 @@ public:
   void CheckForUpdate(std::string_view update_track, std::string_view hash_override,
                       CheckType check_type);
 
+  // True if this build ships an updater that can download and apply an update by itself. When
+  // false, update checks still run, but the user is only told that a new version exists.
   static bool SystemSupportsAutoUpdates();
 
   struct NewVersionInformation
   {
-    // Name (5.0-1234) and revision hash of the new version.
+    // Tag name of the GitHub release, e.g. "2.3.0".
     std::string new_shortrev;
-    std::string new_hash;
 
-    // The full changelog in HTML format.
+    // Body of the GitHub release, in Markdown. The UI layer is responsible for rendering it.
     std::string changelog_html;
 
-    // Internals, to be passed to the updater binary.
-    std::string this_manifest_url;
-    std::string next_manifest_url;
-    std::string content_store_url;
+    // The release asset to install. Empty if the release has no asset for this platform, in which
+    // case the user can only be pointed at the download page.
+    std::string package_url;
+    std::string package_filename;
+    // "sha256:<hex>" as reported by the GitHub API. Empty on releases published before GitHub
+    // started attaching digests, in which case the download is not verified.
+    std::string package_digest;
   };
 
   // Starts the updater process, which will wait in the background until the current process exits.

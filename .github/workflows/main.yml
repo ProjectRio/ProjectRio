@@ -267,7 +267,10 @@ jobs:
           FILE_NAME=${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-${{ matrix.artifact_name }}.zip
           mkdir artifact
           cd ./build/Binaries/
-          zip -ry "${FILE_NAME}" "ProjectRio.app"
+          # Both bundles have to be in here: the updater lives beside ProjectRio.app, and the
+          # auto-updater unpacks this archive straight over the directory containing them.
+          # -y keeps symlinks as symlinks, which the Qt framework layout depends on.
+          zip -ry "${FILE_NAME}" "ProjectRio.app" "Project Rio Updater.app"
           mv "${FILE_NAME}" ../../artifact/
       - name: "Publish"
         if: success()
