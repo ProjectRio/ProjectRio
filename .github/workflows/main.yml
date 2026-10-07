@@ -5,6 +5,10 @@ on:
     branches:
       - "**_release"
       - "master"
+    # A version tag also runs the release job at the bottom of this file.
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+"
   pull_request:
     branches: 
       - "**_release"
@@ -309,3 +313,59 @@ jobs:
           manifest-path: Tools/flatpak.yml
           bundle: ${{ matrix.artifact_name }}.flatpak
           cache-key: flatpak-builder-${{ github.sha }}
+
+  # Runs only for a version tag (e.g. 2.3.0). Gathers every build above and puts them on a DRAFT
+  # GitHub release under the names the auto-updater looks for (docs/autoupdate_overview.md,
+  # "Release requirements"). Nothing reaches users until someone reviews the draft and publishes it.
+  release:
+    name: "Draft release"
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [windows, linux, macOS, steamOS]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v4
+      - name: "Check the tag matches the version in the code"
+        # A build reports RIO_REV_STR as its version. If the tag is ahead of it, every updated
+        # install still looks out of date and offers the same update on every launch.
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          CODE_VERSION=$(sed -n 's/^#define RIO_REV_STR "\(.*\)".*/\1/p' Source/Core/Common/Version.cpp | tr -d '\r')
+          echo "tag: ${TAG}, RIO_REV_STR: ${CODE_VERSION}"
+          if [ "${TAG}" != "${CODE_VERSION}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match RIO_REV_STR \"${CODE_VERSION}\" in Source/Core/Common/Version.cpp"
+            exit 1
+          fi
+      - name: "Download builds"
+        uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+      - name: "Collect release assets"
+        # The names matter: the updater picks its asset by them. Each one must be the file itself,
+        # not an archive wrapped around it.
+        run: |
+          set -euo pipefail
+          mkdir release
+          one() {  # one <glob> <release name>: exactly one build file must match
+            mapfile -t found < <(find artifacts -type f -name "$1" | sort)
+            if [ "${#found[@]}" -ne 1 ]; then
+              echo "::error::Expected exactly one file matching $1, found ${#found[@]}: ${found[*]:-}"
+              exit 1
+            fi
+            cp "${found[0]}" "release/$2"
+          }
+          one '*ProjectRio-Windows.zip'       Project_Rio_Windows.zip
+          one '*ProjectRio-Windows.exe'       Project_Rio_Windows_Installer.exe
+          one '*ProjectRio-macOS-arm64.zip'   Project_Rio_macOS-Apple_silicon.zip
+          one '*ProjectRio-macOS-x86_64.zip'  Project_Rio_macOS-Intel.zip
+          one '*.AppImage'                    Project_Rio_Linux.AppImage
+          one '*.flatpak'                     Project_Rio_SteamOS.flatpak
+          ls -l release
+      - name: "Create draft release"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" release/* \
+            --repo "${GITHUB_REPOSITORY}" --draft --title "${GITHUB_REF_NAME}" --generate-notes

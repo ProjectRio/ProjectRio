@@ -30,8 +30,16 @@ update flow, which is spread across a number of files.
   so it is the directory *containing* `ProjectRio.app` — which is also where `Project Rio Updater.app`
   lives, and why both have to be in the archive.
 
+## Publishing a release
+Set `RIO_REV_STR` in Common/Version.cpp to the new version, merge, then push a tag with exactly
+that version (`2.3.0`, or `v2.3.0`). The "Draft release" job in .github/workflows/main.yml builds
+every platform, refuses to continue if the tag and `RIO_REV_STR` differ, and attaches the builds
+to a **draft** GitHub release under the names below. Review the draft, write the notes (they are
+shown in the update prompt), and publish it. Installs only see a release once it is published and
+not marked as a pre-release.
+
 ## Release requirements
-For auto-update to work, a release needs:
+The release job takes care of these. For auto-update to work, a release needs:
 * A tag name that is just the version number, e.g. `2.3.0` (a leading `v` is also accepted). It has
   to match `RIO_REV_STR` in Common/Version.cpp in the build being released — if the tag is bumped
   but `RIO_REV_STR` isn't, the updated build still reports the old version and prompts to install
