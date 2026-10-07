@@ -144,8 +144,26 @@ catches a corrupted or truncated download before anything is unpacked or execute
 * As part of Rio's normal startup process, the renamed updater is deleted.
 
 ## Testing an update
-Point a build at a release newer than itself by lowering `RIO_REV_STR` in Common/Version.cpp, or
-publish a test release. The updater can also be run directly:
+The whole flow can be run against a throwaway release without touching the real repo:
+
+1. Build with `RIO_REV_STR` raised (e.g. `9.9.9`) and package it the way a release would be: the
+   NSIS installer and/or a zip of the portable build on Windows, the zip holding `ProjectRio.app`
+   and `Project Rio Updater.app` on macOS. Name the assets per "Release requirements".
+2. Publish them as a release tagged with that version on any **public** GitHub repo. It does not
+   have to be a fork (GitHub won't fork ProjectRio into an account that already has a Dolphin
+   fork), and it must not be marked as a pre-release, which `/releases/latest` skips.
+3. Run a normal build (lower `RIO_REV_STR`) with `RIO_UPDATE_REPO=<owner>/<repo>` set. That
+   redirects both the release check and the URL prefix downloads are allowed from. Use a copy of
+   the install: on Windows the installer asset rewrites the Start menu/desktop shortcuts and the
+   Add/Remove Programs entry even when it installs into another folder.
+4. Choose "Install Update". Rio should close, the updater should download, verify and install,
+   and Rio should come back reporting the new version without prompting again. `Updater.log` in
+   the user folder's `Logs` directory records each step, including the reason for any failure.
+
+On Windows the updater prefers the installer asset when a release has both; leave it off the
+release to exercise the zip path.
+
+The updater can also be run directly:
 
 ```
 Updater.exe --package-url=<asset url> --package-filename=<asset name> \

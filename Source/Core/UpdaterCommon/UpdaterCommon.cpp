@@ -469,6 +469,31 @@ bool InstallArchive(const Options& opts, const std::string& package_path,
 }
 
 #ifdef _WIN32
+// True if `install_dir` is registered as a machine-wide ("all users") install, i.e. the installer
+// wrote its uninstall entry under HKLM rather than HKCU. The key name is PRODUCT_UNINST_KEY in
+// Installer.nsi; the installer is a 32-bit program, so look in both registry views.
+bool IsAllUsersInstall(const std::wstring& install_dir)
+{
+  for (const DWORD view : {RRF_SUBKEY_WOW6464KEY, RRF_SUBKEY_WOW6432KEY})
+  {
+    wchar_t location[MAX_PATH * 2] = {};
+    DWORD size = sizeof(location) - sizeof(wchar_t);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE,
+                     L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Project Rio",
+                     L"InstallLocation", RRF_RT_REG_SZ | view, nullptr, location,
+                     &size) != ERROR_SUCCESS)
+    {
+      continue;
+    }
+    std::wstring registered = location;
+    while (!registered.empty() && (registered.back() == L'\\' || registered.back() == L'/'))
+      registered.pop_back();
+    if (_wcsicmp(registered.c_str(), install_dir.c_str()) == 0)
+      return true;
+  }
+  return false;
+}
+
 // Runs the release's NSIS installer silently, pointed at the directory we are already installed in.
 // /D is only honoured because Installer.nsi restores $INSTDIR after MULTIUSER_INIT clobbers it.
 bool InstallWithInstaller(const Options& opts, const std::string& package_path)
@@ -484,10 +509,24 @@ bool InstallWithInstaller(const Options& opts, const std::string& package_path)
   while (!install_dir.empty() && (install_dir.back() == L'\\' || install_dir.back() == L'/'))
     install_dir.pop_back();
 
+  // The installer defaults to a per-user install even when run elevated, which would give a
+  // machine-wide install a second, per-user uninstall entry and set of shortcuts. Say which one
+  // this is.
+  const wchar_t* install_mode = IsAllUsersInstall(install_dir) ? L"/AllUsers" : L"/CurrentUser";
+
   // /D must come last, must not be quoted, and must not end in a separator.
   const std::wstring installer = UTF8ToWString(package_path);
-  std::wstring command_line = L"\"" + installer + L"\" /S /D=" + install_dir;
+  std::wstring command_line =
+      L"\"" + installer + L"\" /S " + install_mode + L" /D=" + install_dir;
   LogToFile("Running installer: %s\n", WStringToUTF8(command_line).c_str());
+
+  // The installer's manifest asks for the highest privileges available, so for an administrator
+  // Windows refuses to start it from an unelevated process (ERROR_ELEVATION_REQUIRED). It doesn't
+  // need more rights than we have: we were only started unelevated because the install directory
+  // is writable, and were elevated already if it isn't. Run it with our own token.
+  SetEnvironmentVariableW(L"__COMPAT_LAYER", L"RunAsInvoker");
+  Common::ScopeGuard compat_layer_guard{
+      [] { SetEnvironmentVariableW(L"__COMPAT_LAYER", nullptr); }};
 
   // Without this, a package that isn't a runnable executable makes Windows put up its own modal
   // error box behind our window instead of letting CreateProcessW just fail.
