@@ -5,6 +5,7 @@
 
 #include <array>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -60,6 +61,8 @@ struct Options
   std::string package_filename;
   // "sha256:<hex>" as reported by the GitHub API, empty if the release did not provide one.
   std::string package_digest;
+  // The version being installed (the release's tag). Optional; only used for bookkeeping.
+  std::string package_version;
   std::string install_base_path;
   std::optional<std::string> binary_to_restart;
   std::optional<u32> parent_pid;
@@ -402,9 +405,181 @@ void RestoreUpdater()
     LogToFile("Moved %s back to %s.\n", s_relocated_self.c_str(), s_original_self.c_str());
 }
 
-// Unpacks a build over the existing install. Files the new version no longer ships are left behind
-// rather than deleted, which is the tradeoff for not needing a file manifest. The archive has to
-// be rooted at the install directory, i.e. built from inside it rather than from its parent.
+#ifndef __APPLE__
+// Every install keeps a list of the files its version shipped (one path per line, relative to the
+// install directory, '/' separated). The next update deletes whatever is on that list but no
+// longer in the new package, so files a version stops shipping don't pile up forever. Anything
+// the user put in the directory is on neither list and is never touched. The release build writes
+// the same file into the package, so installs made by the installer have one too.
+constexpr char INSTALL_MANIFEST[] = "install_manifest.txt";
+
+void ListFilesRecursively(const File::FSTEntry& entry, const std::string& prefix,
+                          std::vector<std::string>* out)
+{
+  for (const auto& child : entry.children)
+  {
+    const std::string path = prefix.empty() ? child.virtualName : prefix + "/" + child.virtualName;
+    if (child.isDirectory)
+      ListFilesRecursively(child, path, out);
+    else
+      out->push_back(path);
+  }
+}
+
+// A manifest sits in a directory the user (or anything else) can write to, and the updater may be
+// running elevated. Only ever act on plain relative paths that stay inside the install directory.
+bool IsSafeManifestEntry(const std::string& entry)
+{
+  if (entry.empty() || entry.front() == '/' || entry.find_first_of("\\:") != std::string::npos)
+    return false;
+  for (const std::string& part : SplitString(entry, '/'))
+  {
+    if (part.empty() || part == "." || part == "..")
+      return false;
+  }
+  return true;
+}
+
+std::string ManifestKey(std::string path)
+{
+#ifdef _WIN32
+  Common::ToLower(&path);  // The file system is case insensitive.
+#endif
+  return path;
+}
+
+// Deletes the files the previous version shipped that `new_files` no longer contains, then any
+// directories that emptied.
+void RemoveStaleFiles(const std::string& install_base_path, const std::string& old_manifest,
+                      const std::vector<std::string>& new_files)
+{
+  std::set<std::string> kept;
+  for (const std::string& file : new_files)
+    kept.insert(ManifestKey(file));
+  kept.insert(ManifestKey(INSTALL_MANIFEST));
+
+  int removed = 0;
+  for (std::string entry : SplitString(old_manifest, '\n'))
+  {
+    entry = std::string(StripWhitespace(entry));
+    if (entry.empty() || kept.contains(ManifestKey(entry)))
+      continue;
+    if (!IsSafeManifestEntry(entry))
+    {
+      LogToFile("Ignoring manifest entry \"%s\".\n", entry.c_str());
+      continue;
+    }
+
+    const std::string path = install_base_path + DIR_SEP + entry;
+    if (!File::Exists(path) || File::IsDirectory(path))
+      continue;
+    if (!File::Delete(path))
+    {
+      LogToFile("Could not remove the outdated %s.\n", entry.c_str());
+      continue;
+    }
+    LogToFile("Removed the outdated %s.\n", entry.c_str());
+    removed++;
+
+    // DeleteDir only removes empty directories, so this stops at the first one still in use.
+    for (size_t slash = entry.rfind('/'); slash != std::string::npos;
+         slash = entry.rfind('/', slash - 1))
+    {
+      if (!File::DeleteDir(install_base_path + DIR_SEP + entry.substr(0, slash)) || slash == 0)
+        break;
+    }
+  }
+  LogToFile("Removed %d outdated file(s).\n", removed);
+}
+
+void WriteInstallManifest(const std::string& install_base_path,
+                          const std::vector<std::string>& files)
+{
+  std::string contents;
+  for (const std::string& file : files)
+    contents += file + "\n";
+  if (!File::WriteStringToFile(install_base_path + DIR_SEP + INSTALL_MANIFEST, contents))
+    LogToFile("Could not write %s.\n", INSTALL_MANIFEST);
+}
+#endif
+
+#ifdef _WIN32
+// The uninstall entry the installer wrote for `install_dir`, if there is one. The key name is
+// PRODUCT_UNINST_KEY in Installer.nsi; the installer is a 32-bit program, so both registry views
+// are searched. `root` is HKEY_CURRENT_USER for a per-user install, HKEY_LOCAL_MACHINE otherwise.
+constexpr wchar_t UNINSTALL_KEY[] =
+    L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Project Rio";
+
+std::optional<REGSAM> FindUninstallEntry(HKEY root, const std::wstring& install_dir)
+{
+  for (const REGSAM view : {KEY_WOW64_64KEY, KEY_WOW64_32KEY})
+  {
+    HKEY key;
+    if (RegOpenKeyExW(root, UNINSTALL_KEY, 0, KEY_QUERY_VALUE | view, &key) != ERROR_SUCCESS)
+      continue;
+
+    wchar_t location[MAX_PATH * 2] = {};
+    DWORD size = sizeof(location) - sizeof(wchar_t);
+    DWORD type = 0;
+    const LSTATUS status = RegQueryValueExW(key, L"InstallLocation", nullptr, &type,
+                                            reinterpret_cast<BYTE*>(location), &size);
+    RegCloseKey(key);
+    if (status != ERROR_SUCCESS || type != REG_SZ)
+      continue;
+
+    std::wstring registered = location;
+    while (!registered.empty() && (registered.back() == L'\\' || registered.back() == L'/'))
+      registered.pop_back();
+    if (_wcsicmp(registered.c_str(), install_dir.c_str()) == 0)
+      return view;
+  }
+  return std::nullopt;
+}
+
+std::wstring TrimmedInstallDir(const Options& opts)
+{
+  std::wstring install_dir = UTF8ToWString(opts.install_base_path);
+  while (!install_dir.empty() && (install_dir.back() == L'\\' || install_dir.back() == L'/'))
+    install_dir.pop_back();
+  return install_dir;
+}
+
+// A zip update doesn't go through the installer, so nothing else would refresh the version shown
+// in Windows' list of installed apps.
+void UpdateUninstallEntryVersion(const Options& opts)
+{
+  if (opts.package_version.empty())
+    return;
+
+  const std::wstring install_dir = TrimmedInstallDir(opts);
+  const std::wstring version = UTF8ToWString(opts.package_version);
+  for (const HKEY root : {HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE})
+  {
+    const std::optional<REGSAM> view = FindUninstallEntry(root, install_dir);
+    if (!view)
+      continue;
+
+    HKEY key;
+    if (RegOpenKeyExW(root, UNINSTALL_KEY, 0, KEY_SET_VALUE | *view, &key) != ERROR_SUCCESS)
+    {
+      LogToFile("Could not open the uninstall entry to update its version.\n");
+      continue;
+    }
+    const LSTATUS status =
+        RegSetValueExW(key, L"DisplayVersion", 0, REG_SZ,
+                       reinterpret_cast<const BYTE*>(version.c_str()),
+                       static_cast<DWORD>((version.size() + 1) * sizeof(wchar_t)));
+    RegCloseKey(key);
+    LogToFile(status == ERROR_SUCCESS ? "Set the installed version to %s.\n" :
+                                        "Could not set the installed version to %s.\n",
+              opts.package_version.c_str());
+  }
+}
+#endif
+
+// Unpacks a build over the existing install, then removes the files the previous version shipped
+// that this one doesn't. The archive has to be rooted at the install directory, i.e. built from
+// inside it rather than from its parent.
 bool InstallArchive(const Options& opts, const std::string& package_path,
                     const std::string& temp_dir)
 {
@@ -458,43 +633,30 @@ bool InstallArchive(const Options& opts, const std::string& package_path,
   if (!SwapInPackage(source_path, opts.install_base_path))
     return false;
 #else
+  std::vector<std::string> new_files;
+  ListFilesRecursively(File::ScanDirectoryTree(source_path, true), "", &new_files);
+  std::string old_manifest;
+  File::ReadFileToString(opts.install_base_path + DIR_SEP + INSTALL_MANIFEST, old_manifest);
+
   if (!File::Copy(source_path, opts.install_base_path, true))
   {
     LogToFile("Could not copy %s over %s.\n", source_path.c_str(),
               opts.install_base_path.c_str());
     return false;
   }
+
+  // Only once the new version is fully in place: a failed copy must not also have deleted things.
+  RemoveStaleFiles(opts.install_base_path, old_manifest, new_files);
+  WriteInstallManifest(opts.install_base_path, new_files);
+#endif
+#ifdef _WIN32
+  UpdateUninstallEntryVersion(opts);
 #endif
   return true;
 }
 
 #ifdef _WIN32
-// True if `install_dir` is registered as a machine-wide ("all users") install, i.e. the installer
-// wrote its uninstall entry under HKLM rather than HKCU. The key name is PRODUCT_UNINST_KEY in
-// Installer.nsi; the installer is a 32-bit program, so look in both registry views.
-bool IsAllUsersInstall(const std::wstring& install_dir)
-{
-  for (const DWORD view : {RRF_SUBKEY_WOW6464KEY, RRF_SUBKEY_WOW6432KEY})
-  {
-    wchar_t location[MAX_PATH * 2] = {};
-    DWORD size = sizeof(location) - sizeof(wchar_t);
-    if (RegGetValueW(HKEY_LOCAL_MACHINE,
-                     L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Project Rio",
-                     L"InstallLocation", RRF_RT_REG_SZ | view, nullptr, location,
-                     &size) != ERROR_SUCCESS)
-    {
-      continue;
-    }
-    std::wstring registered = location;
-    while (!registered.empty() && (registered.back() == L'\\' || registered.back() == L'/'))
-      registered.pop_back();
-    if (_wcsicmp(registered.c_str(), install_dir.c_str()) == 0)
-      return true;
-  }
-  return false;
-}
-
-// Runs the release's NSIS installer silently, pointed at the directory we are already installed in.
+// Only used when a release has no zip to update from. Runs the release's NSIS installer silently, pointed at the directory we are already installed in.
 // /D is only honoured because Installer.nsi restores $INSTDIR after MULTIUSER_INIT clobbers it.
 bool InstallWithInstaller(const Options& opts, const std::string& package_path)
 {
@@ -505,14 +667,13 @@ bool InstallWithInstaller(const Options& opts, const std::string& package_path)
   if (!MakeWayForNewUpdater())
     return false;
 
-  std::wstring install_dir = UTF8ToWString(opts.install_base_path);
-  while (!install_dir.empty() && (install_dir.back() == L'\\' || install_dir.back() == L'/'))
-    install_dir.pop_back();
+  const std::wstring install_dir = TrimmedInstallDir(opts);
 
   // The installer defaults to a per-user install even when run elevated, which would give a
   // machine-wide install a second, per-user uninstall entry and set of shortcuts. Say which one
   // this is.
-  const wchar_t* install_mode = IsAllUsersInstall(install_dir) ? L"/AllUsers" : L"/CurrentUser";
+  const wchar_t* install_mode =
+      FindUninstallEntry(HKEY_LOCAL_MACHINE, install_dir) ? L"/AllUsers" : L"/CurrentUser";
 
   // /D must come last, must not be quoted, and must not end in a separator.
   const std::wstring installer = UTF8ToWString(package_path);
@@ -595,6 +756,10 @@ std::optional<Options> ParseCommandLine(std::vector<std::string>& args)
       .dest("package-digest")
       .help("(optional) \"sha256:<hex>\" digest the downloaded package must match.")
       .metavar("DIGEST");
+  parser.add_option("--package-version")
+      .dest("package-version")
+      .help("(optional) Version being installed, e.g. the release's tag.")
+      .metavar("VERSION");
   parser.add_option("--install-base-path")
       .dest("install-base-path")
       .help("Base path of the Project Rio install to be updated.")
@@ -645,6 +810,8 @@ std::optional<Options> ParseCommandLine(std::vector<std::string>& args)
   // Optional arguments.
   if (options.is_set("package-digest"))
     opts.package_digest = options["package-digest"];
+  if (options.is_set("package-version"))
+    opts.package_version = options["package-version"];
   if (options.is_set("binary-to-restart"))
     opts.binary_to_restart = options["binary-to-restart"];
   if (options.is_set("parent-pid"))

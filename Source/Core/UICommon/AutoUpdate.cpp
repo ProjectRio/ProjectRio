@@ -188,12 +188,14 @@ int ScoreAssetName(std::string name)
 #endif
   if (!contains("win") || contains("arm") != want_arm)
     return 0;
-  // The installer is what Rio releases actually ship, and it knows how to lay out an install, so
-  // prefer it. A zip is only used when a release has no installer; the updater checks that it
-  // really holds a portable build before unpacking it over anything.
-  if (name.ends_with(".exe"))
-    return 2;
+  // Update from the zip of the portable build whenever a release has one: unpacking it over the
+  // install needs no elevation, leaves shortcuts and the uninstall entry alone (so a portable copy
+  // stays portable), and is the same thing macOS does. The updater checks that the zip really
+  // holds a build before unpacking it. The installer is only a fallback for a release without a
+  // zip.
   if (is_zip)
+    return 2;
+  if (name.ends_with(".exe"))
     return 1;
   return 0;
 #elif defined(__APPLE__)
@@ -366,6 +368,7 @@ void AutoUpdateChecker::TriggerUpdate(const AutoUpdateChecker::NewVersionInforma
   updater_flags["package-url"] = info.package_url;
   updater_flags["package-filename"] = info.package_filename;
   updater_flags["package-digest"] = info.package_digest;
+  updater_flags["package-version"] = info.new_shortrev;
   updater_flags["parent-pid"] = std::to_string(GetOwnProcessId());
   updater_flags["install-base-path"] = File::GetExeDirectory();
   updater_flags["log-file"] = File::GetUserPath(D_LOGS_IDX) + UPDATER_LOG_FILE;

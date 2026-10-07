@@ -240,6 +240,7 @@ Section Uninstall
   ; Be a bit careful to not delete files a user may have put into the install directory.
   Delete "$INSTDIR\*.dll"
   Delete "$INSTDIR\build_info.txt"
+  Delete "$INSTDIR\install_manifest.txt"
   Delete "$INSTDIR\${PRODUCT_EXE}"
   Delete "$INSTDIR\Dolphin.exe"  ; Left over from installs made before the rename.
   Delete "$INSTDIR\DolphinTool.exe"

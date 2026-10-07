@@ -12,8 +12,15 @@ update flow, which is spread across a number of files.
   `RIO_REV_STR` in Common/Version.cpp. Tags are ordered numerically ("2.10.0" > "2.9.1"), so
   running a build newer than the latest release never prompts.
 * The release asset to install is picked from the release's asset list by matching the filename
-  against the platform (see `ScoreAssetName` in UICommon/AutoUpdate.cpp). On Windows the NSIS
-  installer is preferred; a `.zip` is only used when a release ships no installer.
+  against the platform (see `ScoreAssetName` in UICommon/AutoUpdate.cpp). On Windows the zip of
+  the portable build is preferred: unpacking it needs no elevation and leaves shortcuts and the
+  uninstall entry alone, so a portable copy stays portable and an installed copy stays installed.
+  The NSIS installer is only used to update when a release has no zip.
+* Each install keeps `install_manifest.txt`, the list of files its version shipped. After
+  unpacking a zip the updater deletes whatever is on the old list but not in the new package, so
+  files a version stops shipping don't accumulate; files the user added are on neither list and
+  are left alone. The release build writes the list into the package, so installer-made installs
+  have one too.
 * Applications can't overwrite themselves so a separate application is responsible for actually
   updating the Rio executable and other files. The updater can't overwrite itself either, so on
   Windows it renames itself out of the way before installing and on macOS Rio runs a copy of it;
@@ -29,8 +36,9 @@ For auto-update to work, a release needs:
   to match `RIO_REV_STR` in Common/Version.cpp in the build being released — if the tag is bumped
   but `RIO_REV_STR` isn't, the updated build still reports the old version and prompts to install
   the same release on every launch.
-* A Windows asset whose name contains "win" (any casing) — the NSIS installer built from
-  Installer/Installer.nsi, e.g. `Project_Rio_Windows_Installer.exe`.
+* Two Windows assets whose names contain "win" (any casing): the zip of the portable build, e.g.
+  `Project_Rio_Windows.zip`, which is what installs update from, and the NSIS installer built from
+  Installer/Installer.nsi, e.g. `Project_Rio_Windows_Installer.exe`, for first-time installs.
 * A macOS asset per architecture, named so that it contains "mac" plus one of "arm"/"silicon"/
   "apple" or "intel"/"x86"/"x64", e.g. `Project_Rio_macOS-Apple_silicon.zip`. It has to be the zip
   the build produces, holding **both** `ProjectRio.app` and `Project Rio Updater.app` at its root —
@@ -39,8 +47,8 @@ For auto-update to work, a release needs:
 * Assets must be the archive itself, not a GitHub Actions artifact download (which wraps whatever
   you built in another zip). Every macOS asset published so far has been double-zipped this way,
   and the updater cannot see through that.
-* If a portable `.zip` is attached instead, it has to contain the actual build (the files that sit
-  next to the executable, including `build_info.txt`), not an installer wrapped in a zip. The
+* The Windows zip has to contain the actual build (the files that sit next to the executable,
+  including `build_info.txt` and `install_manifest.txt`), not an installer wrapped in a zip. The
   updater refuses a zip without `build_info.txt` rather than unpacking junk over the install.
 
 GitHub reports a `sha256` digest for each asset, which the updater checks after downloading. That
@@ -75,8 +83,11 @@ catches a corrupted or truncated download before anything is unpacked or execute
 * UpdaterCommon/UpdaterCommon.cpp: Performs the actual update process.
     * Manages updater UI.
     * Downloads the release asset and verifies its sha256 against the digest from the API.
-    * Installs it. On Windows an `.exe` is run as a silent NSIS install against the current
-      install directory, and a `.zip` is unpacked and copied over it. On macOS the zip is unpacked
+    * Installs it. On Windows a `.zip` is unpacked and copied over the install directory, files
+      the previous version shipped that this one doesn't are deleted, and the version in the
+      uninstall entry (if the install has one) is updated. An `.exe` is run as a silent NSIS
+      install against the current install directory, without elevation and in the install's own
+      per-user or all-users mode. On macOS the zip is unpacked
       with `ditto` (our own unzip restores neither the symlinks holding the framework layout
       together nor the permission bits, which leaves a bundle macOS calls damaged), and each
       bundle in it is then moved into place with a rename — replacing a Mach-O's bytes in place
@@ -160,8 +171,8 @@ The whole flow can be run against a throwaway release without touching the real 
    and Rio should come back reporting the new version without prompting again. `Updater.log` in
    the user folder's `Logs` directory records each step, including the reason for any failure.
 
-On Windows the updater prefers the installer asset when a release has both; leave it off the
-release to exercise the zip path.
+On Windows the updater prefers the zip when a release has both; leave it off the release to
+exercise the installer fallback.
 
 The updater can also be run directly:
 

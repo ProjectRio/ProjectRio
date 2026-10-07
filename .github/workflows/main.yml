@@ -57,6 +57,11 @@ jobs:
           cd .\Binary\x64\
           fsutil file createnew FIX-VCRUNTIME140-ERROR.txt 0
           echo "Download and install this: https://aka.ms/vs/16/release/vc_redist.x64.exe" > .\FIX-VCRUNTIME140-ERROR.txt
+          # List of every file this build ships, relative and '/' separated. The updater compares
+          # it with the next version's files to delete what that version no longer ships. Must be
+          # written last, and before the zip and the installer are made so both include it.
+          $files = @(Get-ChildItem -Recurse -File -Name | ForEach-Object { $_.Replace('\', '/') }) + 'install_manifest.txt'
+          [IO.File]::WriteAllLines("$PWD\install_manifest.txt", $files)
       - name: "Build Installer"
         shell: cmd
         working-directory: ${{ github.workspace }}
