@@ -276,7 +276,9 @@ void LaunchApplication(std::string path)
     PROCESS_INFORMATION process_info;
     if (IsTestMode())
       SetEnvironmentVariableA("DOLPHIN_UPDATE_TEST_DONE", "1");
-    if (CreateProcessW(wpath.c_str(), cmdline.data(), nullptr, nullptr, TRUE, 0, nullptr, nullptr,
+    // Don't let the restarted application inherit our handles: it would keep the updater's log
+    // file (among others) open for as long as it runs.
+    if (CreateProcessW(wpath.c_str(), cmdline.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr,
                        &startup_info, &process_info))
     {
       CloseHandle(process_info.hThread);

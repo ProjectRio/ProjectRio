@@ -695,8 +695,13 @@ bool RunUpdater(std::vector<std::string> args)
   // Let the user process that we are done.
   UI::Sleep(1);
 
+  LogToFile("Update complete.\n");
+
   if (opts.binary_to_restart)
   {
+    LogToFile("Restarting %s\n", opts.binary_to_restart->c_str());
+    // Close the log before the application starts, so it is never left holding it open.
+    FlushLog();
     UI::LaunchApplication(opts.binary_to_restart.value());
   }
 
