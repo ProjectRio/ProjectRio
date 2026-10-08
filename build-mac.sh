@@ -17,6 +17,12 @@ CMAKE_FLAGS+=' -DMACOS_CODE_SIGNING="OFF"'
 
 CMAKE_FLAGS+=' -DCMAKE_POLICY_VERSION_MINIMUM=3.5'
 
+# Always build the SDL in Externals/ rather than using Homebrew's. Homebrew's sdl2 (pulled in by
+# ffmpeg) is sdl2-compat, a shim that dlopen()s libSDL3 at runtime. fixup_bundle only follows link
+# dependencies, so the shim gets bundled without the SDL3 it needs and the app dies with
+# "Failed loading SDL3 library" on any Mac that doesn't have Homebrew's SDL3 installed.
+CMAKE_FLAGS+=' -DUSE_SYSTEM_SDL2=OFF'
+
 # Use ccache if available
 if command -v ccache &> /dev/null; then
     CMAKE_FLAGS+=' -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
