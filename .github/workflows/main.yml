@@ -327,6 +327,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     steps:
       - name: "Checkout"
         uses: actions/checkout@v4
@@ -342,9 +343,29 @@ jobs:
             exit 1
           fi
       - name: "Download builds"
-        uses: actions/download-artifact@v7
-        with:
-          path: artifacts
+        # Through the API rather than actions/download-artifact: some jobs upload a zipped folder
+        # and others (the AppImage, the Flatpak) a single raw file, and this handles both.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dl
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" --paginate \
+            --jq '.artifacts[] | [.id, .name] | @tsv' > artifacts.tsv
+          cat artifacts.tsv
+          while IFS=$'\t' read -r id name; do
+            echo "::group::${name}"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "dl/${name}.download"
+            mkdir "dl/${name}.d"
+            if unzip -tq "dl/${name}.download" > /dev/null 2>&1; then
+              unzip -q "dl/${name}.download" -d "dl/${name}.d"
+              rm "dl/${name}.download"
+            else
+              mv "dl/${name}.download" "dl/${name}.d/${name}"
+            fi
+            ls -l "dl/${name}.d"
+            echo "::endgroup::"
+          done < artifacts.tsv
       - name: "Collect release assets"
         # The names matter: the updater picks its asset by them. Each one must be the file itself,
         # not an archive wrapped around it.
@@ -352,7 +373,7 @@ jobs:
           set -euo pipefail
           mkdir release
           one() {  # one <glob> <release name>: exactly one build file must match
-            mapfile -t found < <(find artifacts -type f -name "$1" | sort)
+            mapfile -t found < <(find dl -type f -name "$1" | sort)
             if [ "${#found[@]}" -ne 1 ]; then
               echo "::error::Expected exactly one file matching $1, found ${#found[@]}: ${found[*]:-}"
               exit 1
