@@ -115,9 +115,13 @@ jobs:
           echo "CURR_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
       - name: "Install prerequisites"
         if: success()
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: build-essential \
+        # Installed directly rather than through a package-caching action: with an empty cache that
+        # action installed nothing and still reported success, which only showed up as a failed
+        # build in a fresh repository.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
             fuse \
             libfuse2 \
             cmake \
@@ -161,7 +165,6 @@ jobs:
             libgtest-dev \
             libudev-dev \
             libsystemd-dev
-          version: 1.0
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
