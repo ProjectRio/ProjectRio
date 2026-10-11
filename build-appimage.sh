@@ -1,5 +1,6 @@
 #!/bin/bash -e
 # build-appimage.sh
+set -e
 
 ZSYNC_STRING="gh-releases-zsync|project-lylat|Ishiiruka|latest|Lylat_Online-x86_64.AppImage.zsync"
 NETPLAY_APPIMAGE_STRING="Lylat_Online-x86_64.AppImage"
