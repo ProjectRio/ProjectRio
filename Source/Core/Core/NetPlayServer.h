@@ -11,6 +11,7 @@
 #include <mutex>
 #include <optional>
 #include <queue>
+#include <set>
 #include <sstream>
 #include <thread>
 #include <unordered_map>
@@ -158,6 +159,9 @@ private:
   void UpdatePadMapping();
   void UpdateGBAConfig();
   void UpdateWiimoteMapping();
+  void BeginFastResetHUDSync();
+  void CancelFastResetHUDSync();
+  void FinishFastResetHUDSyncIfReady();
   std::vector<std::pair<std::string, std::string>> GetInterfaceListInternal() const;
   void ChunkedDataThreadFunc();
   void ChunkedDataSend(sf::Packet&& packet, PlayerId pid, const TargetMode target_mode);
@@ -196,6 +200,20 @@ private:
   bool m_current_night_value = false;
   bool m_current_disable_replays_value = false;
   bool m_current_fast_reset_from_HUD_value = false;
+
+  // Fast reset HUD sync: when fast reset is enabled every client reports its own HUD file, and
+  // the earliest one is sent back to everybody so all clients boot the same game state.
+  struct FastResetHUDReport
+  {
+    bool valid = false;
+    std::string game_id;
+    u32 event_order = 0;
+    std::string event_num;
+    std::string hud_json;
+  };
+  bool m_fast_reset_hud_sync_active = false;
+  std::set<PlayerId> m_fast_reset_hud_pending;
+  std::map<PlayerId, FastResetHUDReport> m_fast_reset_hud_reports;
   std::optional<int> m_tagset_id = std::nullopt;
 
   std::map<PlayerId, Client> m_players;
