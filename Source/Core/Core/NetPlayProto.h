@@ -201,6 +201,8 @@ enum class MessageID : u8
   DisableReplays = 0xF8,
   Course = 0xF9,
   FastResetFromHUD = 0xFA,
+  FastResetHUDReport = 0xFB,
+  FastResetHUDSelected = 0xFC,
 };
 
 enum class ConnectionError : u8

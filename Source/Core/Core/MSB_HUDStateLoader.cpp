@@ -9,8 +9,7 @@
 #include <picojson.h>
 
 
-bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
-                      const std::string& p1Username, const std::string& p2Username)
+bool ReadHUDFile(const std::string& path, std::string& outJson)
 {
     std::ifstream file(path);
     if (!file.is_open())
@@ -19,29 +18,75 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
         return false;
     }
 
+    outJson.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    return true;
+}
+
+bool GetHUDEventInfo(const std::string& json, HUDEventInfo& outInfo)
+{
+    picojson::value v;
+    std::string err = picojson::parse(v, json);
+    if (!err.empty() || !v.is<picojson::object>())
+        return false;
+
+    const picojson::object& j = v.get<picojson::object>();
+    if (!j.count("Event Num") || !j.at("Event Num").is<std::string>())
+        return false;
+
+    // "Event Num" is the event index plus which of the event's two HUD writes this is:
+    // "a" = before the pitch, "b" = after the play.
+    const std::string& eventNum = j.at("Event Num").get<std::string>();
+    size_t digits = 0;
+    uint32_t event = 0;
+    while (digits < eventNum.size() && eventNum[digits] >= '0' && eventNum[digits] <= '9')
+    {
+        event = event * 10 + static_cast<uint32_t>(eventNum[digits] - '0');
+        digits++;
+    }
+    if (digits == 0)
+        return false;
+
+    outInfo.eventNum = eventNum;
+    outInfo.eventOrder = event * 2 + ((eventNum.find('b', digits) != std::string::npos) ? 1 : 0);
+    // The game id is written with the writer's locale (digit grouping), so keep the digits only.
+    outInfo.gameId.clear();
+    if (j.count("GameID") && j.at("GameID").is<std::string>())
+    {
+        for (const char c : j.at("GameID").get<std::string>())
+            if (c >= '0' && c <= '9')
+                outInfo.gameId += c;
+    }
+    return true;
+}
+
+bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
+                      const std::string& p1Username, const std::string& p2Username)
+{
+    std::string json_str;
+    if (!ReadHUDFile(path, json_str))
+        return false;
+
     INFO_LOG_FMT(COMMON, "Found HUD file: {}", path);
+    return LoadStateFromHudJson(json_str, outState, p1Username, p2Username);
+}
 
-    std::string json_str((std::istreambuf_iterator<char>(file)),
-                          std::istreambuf_iterator<char>());
-
+bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& outState,
+                          const std::string& p1Username, const std::string& p2Username)
+{
     picojson::value v;
     std::string err = picojson::parse(v, json_str);
 
     if (!err.empty())
     {
-        ERROR_LOG_FMT(COMMON, "Failed to parse HUD JSON from file: {} ({})", path, err);
+        ERROR_LOG_FMT(COMMON, "Failed to parse HUD JSON ({})", err);
         return false;
     }
-
-    INFO_LOG_FMT(COMMON, "Successfully parsed HUD JSON from file: {}", path);
 
     if (!v.is<picojson::object>())
     {
-        ERROR_LOG_FMT(COMMON, "HUD JSON is not an object: {}", path);
+        ERROR_LOG_FMT(COMMON, "HUD JSON is not an object");
         return false;
     }
-
-    INFO_LOG_FMT(COMMON, "HUD is a JSON object.: {}", path);
 
     const picojson::object& j = v.get<picojson::object>();
 
@@ -486,31 +531,33 @@ int allowLoadFromHUD(const std::string& path,
                      bool isNetplay,
                      HUDValidationDetails* outDetails)
 {
+    std::string json_str;
+    if (!ReadHUDFile(path, json_str))
+        return 2;
+
+    return allowLoadFromHUDJson(json_str, p1Username, p2Username, isNetplay, outDetails);
+}
+
+int allowLoadFromHUDJson(const std::string& json_str,
+                         const std::string& p1Username, const std::string& p2Username,
+                         bool isNetplay,
+                         HUDValidationDetails* outDetails)
+{
     INFO_LOG_FMT(COMMON, "Starting to check if HUD state load is allowed");
 
-    // ===== check HUD file exists and can be parsed. =====
-    std::ifstream file(path);
-    if (!file.is_open())
-    {
-        ERROR_LOG_FMT(COMMON, "Failed to open HUD file: {}", path);
-        return 2;
-    }
-
-    std::string json_str((std::istreambuf_iterator<char>(file)),
-                          std::istreambuf_iterator<char>());
-
+    // ===== check HUD can be parsed. =====
     picojson::value v;
     std::string err = picojson::parse(v, json_str);
 
     if (!err.empty())
     {
-        ERROR_LOG_FMT(COMMON, "Failed to parse HUD JSON from file: {} ({})", path, err);
+        ERROR_LOG_FMT(COMMON, "Failed to parse HUD JSON ({})", err);
         return 2;
     }
 
     if (!v.is<picojson::object>())
     {
-        ERROR_LOG_FMT(COMMON, "HUD JSON is not an object: {}", path);
+        ERROR_LOG_FMT(COMMON, "HUD JSON is not an object");
         return 2;
     }
 

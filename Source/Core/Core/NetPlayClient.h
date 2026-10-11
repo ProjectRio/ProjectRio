@@ -372,6 +372,13 @@ private:
   void OnCourseMsg(sf::Packet& packet);
   void OnDisableReplaysMsg(sf::Packet& packet);
   void OnFastResetFromHUDMsg(sf::Packet& packet);
+  void OnFastResetHUDSelectedMsg(sf::Packet& packet);
+  void GetFastResetPlayerNames(std::string& p1_username, std::string& p2_username) const;
+
+  // Result of validating our own HUD file for the last fast reset request, shown if no player
+  // turns out to have a usable HUD.
+  int m_fast_reset_local_result = 2;
+  std::string m_fast_reset_local_error;
 
   int framesAsGolfer = 0;
 

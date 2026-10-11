@@ -555,10 +555,17 @@ bool ComputeP1IsAway(const MSBQuickMatchGameState& state)
 // each slot comes from inMemRoster, which the game builds in its own default
 // auto order. This C2 injects the HUD charIDs into the game's roster-build
 // routine at 0x80066A48 (r23 = the build's scratch list) so inMemRoster is
-// BUILT in the HUD batting order instead. Ported verbatim from the proven
-// menu-walk generator; gated on rel==4 so the codehandler installs the hook
-// before the boot C0's staging runs the build. Returned BEFORE the boot code
-// so it is processed first. Returns nullopt if the HUD lacks a full order.
+// BUILT in the HUD batting order instead. Ported from the proven menu-walk
+// generator; gated on rel==4 so the codehandler installs the hook before the
+// boot C0's staging runs the build. Returned BEFORE the boot code so it is
+// processed first. Returns nullopt if the HUD lacks a full order.
+//
+// The rel==4 gate only decides when the codehandler (re)writes the branch: once
+// installed, the hook stays in the DOL for the rest of the session. So the
+// injected code checks the boot C0's once-per-session phase itself and does
+// nothing after the boot match has been handed off (TBM_PHASE_DONE). Without
+// that, a match set up from the menus after "Return to main menu" would get
+// the HUD's batting order too.
 std::optional<Gecko::GeckoCode> BuildBattingOrderHookCode(const MSBQuickMatchGameState& state,
                                                           bool p1IsAway)
 {
@@ -588,8 +595,10 @@ std::optional<Gecko::GeckoCode> BuildBattingOrderHookCode(const MSBQuickMatchGam
     std::vector<Gecko::GeckoCode::Code> codes;
     codes.push_back(MakeLine(0x280E877C, 0x00000004)); // if rel == 4 (main menu)
 
-    codes.push_back(MakeLine(0xC2066A48, 0x00000016)); // C2 hook, 0x16 lines follow
-    codes.push_back(MakeLine(0x3AE10038, 0x2C080001)); // is this team P2?
+    codes.push_back(MakeLine(0xC2066A48, 0x00000018)); // C2 hook, 0x18 lines follow
+    codes.push_back(MakeLine(0x3AE10038, 0x3D80802F)); // original instruction; lis r12, 0x802F
+    codes.push_back(MakeLine(0x898CC01F, 0x2C0C0002)); // r12 = tbm_bootPhase (0x802EC01F); DONE (2)?
+    codes.push_back(MakeLine(0x418200A8, 0x2C080001)); // boot is over: branch to end; is this team P2?
     codes.push_back(MakeLine(0x41820058, 0x60000000)); // branch to P2 block; nop
 
     for (int i = 0; i < 9; i++) // P1 batting order
