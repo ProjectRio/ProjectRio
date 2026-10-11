@@ -3,7 +3,9 @@
 
 #include "DiscIO/VolumeGC.h"
 
+#include <algorithm>
 #include <cstddef>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -18,6 +20,7 @@
 #include "Common/Logging/Log.h"
 #include "Common/MsgHandler.h"
 #include "Common/StringUtil.h"
+#include "Common/Swap.h"
 
 #include "DiscIO/Blob.h"
 #include "DiscIO/DiscExtractor.h"
@@ -149,11 +152,68 @@ bool VolumeGC::IsDatelDisc() const
   return GetGameID() == "DTLX01" || !GetBootDOLOffset(*this, PARTITION_NONE).has_value();
 }
 
+// Project Rio: the netplay "same game" hash ignores where things sit on the disc, so a good ISO,
+// an NKit image (which repacks files and writes its own data into the header) and an extracted
+// folder (which Dolphin lays out itself) all match when their contents do. CISO/RVZ/GCZ/WIA are
+// lossless and match already. File contents are not hashed, same as upstream; netplay forces Fast
+// Disc Speed so read timing doesn't depend on the layout either.
 std::array<u8, 20> VolumeGC::GetSyncHash() const
 {
   auto context = Common::SHA1::CreateContext();
 
-  AddGamePartitionToSyncHash(context.get());
+  // Disc header (boot.bin), minus the layout-dependent parts: NKit's header data at 0x200-0x21C
+  // and the boot DOL / FST offsets at 0x420-0x428. The FST and max FST sizes stay in.
+  std::vector<u8> header(0x440);
+  if (Read(0, header.size(), header.data(), PARTITION_NONE))
+  {
+    std::fill(header.begin() + 0x200, header.begin() + 0x21C, 0);
+    std::fill(header.begin() + 0x420, header.begin() + 0x428, 0);
+    context->Update(header);
+  }
+
+  // bi2.bin and the apploader
+  ReadAndAddToSyncHash(context.get(), 0x440,
+                       0x2000 + GetApploaderSize(*this, PARTITION_NONE).value_or(0), PARTITION_NONE);
+
+  // Boot DOL contents (may be missing if this is a Datel disc)
+  if (const std::optional<u64> dol_offset = GetBootDOLOffset(*this, PARTITION_NONE))
+  {
+    ReadAndAddToSyncHash(context.get(), *dol_offset,
+                         GetBootDOLSize(*this, PARTITION_NONE, *dol_offset).value_or(0),
+                         PARTITION_NONE);
+  }
+
+  const FileSystem* file_system = GetFileSystem(PARTITION_NONE);
+  if (file_system && file_system->IsValid())
+  {
+    // Every file's path and size, but not its offset
+    std::function<void(const FileInfo&, const std::string&)> add_directory =
+        [&](const FileInfo& directory, const std::string& path) {
+          for (const FileInfo& file_info : directory)
+          {
+            const std::string file_path = path + '/' + file_info.GetName();
+            context->Update(reinterpret_cast<const u8*>(file_path.data()), file_path.size() + 1);
+            if (file_info.IsDirectory())
+            {
+              add_directory(file_info, file_path);
+            }
+            else
+            {
+              const u32 size = Common::swap32(file_info.GetSize());
+              context->Update(reinterpret_cast<const u8*>(&size), sizeof(size));
+            }
+          }
+        };
+    add_directory(file_system->GetRoot(), "");
+
+    // opening.bnr (name and banner)
+    std::unique_ptr<FileInfo> file_info = file_system->FindFileInfo("opening.bnr");
+    if (file_info && !file_info->IsDirectory())
+    {
+      ReadAndAddToSyncHash(context.get(), file_info->GetOffset(), file_info->GetSize(),
+                           PARTITION_NONE);
+    }
+  }
 
   return context->Finish();
 }
