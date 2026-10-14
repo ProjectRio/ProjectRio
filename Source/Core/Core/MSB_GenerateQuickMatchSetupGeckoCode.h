@@ -99,7 +99,7 @@ struct MSBQuickMatchGameState
     std::optional<uint16_t> runnerRosterSpot[3];
     std::optional<uint16_t> runnerCharacterID[3];
 
-    // note the P1/P2 basis. Also, array based on batting order.
+    // Stamina left per HUD "Roster N" slot (the game's inMemRoster index), P1/P2 basis.
     std::optional<uint16_t> pitcherStaminaP1[9];
     std::optional<uint16_t> pitcherStaminaP2[9];
 };
