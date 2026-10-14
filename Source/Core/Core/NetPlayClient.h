@@ -206,7 +206,8 @@ public:
   static std::string GetNetplayNames(u8 PortInt);
   static u32 sGetPlayersMaxPing();
   static std::map<int, LocalPlayers::LocalPlayers::Player> getNetplayerUserInfo();
-  static void SendGameID(u32 gameId);
+  static void SendGameID(u64 gameId);
+  static bool sIsHost();
   static bool isGolfMode();
   u32 maxPing;
 

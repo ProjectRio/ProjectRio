@@ -1748,10 +1748,9 @@ void NetPlayClient::OnChecksumMsg(sf::Packet& packet)
 
 void NetPlayClient::OnGameIDMsg(sf::Packet& packet)
 {
-  u32 gameID;
-  packet >> gameID;
+  const u64 gameID = Common::PacketReadU64(packet);
 
-  Core::SetGameID(gameID);
+  Core::SetNetplayGameID(gameID);
 }
 
 void NetPlayClient::OnStadiumMsg(sf::Packet& packet)
@@ -2763,16 +2762,23 @@ void NetPlayClient::RequestGolfControl()
   RequestGolfControl(m_local_player->pid);
 }
 
-void NetPlayClient::SendGameID(u32 gameId)
+// the host decides the game id for everyone (see StatTracker::generateGameID)
+void NetPlayClient::SendGameID(u64 gameId)
 {
-  // only golfer sends
-  if (netplay_client->m_local_player->pid != netplay_client->m_current_golfer)
+  if (!sIsHost())
     return;
 
   sf::Packet packet;
   packet << MessageID::GameID;
-  packet << gameId;
+  packet << sf::Uint64{gameId};
   netplay_client->SendAsync(std::move(packet));
+}
+
+bool NetPlayClient::sIsHost()
+{
+  std::lock_guard lk(crit_netplay_client);
+  return netplay_client && netplay_client->m_local_player &&
+         netplay_client->m_local_player->IsHost();
 }
 
 
