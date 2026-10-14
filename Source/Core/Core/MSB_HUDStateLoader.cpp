@@ -476,41 +476,56 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
     }
 
     // === STAMINA ===
-    // Stamina is stored per-character in defensive stats.
-    // Your state expects it on a P1/P2 basis by roster ID.
-
-    if (j.count("Away Batter Roster Loc") && j.count("Home Batter Roster Loc"))
+    // Stamina is stored per character in "Defensive Stats", indexed by the HUD's roster slot (the
+    // game's own index for it). Keep that index; the generator maps it onto the booted order.
+    for (int i = 0; i < 9; i++)
     {
-        int awayStartingBatter = static_cast<int>(j.at("Away Batter Roster Loc").get<double>());
-        int homeStartingBatter = static_cast<int>(j.at("Home Batter Roster Loc").get<double>());
+        std::string p1Key = (p1IsAway ? "Away Roster " : "Home Roster ") + std::to_string(i);
+        std::string p2Key = (p1IsAway ? "Home Roster " : "Away Roster ") + std::to_string(i);
 
-        for (int i = 0; i < 9; i++)
+        if (j.count(p1Key))
         {
-            int awayAdjustedIndex = (i + awayStartingBatter) % 9;
-            int homeAdjustedIndex = (i + homeStartingBatter) % 9;
-
-            std::string p1Key = p1IsAway ? "Away Roster " + std::to_string(awayAdjustedIndex)
-                                                : "Home Roster " + std::to_string(homeAdjustedIndex);
-            std::string p2Key = p1IsAway ? "Home Roster " + std::to_string(homeAdjustedIndex)
-                                                : "Away Roster " + std::to_string(awayAdjustedIndex);
-
-            if (j.count(p1Key))
+            const picojson::object& roster = j.at(p1Key).get<picojson::object>();
+            if (roster.count("Defensive Stats"))
             {
-                const picojson::object& roster = j.at(p1Key).get<picojson::object>();
                 const picojson::object& defensiveStats = roster.at("Defensive Stats").get<picojson::object>();
                 if (defensiveStats.count("Stamina"))
                     state.pitcherStaminaP1[i] = static_cast<uint16_t>(defensiveStats.at("Stamina").get<double>());
             }
+        }
 
-            if (j.count(p2Key))
+        if (j.count(p2Key))
+        {
+            const picojson::object& roster = j.at(p2Key).get<picojson::object>();
+            if (roster.count("Defensive Stats"))
             {
-                const picojson::object& roster = j.at(p2Key).get<picojson::object>();
                 const picojson::object& defensiveStats = roster.at("Defensive Stats").get<picojson::object>();
                 if (defensiveStats.count("Stamina"))
                     state.pitcherStaminaP2[i] = static_cast<uint16_t>(defensiveStats.at("Stamina").get<double>());
             }
         }
     }
+    // The HUD's situation (count, score, inning, "Pitcher Stamina") is captured when the event
+    // starts, before the pitch, but "Defensive Stats" are read when the HUD is written, which for a
+    // post-play ("b") HUD is after the play has already drained stamina (runs scored, star pitch).
+    // Only the current pitcher's stamina changes during a play, so put that slot back to the
+    // pre-play value so it matches the situation the reset restores. (Same fix as PR #150 for the
+    // old menu-walk generator, indexed here by HUD roster slot.)
+    if (j.count("Pitcher Stamina") && j.count("Pitcher Roster Loc") && state.halfInning.has_value())
+    {
+        const bool homeIsPitching = (state.halfInning.value() == 0);
+        const bool p1IsPitching = (homeIsPitching != p1IsAway);
+        const int pitcherSlot = static_cast<int>(j.at("Pitcher Roster Loc").get<double>());
+        const uint16_t prePlayStamina = static_cast<uint16_t>(j.at("Pitcher Stamina").get<double>());
+        std::optional<uint16_t>* staminaBySlot = p1IsPitching ? state.pitcherStaminaP1 : state.pitcherStaminaP2;
+        if (pitcherSlot >= 0 && pitcherSlot < 9)
+        {
+            staminaBySlot[pitcherSlot] = prePlayStamina;
+            INFO_LOG_FMT(COMMON, "P{} pitcher (roster slot {}) set to pre-play stamina {}",
+                         p1IsPitching ? 1 : 2, pitcherSlot, prePlayStamina);
+        }
+    }
+
     for (int i = 0; i < 9; i++)
     {
         if (state.pitcherStaminaP1[i].has_value())
