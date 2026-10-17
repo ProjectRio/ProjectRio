@@ -65,6 +65,13 @@ enum class DEAD_BALL_REASON
     BALL_DEAD
 };
 
+enum class SPECIAL_LIVE_BALL_REASON : u8
+{
+    NONE    = 0,
+    PICKOFF = 1,
+    STEAL   = 2
+};
+
 static std::map<EVENT_STATE, std::string> c_event_state = {
     {EVENT_STATE::INIT_EVENT, "INIT_EVENT"},
     {EVENT_STATE::PITCH_RESULT, "PITCH_RESULT"},
@@ -415,10 +422,10 @@ static const u32 aWhoQuit          = 0x802EBF93;
 static const u32 aGameControlStateCurr = 0x80892aaa;
 static const u32 aGameControlStatePrev = 0x80892aab;
 
-static const u32 aAB_PitchThrown     = 0x8088A81B;
-static const u32 aAB_ContactResult   = 0x808926B3; //0=InAir, 1=Landed, 2=Fielded, 3=Caught, FF=Foul
-static const u32 aAB_ContactMade     = 0x808909a1; //Boolean, from Roeming
-static const u32 aAB_PickoffAttempt  = 0x80892857; //0=None, 1=Pickoff, 2=Steal
+static const u32 aAB_PitchThrown            = 0x8088A81B; // 1 when windup starts, cleared when pitch over or steal attempt completed.
+static const u32 aAB_ContactResult          = 0x808926B3; //0=InAir, 1=Landed, 2=Fielded, 3=Caught, FF=Foul
+static const u32 aAB_ContactMade            = 0x808909a1; //Boolean, from Roeming
+static const u32 aAB_SpecialLiveBallReason  = 0x80892857; //0=None, 1=Pickoff, 2=Steal
 
 static const u32 aAB_GameIsLive  = 0x8036F3A9; //0 at beginning of game and inbetween innings/changes
 static const u32 aAB_PlayIsReadyToStart  = 0x808909AA; //Key addr that tells us when all addrs have been initialized for the play

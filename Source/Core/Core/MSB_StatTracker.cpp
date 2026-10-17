@@ -229,7 +229,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                 }
                 break;
             //Look for Pitch
-            case (EVENT_STATE::WAITING_FOR_EVENT):
+            case (EVENT_STATE::WAITING_FOR_EVENT): {
                 //Handle quit to main menu
                 if (PowerPC::MMU::HostRead_U32(guard, aGameId) == 0){
                     onGameQuit(guard);
@@ -264,8 +264,9 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                     
                     m_event_state = EVENT_STATE::INIT_EVENT;
                 }
-                //Watch for Runners Stealing
-                if (PowerPC::MMU::HostRead_U8(guard, aAB_PitchThrown) || PowerPC::MMU::HostRead_U8(guard, aAB_PickoffAttempt)){
+                //Start the next event on a pitch or pickoff (writes HUD 'a')
+                const auto special_live_ball_reason = static_cast<SPECIAL_LIVE_BALL_REASON>(PowerPC::MMU::HostRead_U8(guard, aAB_SpecialLiveBallReason));
+                if (PowerPC::MMU::HostRead_U8(guard, aAB_PitchThrown) || special_live_ball_reason == SPECIAL_LIVE_BALL_REASON::PICKOFF){
                     //If HUD not produced for this event, produce HUD JSON
                     logGameInfo(guard);
 
@@ -307,13 +308,14 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                         //Pitch has started
                         m_event_state = EVENT_STATE::PITCH_RESULT;
                     }
-                    else if(PowerPC::MMU::HostRead_U8(guard, aAB_PickoffAttempt)) {
+                    else if (special_live_ball_reason == SPECIAL_LIVE_BALL_REASON::PICKOFF){
                         std::cout << "Pick off attempt detected!\n";
                         m_event_state = EVENT_STATE::MONITOR_RUNNERS;
                         m_game_info.getCurrentEvent().pick_off_attempt = true;
                     }
                 }
                 break;
+            }
             case (EVENT_STATE::PITCH_RESULT): //Look for contact or end of pitch
 
                 // === Monitor ===
@@ -393,7 +395,8 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                 break;
             case (EVENT_STATE::MONITOR_RUNNERS):
-                if (!PowerPC::MMU::HostRead_U8(guard, aAB_PitchThrown) && !PowerPC::MMU::HostRead_U8(guard, aAB_PickoffAttempt)){
+                if (!PowerPC::MMU::HostRead_U8(guard, aAB_PitchThrown) &&
+                    static_cast<SPECIAL_LIVE_BALL_REASON>(PowerPC::MMU::HostRead_U8(guard, aAB_SpecialLiveBallReason)) != SPECIAL_LIVE_BALL_REASON::PICKOFF){
                     m_game_info.getCurrentEvent().dead_ball_reason = PowerPC::MMU::HostRead_U8(guard, aAB_DeadBallReason);
                     m_game_info.getCurrentEvent().result_of_atbat = PowerPC::MMU::HostRead_U8(guard, aAB_FinalResult);
                     m_event_state = EVENT_STATE::PLAY_OVER;
