@@ -11,6 +11,7 @@
 #include "Core/LocalPlayersConfig.h"
 #include "Common/Version.h"
 
+#include "Common/Random.h"
 #include "Common/Swap.h"
 #include "Common/Thread.h"
 
@@ -25,6 +26,7 @@
 #include "Common/TagSet.h"
 
 #include "Core/GeckoCodeConfig.h"
+#include "Core/NetPlayClient.h"
 #include "Core/NetPlayServer.h"
 
 void StatTracker::Run(const Core::CPUThreadGuard& guard)
@@ -167,6 +169,43 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
         }
     }
 
+    //Start recording on the frame the game flags the match as started (the first at bat).
+    //This runs before the At Bat State Machine so the first event is created on this same frame
+    bool game_has_started = (PowerPC::MMU::HostRead_U16(guard, aLoadedRel) == 5) &&
+                            (PowerPC::MMU::HostRead_U8(guard, aGameTypeSelected) != 4) &&
+                            (PowerPC::MMU::HostRead_U8(guard, aGameHasStarted) != 0);
+    if (m_game_state == GAME_STATE::PREGAME && game_has_started && !m_game_has_started_prev) {
+        //Sample settings
+
+        // Capture fast-reset-from-HUD at game start (the HUD gecko code is already applied
+        // at boot, so this flag is authoritative by now), then immediately clear the global.
+        // isLoadingFromHUD is a one-shot intent for the game being booted; clearing it here
+        // prevents the value leaking into the next game played in the same session, which
+        // previously left "Loaded from HUD": 1 on subsequent normal games.
+        m_game_info.fastResetFromHUD = Gecko::isLoadingFromHUD;
+        Gecko::setFastResetFromHUD(false);
+
+        m_game_info.netplay = m_state.m_netplay_session;
+        m_game_info.netplay_opponent_alias = m_state.m_netplay_opponent_alias;
+        m_game_info.tag_set_id =
+            m_state.m_netplay_session ? m_state.tag_set_id_netplay : m_state.tag_set_id_local;
+
+        m_game_info.game_id = generateGameID();
+
+        m_game_state = GAME_STATE::INGAME;
+
+        std::string tag_set_id_str = "-1";
+        if (m_game_info.tag_set_id.has_value()){
+            tag_set_id_str = std::to_string(m_game_info.tag_set_id.value());
+        }
+        std::cout << "PREGAME->INGAME (GameID=" << std::to_string(m_game_info.game_id) << ", TagSetID=" << tag_set_id_str <<")\n";
+        std::cout << "                (Netplay=" << m_game_info.netplay << ")\n";
+    }
+    m_game_has_started_prev = game_has_started;
+
+    if (m_game_state == GAME_STATE::INGAME)
+        applyPendingNetplayGameID();
+
     //At Bat State Machine
     if (m_game_state == GAME_STATE::INGAME){
         switch(m_event_state){
@@ -218,7 +257,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                     std::cout << "Init event " << std::to_string(m_game_info.event_num) << "\n";
                 }
-                else if (PowerPC::MMU::HostRead_U32(guard, aGameId) == 0){
+                else if (hasLeftGame(guard)){
                     onGameQuit(guard);
 
                     //Remove current event, wasn't finished
@@ -231,7 +270,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
             //Look for Pitch
             case (EVENT_STATE::WAITING_FOR_EVENT):
                 //Handle quit to main menu
-                if (PowerPC::MMU::HostRead_U32(guard, aGameId) == 0){
+                if (hasLeftGame(guard)){
                     onGameQuit(guard);
 
                     //Remove current event, wasn't finished
@@ -524,35 +563,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
     //Game State Machine
     switch (m_game_state){ // crashed here in debugging "Access violation reading location 0xFFFFFFFFFFFFFFFF"
         case (GAME_STATE::PREGAME):
-            //Start recording when GameId is set AND record button is pressed AND game has started
-            //std::cout << std::hex << "GameId=" << PowerPC::MMU::HostRead_U32(guard, aGameId) << "GameState=" <<  PowerPC::MMU::HostRead_U8(aGameControlStateCurr) << '\n';
-            if ((PowerPC::MMU::HostRead_U32(guard, aGameId) != 0) && (PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr) == 0x5) ) {
-                m_game_info.game_id = PowerPC::MMU::HostRead_U32(guard, aGameId);
-                //Sample settings
-
-                // Capture fast-reset-from-HUD at game start (the HUD gecko code is already applied
-                // at boot, so this flag is authoritative by now), then immediately clear the global.
-                // isLoadingFromHUD is a one-shot intent for the game being booted; clearing it here
-                // prevents the value leaking into the next game played in the same session, which
-                // previously left "Loaded from HUD": 1 on subsequent normal games.
-                m_game_info.fastResetFromHUD = Gecko::isLoadingFromHUD;
-                Gecko::setFastResetFromHUD(false);
-
-                m_game_info.netplay = m_state.m_netplay_session;
-                m_game_info.netplay_opponent_alias = m_state.m_netplay_opponent_alias;
-                m_game_info.tag_set_id =
-                    m_state.m_netplay_session ? m_state.tag_set_id_netplay : m_state.tag_set_id_local;
-
-
-                m_game_state = GAME_STATE::INGAME;
-
-                std::string tag_set_id_str = "-1";
-                if (m_game_info.tag_set_id.has_value()){
-                    tag_set_id_str = std::to_string(m_game_info.tag_set_id.value());
-                }
-                std::cout << "PREGAME->INGAME (GameID=" << std::to_string(m_game_info.game_id) << ", TagSetID=" << tag_set_id_str <<")\n";
-                std::cout << "                (Netplay=" << m_game_info.netplay << ")\n";
-            }
+            //Handled above the At Bat State Machine
             break;
         case (GAME_STATE::INGAME):
             if (m_event_state == EVENT_STATE::GAME_OVER){
@@ -1817,9 +1828,48 @@ void StatTracker::setNetplayerUserInfo(std::map<int, LocalPlayers::LocalPlayers:
     m_game_info.NetplayerUserInfo[player.first] = player.second;
 }
 
-void StatTracker::setGameID(u32 gameID)
+void StatTracker::setNetplayGameID(u64 gameID)
 {
-  m_game_info.game_id = gameID;
+  m_pending_netplay_game_id = gameID;
+}
+
+// A random id for the game that just started. On netplay the host's id is used by everyone: the
+// host sends its own, and a client takes the host's if it has arrived already, or uses a
+// placeholder that applyPendingNetplayGameID() replaces when it does
+u64 StatTracker::generateGameID()
+{
+  if (m_state.m_netplay_session && !NetPlay::NetPlayClient::sIsHost())
+  {
+    const u64 host_id = m_pending_netplay_game_id.exchange(0);
+    if (host_id != 0)
+      return host_id;
+  }
+
+  u64 id = 0;
+  while (id == 0)
+    id = Common::Random::GenerateValue<u64>();
+
+  if (m_state.m_netplay_session && NetPlay::NetPlayClient::sIsHost())
+    NetPlay::NetPlayClient::SendGameID(id);
+
+  return id;
+}
+
+void StatTracker::applyPendingNetplayGameID()
+{
+  const u64 host_id = m_pending_netplay_game_id.exchange(0);
+  if (host_id != 0 && host_id != m_game_info.game_id)
+  {
+    std::cout << "GameID " << m_game_info.game_id << " replaced by host's " << host_id << "\n";
+    m_game_info.game_id = host_id;
+  }
+}
+
+// The game is leaving the match before it finished: the player quit from the pause menu
+bool StatTracker::hasLeftGame(const Core::CPUThreadGuard& guard)
+{
+  return PowerPC::MMU::HostRead_U16(guard, aLoadedRel) != 5 ||
+         PowerPC::MMU::HostRead_U8(guard, aExitingToMenu) != 0;
 }
 
 void StatTracker::initPlayerInfo(const Core::CPUThreadGuard& guard){
