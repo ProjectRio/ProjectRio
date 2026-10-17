@@ -415,9 +415,6 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
     }
 
     // === STAMINA ===
-    // Stamina is stored per-character in defensive stats.
-    // Your state expects it on a P1/P2 basis by roster ID.
-
     if (j.count("Away Batter Roster Loc") && j.count("Home Batter Roster Loc"))
     {
         int awayStartingBatter = static_cast<int>(j.at("Away Batter Roster Loc").get<double>());
@@ -450,6 +447,31 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
             }
         }
     }
+
+    // === STAMINA ADJUSTMENT ===
+    // Defensive Stats stamina is post-play, but fast reset restores the pre-play situation.
+    // Overwrite the current pitcher's stamina with the pre-play value captured with the situation.
+    if (j.count("Pitcher Stamina") && j.count("Pitcher Roster Loc") && state.halfInning.has_value() &&
+        j.count("Away Batter Roster Loc") && j.count("Home Batter Roster Loc"))
+    {
+        const bool homeIsPitching = (state.halfInning.value() == 0);
+        const bool p1IsPitching = (homeIsPitching != p1IsAway);
+        const int startingBatter = static_cast<int>(
+            j.at(homeIsPitching ? "Home Batter Roster Loc" : "Away Batter Roster Loc").get<double>());
+        const int pitcherRosterLoc = static_cast<int>(j.at("Pitcher Roster Loc").get<double>());
+        const uint16_t pitcherStamina = static_cast<uint16_t>(j.at("Pitcher Stamina").get<double>());
+
+        const int pitcherIndex = (pitcherRosterLoc - startingBatter + 9) % 9;
+        auto& staminaArray = p1IsPitching ? state.pitcherStaminaP1 : state.pitcherStaminaP2;
+        staminaArray[pitcherIndex] = pitcherStamina;
+        INFO_LOG_FMT(COMMON, "Set P{} pitcher stamina (batting order {}) to pre-play value {}",
+                     p1IsPitching ? 1 : 2, pitcherIndex, pitcherStamina);
+    }
+    else
+    {
+        INFO_LOG_FMT(COMMON, "Pitcher stamina adjustment skipped (missing HUD fields or half inning)");
+    }
+
     for (int i = 0; i < 9; i++)
     {
         if (state.pitcherStaminaP1[i].has_value())
