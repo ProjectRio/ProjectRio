@@ -1,5 +1,6 @@
 #!/bin/bash -e
 # build-linux.sh
+set -e
 
 CMAKE_FLAGS='-DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DLINUX_LOCAL_DEV=true -DCMAKE_BUILD_WITH_INSTALL_RPATH=true -DCMAKE_BUILD_TYPE=Release -GNinja'
 

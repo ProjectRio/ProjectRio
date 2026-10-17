@@ -735,10 +735,9 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
       OSD::MessageType::QuickMatchBattingOrder,
       fmt::format
       (
-        "Quick Match Setup V1 \n"
-        "The match will load to 1 pitch before the crash.\n"
-        "Everything will be set automatically.\n"
-        "Just press A and ignore the graphics.\n"
+        "Quick Match Setup V2\n"
+        "The match will load to 1 pitch before the crash/desync.\n"
+        "Everything will be set automatically."
       ), 
       OSD::Duration::NORMAL,
       OSD::Color::BLUE
