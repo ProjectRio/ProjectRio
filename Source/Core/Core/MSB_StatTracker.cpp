@@ -174,8 +174,8 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                 //Create new event, collect runner data
 
                 //Capture the rising edge of the AtBat Scene
-        if (PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr) == 0x1 &&
-            PowerPC::MMU::HostRead_U8(guard, aGameControlStatePrev) != 0x1)
+        if (static_cast<GAME_CONTROL_STATE>(PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr)) == GAME_CONTROL_STATE::AT_BAT &&
+            static_cast<GAME_CONTROL_STATE>(PowerPC::MMU::HostRead_U8(guard, aGameControlStatePrev)) != GAME_CONTROL_STATE::AT_BAT)
         {
 
                     m_game_info.events[m_game_info.event_num] = Event();
@@ -229,7 +229,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                 }
                 break;
             //Look for Pitch
-            case (EVENT_STATE::WAITING_FOR_EVENT):
+            case (EVENT_STATE::WAITING_FOR_EVENT): {
                 //Handle quit to main menu
                 if (PowerPC::MMU::HostRead_U32(guard, aGameId) == 0){
                     onGameQuit(guard);
@@ -252,7 +252,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                 //1. Are runners stealing and pitcher stepped off the mound
                 //2. Has pitch started?
                 //3. Has game been paused, reinit 
-                if (PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr) == 0xb){
+                if (static_cast<GAME_CONTROL_STATE>(PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr)) == GAME_CONTROL_STATE::PAUSED){
                     std::cout << "Game paused, need to re-init event " << std::to_string(m_game_info.event_num) << "\n";
                     logGameInfo(guard);
 
@@ -264,8 +264,9 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                     
                     m_event_state = EVENT_STATE::INIT_EVENT;
                 }
-                //Watch for Runners Stealing
-                if (PowerPC::MMU::HostRead_U8(guard, aAB_PitchThrown) || PowerPC::MMU::HostRead_U8(guard, aAB_PickoffAttempt)){
+                //Start the next event on a pitch or pickoff (writes HUD 'a')
+                const auto special_live_ball_reason = static_cast<SPECIAL_LIVE_BALL_REASON>(PowerPC::MMU::HostRead_U8(guard, aAB_SpecialLiveBallReason));
+                if (PowerPC::MMU::HostRead_U8(guard, aAB_PitchThrown) || special_live_ball_reason == SPECIAL_LIVE_BALL_REASON::PICKOFF){
                     //If HUD not produced for this event, produce HUD JSON
                     logGameInfo(guard);
 
@@ -307,13 +308,14 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                         //Pitch has started
                         m_event_state = EVENT_STATE::PITCH_RESULT;
                     }
-                    else if(PowerPC::MMU::HostRead_U8(guard, aAB_PickoffAttempt)) {
+                    else if (special_live_ball_reason == SPECIAL_LIVE_BALL_REASON::PICKOFF){
                         std::cout << "Pick off attempt detected!\n";
                         m_event_state = EVENT_STATE::MONITOR_RUNNERS;
                         m_game_info.getCurrentEvent().pick_off_attempt = true;
                     }
                 }
                 break;
+            }
             case (EVENT_STATE::PITCH_RESULT): //Look for contact or end of pitch
 
                 // === Monitor ===
@@ -393,7 +395,8 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                 break;
             case (EVENT_STATE::MONITOR_RUNNERS):
-                if (!PowerPC::MMU::HostRead_U8(guard, aAB_PitchThrown) && !PowerPC::MMU::HostRead_U8(guard, aAB_PickoffAttempt)){
+                if (!PowerPC::MMU::HostRead_U8(guard, aAB_PitchThrown) &&
+                    static_cast<SPECIAL_LIVE_BALL_REASON>(PowerPC::MMU::HostRead_U8(guard, aAB_SpecialLiveBallReason)) != SPECIAL_LIVE_BALL_REASON::PICKOFF){
                     m_game_info.getCurrentEvent().dead_ball_reason = PowerPC::MMU::HostRead_U8(guard, aAB_DeadBallReason);
                     m_game_info.getCurrentEvent().result_of_atbat = PowerPC::MMU::HostRead_U8(guard, aAB_FinalResult);
                     m_event_state = EVENT_STATE::PLAY_OVER;
@@ -442,7 +445,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                     std::cout << "Play over\n";
                 }
                 break;
-            case (EVENT_STATE::FINAL_RESULT):
+            case (EVENT_STATE::FINAL_RESULT): {
                 //Log post event HUD to file
                 if (m_game_info.getCurrentEvent().write_hud_ab.second){
 
@@ -478,7 +481,8 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                 // === Transitions ===
 
-                if (PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr) == 0x7){
+                const auto game_control_state = static_cast<GAME_CONTROL_STATE>(PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr));
+                if (game_control_state == GAME_CONTROL_STATE::TRANSITION_PREPARE_NEXT_PLAY){
                     //Increment event count
                     ++m_game_info.event_num;
                     //Save position as prev position
@@ -489,13 +493,13 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                     m_game_info.update_ongoing_game = true;
                     std::cout << "Logging Final Result\n" << "Starting next AB\n\n";
                 }
-                else if (PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr) == 0x1 && !m_game_info.previous_state.value().pitch.has_value()){
+                else if (game_control_state == GAME_CONTROL_STATE::AT_BAT && !m_game_info.previous_state.value().pitch.has_value()){
                     //Increment event count
                     ++m_game_info.event_num;
                     m_event_state = EVENT_STATE::INIT_EVENT;
                     std::cout << "Logging Final Result\n" << "Pickoff over\n\n";
                 }
-                else if ((PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr) == 0xE) || (PowerPC::MMU::HostRead_U8(guard, aEndOfGameFlag) == 1)){ //MVP screen
+                else if ((game_control_state == GAME_CONTROL_STATE::MVP_END_GAME_SCREEN) || (PowerPC::MMU::HostRead_U8(guard, aEndOfGameFlag) == 1)){
                     //Increment event count
                     m_event_state = EVENT_STATE::GAME_OVER;
                     std::cout << "Logging Final Result\n" << "Game Over\n\n";
@@ -507,6 +511,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                     std::cout << "Logging Final Result\n" << "Starting next pitch of AB\n\n";
                 }
                 break;
+            }
             case (EVENT_STATE::GAME_OVER):
                 std::cout << "Game Over. Waiting for next game\n";
                 break;
@@ -526,7 +531,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
         case (GAME_STATE::PREGAME):
             //Start recording when GameId is set AND record button is pressed AND game has started
             //std::cout << std::hex << "GameId=" << PowerPC::MMU::HostRead_U32(guard, aGameId) << "GameState=" <<  PowerPC::MMU::HostRead_U8(aGameControlStateCurr) << '\n';
-            if ((PowerPC::MMU::HostRead_U32(guard, aGameId) != 0) && (PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr) == 0x5) ) {
+            if ((PowerPC::MMU::HostRead_U32(guard, aGameId) != 0) && (static_cast<GAME_CONTROL_STATE>(PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr)) == GAME_CONTROL_STATE::GAME_START_MOVIE) ) {
                 m_game_info.game_id = PowerPC::MMU::HostRead_U32(guard, aGameId);
                 //Sample settings
 

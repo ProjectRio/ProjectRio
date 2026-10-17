@@ -65,6 +65,44 @@ enum class DEAD_BALL_REASON
     BALL_DEAD
 };
 
+enum class SPECIAL_LIVE_BALL_REASON : u8
+{
+    NONE    = 0,
+    PICKOFF = 1,
+    STEAL   = 2
+};
+
+// From Nuche
+enum class GAME_CONTROL_STATE : u8
+{
+    DEFAULT                              = 0x0,
+    AT_BAT                               = 0x1,
+    LIVE_BALL                            = 0x2,
+    INNING_TRANSITION                    = 0x3,
+    LOAD_GAME                            = 0x4,
+    GAME_START_MOVIE                     = 0x5,
+    TRANSITION_TO_MINIGAME_START         = 0x6,
+    TRANSITION_PREPARE_NEXT_PLAY         = 0x7,
+    TRANSITION                           = 0x8,
+    END_OF_GAME                          = 0x9,
+    PAUSED                               = 0xb,
+    HOW_TO_PLAY_SCREEN                   = 0xd,
+    MVP_END_GAME_SCREEN                  = 0xe,
+    MINIGAME_POST_GAME_TRANSITION        = 0xf,
+    HOME_RUN_END                         = 0x13,
+    HOME_RUN_LAP                         = 0x14,
+    POST_REPLAY_BATTER_CELEBRATION       = 0x15,
+    STAR_CHANCE_VS_SCREEN                = 0x16,
+    CHAMPIONSHIP_SCREEN                  = 0x17,
+    MINIGAME_NEW_ROUND                   = 0x19,
+    MINIGAME_TRANSITION_TO_BATTING_1     = 0x1a,
+    MINIGAME_SELECT_SCREEN               = 0x1c,
+    TOY_FIELD_STADIUM_LOAD_SCREEN        = 0x1d,
+    CHARACTER_SELECT_MINIGAME_TOY_FIELD  = 0x1e,
+    READY_MINIGAME_SCREEN                = 0x21,
+    POST_MINIGAME_MENU                   = 0x22
+};
+
 static std::map<EVENT_STATE, std::string> c_event_state = {
     {EVENT_STATE::INIT_EVENT, "INIT_EVENT"},
     {EVENT_STATE::PITCH_RESULT, "PITCH_RESULT"},
@@ -373,34 +411,33 @@ static const std::map<u8, std::string> cManualSelectDecode = {
     {0x4,  "Closest to Drop"},
 };
 
-// From Nuche
-static const std::map<u8, std::string> cGameControlState = {
-    {0x0,  "default"},
-    {0x1,  "AtBat"},
-    {0x2,  "LiveBall"},
-    {0x3,  "InningTransition"},
-    {0x4,  "LoadGame"},
-    {0x5,  "GameStartMovie"},
-    {0x6,  "TransitionToMinigameStart"},
-    {0x7,  "TransitionPrepareNextGame"},
-    {0x8,  "TransitionMainFunction"},
-    {0x9,  "EndOfGame?"},
-    {0xb,  "Paused"},
-    {0xd,  "HowToPlayScreen"},
-    {0xe,  "MVP/EndGameScreen"},
-    {0xf,  "MinigamePostGameTransition"},
-    {0x13, "HomeRunEnd"},
-    {0x14, "HomeRunLap"},
-    {0x15, "PostReplayBatterCelebration"},
-    {0x16, "StarChanceVsScreen"},
-    {0x17, "ChampionshipScreen"},
-    {0x19, "MinigameNewRound?"},
-    {0x1a, "MinigameTransitionToBatting1"},
-    {0x1c, "MinigameSelectScreen"},
-    {0x1d, "ToyFieldStadiumLoadScreen"},
-    {0x1e, "CharacterSelectMinigameToyField"},
-    {0x21, "ReadyMinigameScreen"},
-    {0x22, "PostMinigameMenu"},
+static const std::map<GAME_CONTROL_STATE, std::string> cGameControlState = {
+    {GAME_CONTROL_STATE::DEFAULT,                              "DEFAULT"},
+    {GAME_CONTROL_STATE::AT_BAT,                               "AT_BAT"},
+    {GAME_CONTROL_STATE::LIVE_BALL,                            "LIVE_BALL"},
+    {GAME_CONTROL_STATE::INNING_TRANSITION,                    "INNING_TRANSITION"},
+    {GAME_CONTROL_STATE::LOAD_GAME,                            "LOAD_GAME"},
+    {GAME_CONTROL_STATE::GAME_START_MOVIE,                     "GAME_START_MOVIE"},
+    {GAME_CONTROL_STATE::TRANSITION_TO_MINIGAME_START,         "TRANSITION_TO_MINIGAME_START"},
+    {GAME_CONTROL_STATE::TRANSITION_PREPARE_NEXT_PLAY,         "TRANSITION_PREPARE_NEXT_PLAY"},
+    {GAME_CONTROL_STATE::TRANSITION,                           "TRANSITION"},
+    {GAME_CONTROL_STATE::END_OF_GAME,                          "END_OF_GAME"},
+    {GAME_CONTROL_STATE::PAUSED,                               "PAUSED"},
+    {GAME_CONTROL_STATE::HOW_TO_PLAY_SCREEN,                   "HOW_TO_PLAY_SCREEN"},
+    {GAME_CONTROL_STATE::MVP_END_GAME_SCREEN,                  "MVP_END_GAME_SCREEN"},
+    {GAME_CONTROL_STATE::MINIGAME_POST_GAME_TRANSITION,        "MINIGAME_POST_GAME_TRANSITION"},
+    {GAME_CONTROL_STATE::HOME_RUN_END,                         "HOME_RUN_END"},
+    {GAME_CONTROL_STATE::HOME_RUN_LAP,                         "HOME_RUN_LAP"},
+    {GAME_CONTROL_STATE::POST_REPLAY_BATTER_CELEBRATION,       "POST_REPLAY_BATTER_CELEBRATION"},
+    {GAME_CONTROL_STATE::STAR_CHANCE_VS_SCREEN,                "STAR_CHANCE_VS_SCREEN"},
+    {GAME_CONTROL_STATE::CHAMPIONSHIP_SCREEN,                  "CHAMPIONSHIP_SCREEN"},
+    {GAME_CONTROL_STATE::MINIGAME_NEW_ROUND,                   "MINIGAME_NEW_ROUND"},
+    {GAME_CONTROL_STATE::MINIGAME_TRANSITION_TO_BATTING_1,     "MINIGAME_TRANSITION_TO_BATTING_1"},
+    {GAME_CONTROL_STATE::MINIGAME_SELECT_SCREEN,               "MINIGAME_SELECT_SCREEN"},
+    {GAME_CONTROL_STATE::TOY_FIELD_STADIUM_LOAD_SCREEN,        "TOY_FIELD_STADIUM_LOAD_SCREEN"},
+    {GAME_CONTROL_STATE::CHARACTER_SELECT_MINIGAME_TOY_FIELD,  "CHARACTER_SELECT_MINIGAME_TOY_FIELD"},
+    {GAME_CONTROL_STATE::READY_MINIGAME_SCREEN,                "READY_MINIGAME_SCREEN"},
+    {GAME_CONTROL_STATE::POST_MINIGAME_MENU,                   "POST_MINIGAME_MENU"},
 };
 
 //Const for structs
@@ -415,10 +452,10 @@ static const u32 aWhoQuit          = 0x802EBF93;
 static const u32 aGameControlStateCurr = 0x80892aaa;
 static const u32 aGameControlStatePrev = 0x80892aab;
 
-static const u32 aAB_PitchThrown     = 0x8088A81B;
-static const u32 aAB_ContactResult   = 0x808926B3; //0=InAir, 1=Landed, 2=Fielded, 3=Caught, FF=Foul
-static const u32 aAB_ContactMade     = 0x808909a1; //Boolean, from Roeming
-static const u32 aAB_PickoffAttempt  = 0x80892857; //0=None, 1=Pickoff, 2=Steal
+static const u32 aAB_PitchThrown            = 0x8088A81B; // 1 when windup starts, cleared when pitch over or steal attempt completed.
+static const u32 aAB_ContactResult          = 0x808926B3; //0=InAir, 1=Landed, 2=Fielded, 3=Caught, FF=Foul
+static const u32 aAB_ContactMade            = 0x808909a1; //Boolean, from Roeming
+static const u32 aAB_SpecialLiveBallReason  = 0x80892857; //0=None, 1=Pickoff, 2=Steal
 
 static const u32 aAB_GameIsLive  = 0x8036F3A9; //0 at beginning of game and inbetween innings/changes
 static const u32 aAB_PlayIsReadyToStart  = 0x808909AA; //Key addr that tells us when all addrs have been initialized for the play
