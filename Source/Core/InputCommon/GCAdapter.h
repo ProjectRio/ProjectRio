@@ -27,5 +27,6 @@ bool IsDetected(const char** error_message);
 bool DeviceConnected(int chan);
 void ResetDeviceType(int chan);
 bool UseAdapter();
+double ReadRate();
 
 }  // namespace GCAdapter

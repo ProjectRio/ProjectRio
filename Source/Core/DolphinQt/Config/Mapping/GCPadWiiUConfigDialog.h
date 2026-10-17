@@ -21,6 +21,8 @@ private:
   void LoadSettings();
   void SaveSettings();
 
+  void UpdatePollRate();
+
   void CreateLayout();
   void ConnectWidgets();
 
@@ -32,6 +34,7 @@ private:
   QVBoxLayout* m_layout;
   QLabel* m_status_label;
   QDialogButtonBox* m_button_box;
+  QLabel* m_poll_rate_label;
 
   // Checkboxes
   QCheckBox* m_rumble;
