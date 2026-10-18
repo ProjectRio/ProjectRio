@@ -11,6 +11,7 @@
 #include <OptionParser.h>
 #include <fmt/format.h>
 #include <fmt/ostream.h>
+#include <fmt/ranges.h>
 #include <picojson.h>
 
 #include "DiscIO/Blob.h"
@@ -19,6 +20,11 @@
 
 namespace DolphinTool
 {
+static std::string NetplayHash(const DiscIO::Volume& volume)
+{
+  return fmt::format("{:02x}", fmt::join(volume.GetSyncHash(), ""));
+}
+
 int HeaderCommand(const std::vector<std::string>& args)
 {
   optparse::OptionParser parser;
@@ -103,6 +109,8 @@ int HeaderCommand(const std::vector<std::string>& args)
       json["region"] = picojson::value(DiscIO::GetName(volume->GetRegion(), false));
 
       json["country"] = picojson::value(DiscIO::GetName(volume->GetCountry(), false));
+
+      json["netplay_hash"] = picojson::value(NetplayHash(*volume));
     }
 
     // Print
@@ -164,6 +172,9 @@ int HeaderCommand(const std::vector<std::string>& args)
       fmt::print(std::cout, "Region: {}\n", DiscIO::GetName(volume->GetRegion(), false));
 
       fmt::print(std::cout, "Country: {}\n", DiscIO::GetName(volume->GetCountry(), false));
+
+      // Netplay treats two copies as the same game when this matches
+      fmt::print(std::cout, "Netplay Hash: {}\n", NetplayHash(*volume));
     }
   }
 

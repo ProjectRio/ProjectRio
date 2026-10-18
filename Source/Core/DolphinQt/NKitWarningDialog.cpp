@@ -40,7 +40,7 @@ NKitWarningDialog::NKitWarningDialog(QWidget* parent) : QDialog(parent)
          "happen with normal disc images. These problems include:\n"
          "\n"
          "• The emulated loading times are longer\n"
-         "• You can't use NetPlay with people who have normal disc images\n"
+         "• Potential netplay issues\n"
          "• Input recordings are not compatible between NKit disc images and normal disc images\n"
          "• Savestates are not compatible between NKit disc images and normal disc images\n"
          "• Some games can crash, such as Super Paper Mario and Metal Gear Solid: The Twin Snakes\n"
