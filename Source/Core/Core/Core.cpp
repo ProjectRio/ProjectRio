@@ -368,7 +368,6 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
   if (mGameBeingPlayed == GameName::MarioBaseball)
   {
     // bool isPitchThrown = PowerPC::MMU::HostRead_U8(0x80895D6C) == 1 ? true : false;
-    bool isField = PowerPC::MMU::HostRead_U8(guard, aIsField) == 1 ? true : false;
     bool isInGame = PowerPC::MMU::HostRead_U8(guard, aIsInGame) == 1 ? true : false;
     bool ContactMade = PowerPC::MMU::HostRead_U8(guard, aContactMade) == 1 ? true : false;
 
@@ -379,7 +378,8 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
       if (BatterPort > 0)
         BatterPort--;
       u32 stickDirectionAddr = 0x8089392D + (0x10 * BatterPort);
-      float contactQuality = PowerPC::MMU::HostRead_F32(guard, aAB_ContactQuality);
+      int contactQuality =
+          static_cast<int>(roundf(PowerPC::MMU::HostRead_F32(guard, aAB_ContactQuality) * 100));
       u16 contactFrame = PowerPC::MMU::HostRead_U16(guard, aContactFrame);
       u8 typeOfContact_Value = PowerPC::MMU::HostRead_U8(guard, aTypeOfContact);
       std::string typeOfContact;
@@ -392,14 +392,6 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
 
       float angle = roundf((float)PowerPC::MMU::HostRead_U16(guard, aBallAngle) * 36000 / 4096) /
                     100;  // 0x400 == 90°, 0x800 == 180°, 0x1000 == 360°
-      float xVelocity =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallVelocity_X)) * 6000) /
-          100;  // * 60 cause default units are meters per frame
-      float yVelocity =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallVelocity_Y)) * 6000) / 100;
-      float zVelocity =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallVelocity_Z)) * 6000) / 100;
-      float netVelocity = vectorMagnitude(xVelocity, yVelocity, zVelocity);
 
       // convert type of contact to string
       if (typeOfContact_Value == 0)
@@ -446,101 +438,42 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
                            fmt::format("Batting Data:                    \n"
                                        "Contact Frame:  {}\n"
                                        "Type of Contact:  {}\n"
-                                       "Contact Quality: {}\n"
+                                       "Contact Quality: {}%\n"
                                        "Input Direction:  {}\n"
                                        "Charge Percent:  {}%\n"
-                                       "Ball Angle:  {}°\n\n"
-                                       "Exit Velocities:  \n"
-                                       "X :  {} m/s  -->  {} mph\n"
-                                       "Y:  {} m/s  -->  {} mph\n"
-                                       "Z :  {} m/s  -->  {} mph\n"
-                                       "Net:  {} m/s  -->  {} mph",
+                                       "Ball Angle:  {}°",
                                        contactFrame, typeOfContact, contactQuality, inputDirection,
-                                       totalCharge, angle, xVelocity, ms_to_mph(xVelocity),
-                                       yVelocity, ms_to_mph(yVelocity), zVelocity,
-                                       ms_to_mph(zVelocity), netVelocity, ms_to_mph(netVelocity)),
+                                       totalCharge, angle),
                            8000);  // message time & color
     }
 
     // Coordinate data
     if (isInGame)
     {
-      float BallPos_X =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallPosition_X)) * 100) / 100;
-      float BallPos_Y =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallPosition_Y)) * 100) / 100;
-      float BallPos_Z =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallPosition_Z)) * 100) / 100;
-      float BallVel_X =
-          isField ?
-              roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallVelocity_X)) * 6000) / 100 :
-              roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aPitchedBallVelocity_X)) * 6000) /
-                  100;
-      float BallVel_Y =
-          isField ? RoundZ(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallVelocity_Y)) * 6000) /
-                        100 :  // floor small decimal to prevent weirdness
-              RoundZ(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aPitchedBallVelocity_Y)) * 6000) /
-                  100;
-      float BallVel_Z =
-          isField ?
-              roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallVelocity_Z)) * 6000) / 100 :
-              roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aPitchedBallVelocity_Z)) * 6000) /
-                  100;
-      float BallVel_Net = roundf(vectorMagnitude(BallVel_X, BallVel_Y, BallVel_Z) * 100) / 100;
+      float BallPos_X = u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallPosition_X));
+      float BallPos_Y = u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallPosition_Y));
+      float BallPos_Z = u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallPosition_Z));
 
       int baseOffset = 0x268 * PowerPC::MMU::HostRead_U8(
                                    guard, 0x80892801);  // used to get offsed for baseFielderAddr
       u32 baseFielderAddr = 0x8088F368 + baseOffset;    // 0x0 == x; 0x8 == y; 0xc == z
 
-      float FielderPos_X =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr)) * 100) / 100;
-      float FielderPos_Y =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr + 0xc)) * 100) / 100;
-      float FielderPos_Z =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr + 0x8)) * 100) / 100;
-      float FielderVel_X =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr + 0x30)) * 6000) /
-          100;
-      // float FielderVel_Y = roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(baseFielderAddr + 0x15C))
-      // * 6000) / 100; // this addr is wrong
-      float FielderVel_Z =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr + 0x34)) * 6000) /
-          100;
-      float FielderVel_Net =
-          roundf(vectorMagnitude(FielderVel_X, 0 /*FielderVel_Y*/, FielderVel_Z) * 100) / 100;
+      float FielderPos_X = u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr));
+      float FielderPos_Y = u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr + 0xc));
+      float FielderPos_Z = u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr + 0x8));
 
-      OSD::AddTypedMessage(
-          OSD::MessageType::TrainingModeBallCoordinates,
-          fmt::format("Ball Coordinates:                \n"
-                      "X:  {}\n"
-                      "Y:  {}\n"
-                      "Z:  {}\n\n"
-                      "Ball Velocity:  \n"
-                      "X:  {} m/s  -->  {} mph\n"
-                      "Y:  {} m/s  -->  {} mph\n"
-                      "Z:  {} m/s  -->  {} mph\n"
-                      "Net:  {} m/s  -->  {} mph\n",
-                      BallPos_X, BallPos_Y, BallPos_Z, BallVel_X, ms_to_mph(BallVel_X), BallVel_Y,
-                      ms_to_mph(BallVel_Y), BallVel_Z, ms_to_mph(BallVel_Z), BallVel_Net,
-                      ms_to_mph(BallVel_Net)),
-          200, OSD::Color::CYAN);  // short time cause we don't want this info to linger
-
-      OSD::AddTypedMessage(OSD::MessageType::TrainingModeFielderCoordinates,
-                           fmt::format("Fielder Coordinates:             \n"
-                                       "X:  {}\n"
-                                       "Y:  {}\n"
-                                       "Z:  {}\n\n"
-                                       "Fielder Velocity: \n"
-                                       "X:  {} m/s  -->  {} mph\n"
-                                       //"Y:  {} m/s  -->  {} mph\n"
-                                       "Z:  {} m/s  -->  {} mph\n"
-                                       "Net:  {} m/s  -->  {} mph",
-                                       FielderPos_X, FielderPos_Y, FielderPos_Z, FielderVel_X,
-                                       ms_to_mph(FielderVel_X),
-                                       // FielderVel_Y, ms_to_mph(FielderVel_Y),
-                                       FielderVel_Z, ms_to_mph(FielderVel_Z), FielderVel_Net,
-                                       ms_to_mph(FielderVel_Net)),
-                           200, OSD::Color::CYAN);
+      OSD::AddTypedMessage(OSD::MessageType::TrainingModeCoordinates,
+                           fmt::format("Ball Coordinates:                \n"
+                                       "X:  {:.1f}\n"
+                                       "Y:  {:.1f}\n"
+                                       "Z:  {:.1f}\n\n"
+                                       "Fielder Coordinates:             \n"
+                                       "X:  {:.1f}\n"
+                                       "Y:  {:.1f}\n"
+                                       "Z:  {:.1f}",
+                                       BallPos_X, BallPos_Y, BallPos_Z, FielderPos_X, FielderPos_Y,
+                                       FielderPos_Z),
+                           200, OSD::Color::CYAN);  // short time cause we don't want this info to linger
     }
 
     previousContactMade = ContactMade;
@@ -756,24 +689,6 @@ float u32ToFloat(u32 value)
   
   float_converter.num = value;
   return float_converter.fnum;
-}
-
-float ms_to_mph(float MetersPerSecond)
-{
-  return roundf(MetersPerSecond * 223.7) / 100;
-}
-
-float vectorMagnitude(float x, float y, float z)
-{
-  float sum = pow(x, 2) + pow(y, 2) + pow(z, 2);
-  return roundf(sqrt(sum) * 100) / 100;
-}
-
-float RoundZ(float num)
-{
-  if (num < 50 && num > -50)
-    num = 0;
-  return roundf(num);
 }
 
 void SetAvgPing(const Core::CPUThreadGuard& guard)
