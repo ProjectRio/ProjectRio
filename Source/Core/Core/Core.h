@@ -230,9 +230,6 @@ void UpdateInputGate(bool require_focus, bool require_full_focus = false);
 void UpdateTitle();
 
 float u32ToFloat(u32 value);
-float ms_to_mph(float MetersPerSecond);
-float vectorMagnitude(float x, float y, float z);
-float RoundZ(float num);
 void MSSBCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer);
 void MGTTCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer);
 
@@ -279,12 +276,6 @@ static const u32 aBallAngle = 0x808926D4;
 static const u32 aBallPosition_X = 0x80890B38;
 static const u32 aBallPosition_Y = 0x80890B3C;
 static const u32 aBallPosition_Z = 0x80890B40;
-static const u32 aBallVelocity_X = 0x80890E50;
-static const u32 aBallVelocity_Y = 0x80890E54;
-static const u32 aBallVelocity_Z = 0x80890E58;
-static const u32 aPitchedBallVelocity_X = 0x808909D8;
-static const u32 aPitchedBallVelocity_Y = 0x808909DC;
-static const u32 aPitchedBallVelocity_Z = 0x808909E0;
 static const u32 aBarrelBatterPort = 0x80890971; // port of character at bat in barrel batter & bom-omb derby
 static const u32 aWallBallPort = 0x80890AD9; // port of character pitching in wall ball
 static const u32 aMinigameID = 0x808980DE;  // 3 == Barrel Batter; 2 == Wall Ball; 1 == Bom-omb Derby; 4 == Chain Chomp Sprint; 5 == Piranha Panic; 6 == Star Dash; 7 == Grand Prix
