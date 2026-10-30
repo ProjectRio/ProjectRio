@@ -186,7 +186,7 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
   }
 
   // append the gecko codes to allow starting a game from the latest hud game state.
-  // HUDState is pre-populated by OnFastResetFromHUDMsg before the game starts.
+  // HUDState is pre-populated by OnFastResetHUDSelectedMsg before the game starts.
   if (isLoadingFromHUD)
   {
           auto hudCodes = MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSetupGeckoCode(HUDState);
@@ -377,7 +377,8 @@ void resetNetplayGameOptions()
 //
 // Set true by setFastResetFromHUD() after the HUD state is validated and loaded into HUDState:
 //   - local play: LocalPlayersWidget::ValidateAndApplyFastReset() when the checkbox is checked
-//   - netplay:    NetPlayClient::OnFastResetFromHUDMsg() when the host enables it for the lobby
+//   - netplay:    NetPlayClient::OnFastResetHUDSelectedMsg() once the server has picked which
+//                 player's HUD the whole lobby boots from
 //
 // Used during boot:
 //   - LoadCodes() generates the quick-match setup gecko code from HUDState (see line ~190)

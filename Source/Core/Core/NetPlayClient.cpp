@@ -545,6 +545,10 @@ void NetPlayClient::OnData(sf::Packet& packet)
     OnFastResetFromHUDMsg(packet); 
     break;
 
+  case MessageID::FastResetHUDSelected:
+    OnFastResetHUDSelectedMsg(packet);
+    break;
+
   case MessageID::Course:
     OnCourseMsg(packet);
     break;
@@ -1662,71 +1666,152 @@ void NetPlayClient::OnDisableReplaysMsg(sf::Packet& packet)
   Gecko::setDisableReplaysNetplay(disable);
 }
 
-void NetPlayClient::OnFastResetFromHUDMsg(sf::Packet& packet)
+// Chat line explaining a game mode (3) or player (4) mismatch between a HUD and the lobby.
+static std::string FastResetMismatchMessage(int result_code, const HUDValidationDetails& details,
+                                            const std::map<int, Tag::TagSet>* tagset_map,
+                                            const std::string& p1_username,
+                                            const std::string& p2_username)
 {
-  bool load_from_hud;
-  packet >> load_from_hud;
-
-  if (!load_from_hud)
+  if (result_code == 3)
   {
-    m_dialog->OnFastResetFromHUDResult(1); // play disable message
-    Gecko::setFastResetFromHUD(false);
-    return;
-  }
+    std::string hudTagSetLabel = std::to_string(details.hudTagSetId);
+    if (details.hudTagSetId >= 0 && tagset_map && tagset_map->count(details.hudTagSetId))
+      hudTagSetLabel = tagset_map->at(details.hudTagSetId).name;
 
-  // Resolve player names from the lobby directly so callers don't need the static netplay_client pointer.
-  std::string p1Username = std::string(StripWhitespace(m_players.count(m_pad_map[0]) ? m_players.at(m_pad_map[0]).name : ""));
-  std::string p2Username;
+    if (details.hudTagSetId == -1)
+      return fmt::format("HUD has no Game Mode, but '{}' is active in the lobby.",
+                         details.activeTagSetName);
+    if (details.activeTagSetName.empty())
+      return fmt::format("HUD expects '{}', but no Game Mode is active in the lobby.",
+                         hudTagSetLabel);
+    return fmt::format("HUD expects '{}', but '{}' is active in the lobby.", hudTagSetLabel,
+                       details.activeTagSetName);
+  }
+  if (result_code == 4)
+  {
+    return fmt::format("HUD expects Away='{}', Home='{}'. Lobby has P1='{}', P2='{}'.",
+                       details.hudAwayPlayer, details.hudHomePlayer,
+                       p1_username.empty() ? "None" : p1_username,
+                       p2_username.empty() ? "None" : p2_username);
+  }
+  return "";
+}
+
+// Resolve player names from the lobby directly so callers don't need the static netplay_client pointer.
+void NetPlayClient::GetFastResetPlayerNames(std::string& p1_username,
+                                            std::string& p2_username) const
+{
+  p1_username = std::string(StripWhitespace(
+      m_players.count(m_pad_map[0]) ? m_players.at(m_pad_map[0]).name : ""));
+  p2_username.clear();
   for (int i = 1; i < 4; i++)
   {
     PlayerId pid = m_pad_map[i];
     if (pid != 0 && m_players.count(pid))
     {
-      p2Username = std::string(StripWhitespace(m_players.at(pid).name));
+      p2_username = std::string(StripWhitespace(m_players.at(pid).name));
       break;
     }
   }
+}
+
+void NetPlayClient::OnFastResetFromHUDMsg(sf::Packet& packet)
+{
+  bool load_from_hud;
+  packet >> load_from_hud;
+
+  // Enabling is a two step exchange (see OnFastResetHUDSelectedMsg), so nothing is enabled yet.
+  Gecko::setFastResetFromHUD(false);
+
+  if (!load_from_hud)
+  {
+    m_dialog->OnFastResetFromHUDResult(1); // play disable message
+    return;
+  }
+
+  // Players can hold different "latest" HUD files (each one stops writing when it notices the
+  // desync/crash), so report ours to the server. It picks the earliest of everyone's and sends
+  // that one back for all clients to boot from.
+  std::string p1Username;
+  std::string p2Username;
+  GetFastResetPlayerNames(p1Username, p2Username);
 
   INFO_LOG_FMT(COMMON, "HUD reset check: P1='{}', P2='{}'", p1Username, p2Username.empty() ? "none" : p2Username);
 
   std::string hudPath = File::GetUserPath(D_HUDFILES_IDX) + "hud.json";
+  std::string hudJson;
   HUDValidationDetails details;
-  int resultCode = allowLoadFromHUD(hudPath, p1Username, p2Username, true, &details);
+  HUDEventInfo eventInfo;
+  int resultCode = 2;
+
+  if (ReadHUDFile(hudPath, hudJson))
+    resultCode = allowLoadFromHUDJson(hudJson, p1Username, p2Username, true, &details);
+  if (resultCode == 0 && !GetHUDEventInfo(hudJson, eventInfo))
+    resultCode = 2;
+
+  m_fast_reset_local_result = resultCode;
+  m_fast_reset_local_error = FastResetMismatchMessage(resultCode, details, TagSetMap, p1Username, p2Username);
+
+  const bool valid = (resultCode == 0);
+  sf::Packet report;
+  report << MessageID::FastResetHUDReport;
+  report << valid;
+  report << eventInfo.gameId;
+  report << eventInfo.eventOrder;
+  report << eventInfo.eventNum;
+  report << (valid ? hudJson : std::string());
+
+  Send(report);
+}
+
+void NetPlayClient::OnFastResetHUDSelectedMsg(sf::Packet& packet)
+{
+  bool found;
+  packet >> found;
+
+  if (!found)
+  {
+    // No player had a usable HUD; explain what was wrong with ours.
+    m_dialog->OnFastResetFromHUDResult(m_fast_reset_local_result != 0 ? m_fast_reset_local_result : 2);
+    if (!m_fast_reset_local_error.empty())
+      m_dialog->AppendChat(m_fast_reset_local_error);
+    Gecko::setFastResetFromHUD(false);
+    return;
+  }
+
+  std::string sourceName;
+  std::string eventNum;
+  std::string hudJson;
+  packet >> sourceName;
+  packet >> eventNum;
+  packet >> hudJson;
+
+  std::string p1Username;
+  std::string p2Username;
+  GetFastResetPlayerNames(p1Username, p2Username);
+
+  // Every client loads this same HUD, whether or not it is the one in its own HudFiles folder.
+  HUDValidationDetails details;
+  int resultCode = allowLoadFromHUDJson(hudJson, p1Username, p2Username, true, &details);
 
   if (resultCode == 0)
   {
-    if (!LoadStateFromHud(hudPath, Gecko::HUDState, p1Username, p2Username))
+    if (!LoadStateFromHudJson(hudJson, Gecko::HUDState, p1Username, p2Username))
       resultCode = 2;
   }
 
   m_dialog->OnFastResetFromHUDResult(resultCode);
 
-  if (resultCode == 3)
+  if (resultCode == 0)
   {
-    std::string hudTagSetLabel = std::to_string(details.hudTagSetId);
-    if (details.hudTagSetId >= 0 && TagSetMap && TagSetMap->count(details.hudTagSetId))
-      hudTagSetLabel = TagSetMap->at(details.hudTagSetId).name;
-
-    if (details.hudTagSetId == -1)
-      m_dialog->AppendChat(fmt::format(
-          "HUD has no Game Mode, but '{}' is active in the lobby.",
-          details.activeTagSetName));
-    else if (details.activeTagSetName.empty())
-      m_dialog->AppendChat(fmt::format(
-          "HUD expects '{}', but no Game Mode is active in the lobby.",
-          hudTagSetLabel));
-    else
-      m_dialog->AppendChat(fmt::format(
-          "HUD expects '{}', but '{}' is active in the lobby.",
-          hudTagSetLabel, details.activeTagSetName));
+    m_dialog->AppendChat(fmt::format("Fast Reset will resume from event {} ({}'s HUD).",
+                                     eventNum, sourceName));
   }
-  else if (resultCode == 4)
+  else
   {
-    m_dialog->AppendChat(fmt::format(
-        "HUD expects Away='{}', Home='{}'. Lobby has P1='{}', P2='{}'.",
-        details.hudAwayPlayer, details.hudHomePlayer,
-        p1Username.empty() ? "None" : p1Username,
-        p2Username.empty() ? "None" : p2Username));
+    const std::string error = FastResetMismatchMessage(resultCode, details, TagSetMap, p1Username, p2Username);
+    if (!error.empty())
+      m_dialog->AppendChat(error);
   }
 
   Gecko::setFastResetFromHUD(resultCode == 0);

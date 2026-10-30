@@ -9,8 +9,7 @@
 #include <picojson.h>
 
 
-bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
-                      const std::string& p1Username, const std::string& p2Username)
+bool ReadHUDFile(const std::string& path, std::string& outJson)
 {
     std::ifstream file(path);
     if (!file.is_open())
@@ -19,29 +18,75 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
         return false;
     }
 
+    outJson.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    return true;
+}
+
+bool GetHUDEventInfo(const std::string& json, HUDEventInfo& outInfo)
+{
+    picojson::value v;
+    std::string err = picojson::parse(v, json);
+    if (!err.empty() || !v.is<picojson::object>())
+        return false;
+
+    const picojson::object& j = v.get<picojson::object>();
+    if (!j.count("Event Num") || !j.at("Event Num").is<std::string>())
+        return false;
+
+    // "Event Num" is the event index plus which of the event's two HUD writes this is:
+    // "a" = before the pitch, "b" = after the play.
+    const std::string& eventNum = j.at("Event Num").get<std::string>();
+    size_t digits = 0;
+    uint32_t event = 0;
+    while (digits < eventNum.size() && eventNum[digits] >= '0' && eventNum[digits] <= '9')
+    {
+        event = event * 10 + static_cast<uint32_t>(eventNum[digits] - '0');
+        digits++;
+    }
+    if (digits == 0)
+        return false;
+
+    outInfo.eventNum = eventNum;
+    outInfo.eventOrder = event * 2 + ((eventNum.find('b', digits) != std::string::npos) ? 1 : 0);
+    // The game id is written with the writer's locale (digit grouping), so keep the digits only.
+    outInfo.gameId.clear();
+    if (j.count("GameID") && j.at("GameID").is<std::string>())
+    {
+        for (const char c : j.at("GameID").get<std::string>())
+            if (c >= '0' && c <= '9')
+                outInfo.gameId += c;
+    }
+    return true;
+}
+
+bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
+                      const std::string& p1Username, const std::string& p2Username)
+{
+    std::string json_str;
+    if (!ReadHUDFile(path, json_str))
+        return false;
+
     INFO_LOG_FMT(COMMON, "Found HUD file: {}", path);
+    return LoadStateFromHudJson(json_str, outState, p1Username, p2Username);
+}
 
-    std::string json_str((std::istreambuf_iterator<char>(file)),
-                          std::istreambuf_iterator<char>());
-
+bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& outState,
+                          const std::string& p1Username, const std::string& p2Username)
+{
     picojson::value v;
     std::string err = picojson::parse(v, json_str);
 
     if (!err.empty())
     {
-        ERROR_LOG_FMT(COMMON, "Failed to parse HUD JSON from file: {} ({})", path, err);
+        ERROR_LOG_FMT(COMMON, "Failed to parse HUD JSON ({})", err);
         return false;
     }
-
-    INFO_LOG_FMT(COMMON, "Successfully parsed HUD JSON from file: {}", path);
 
     if (!v.is<picojson::object>())
     {
-        ERROR_LOG_FMT(COMMON, "HUD JSON is not an object: {}", path);
+        ERROR_LOG_FMT(COMMON, "HUD JSON is not an object");
         return false;
     }
-
-    INFO_LOG_FMT(COMMON, "HUD is a JSON object.: {}", path);
 
     const picojson::object& j = v.get<picojson::object>();
 
@@ -105,6 +150,10 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
 
     MSBQuickMatchGameState state;
 
+    // Record who is playing for the boot code: a CPU opponent means a 1-player
+    // boot. The second human's controller port defaults inside the generator.
+    state.isCpuMatch = localOpponentIsCpu ? 1 : 0;
+
     // === PRE-GAME SETTINGS ===
     // === ROSTERS ===
     // Characters are stored in roster order in the HUD file, but your state
@@ -132,6 +181,9 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
             }
             uint8_t charID = static_cast<uint8_t>(roster.at("CharID").get<double>());
             uint8_t position = static_cast<uint8_t>(roster.at("Fielding Position").get<double>());
+            // draft-slot order: "Away/Home Roster i" is slot i as the game stores it
+            state.rosterCharP1BySlot[i] = charID;
+            state.positionByRosterSlotP1[i] = position;
             if (position < 9)
             {
                 state.charactersP1ByPosition[position] = charID;
@@ -158,6 +210,8 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
             }
             uint8_t charID = static_cast<uint8_t>(roster.at("CharID").get<double>());
             uint8_t position = static_cast<uint8_t>(roster.at("Fielding Position").get<double>());
+            state.rosterCharP2BySlot[i] = charID;
+            state.positionByRosterSlotP2[i] = position;
             if (position < 9)
             {
                 state.charactersP2ByPosition[position] = charID;
@@ -352,6 +406,11 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
         int awayStartingBatter = static_cast<int>(j.at("Away Batter Roster Loc").get<double>());
         int homeStartingBatter = static_cast<int>(j.at("Home Batter Roster Loc").get<double>());
 
+        // Keep the current batter's natural-order slot so the generator can
+        // un-rotate the batting order and set the current batter correctly.
+        state.awayBatterRosterLoc = static_cast<uint8_t>(((awayStartingBatter % 9) + 9) % 9);
+        state.homeBatterRosterLoc = static_cast<uint8_t>(((homeStartingBatter % 9) + 9) % 9);
+
         for (int i = 0; i < 9; i++)
         {
             std::string awayKey = "Away Roster " + std::to_string((i + awayStartingBatter) % 9);
@@ -397,9 +456,11 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
 
             if (runner.count("Runner Roster Loc"))
             {
-                uint16_t batterRosterLoc = static_cast<uint16_t>(j.at("Batter Roster Loc").get<double>()); // 1
-                uint16_t runnerRosterLocRaw = static_cast<uint16_t>(runner.at("Runner Roster Loc").get<double>()); // 0
-                state.runnerRosterSpot[i] = (runnerRosterLocRaw - batterRosterLoc + 9) % 9;
+                // Absolute natural batting slot of the runner (0 = leadoff), which
+                // is the index into the batting team's in-memory roster the boot
+                // code writes directly.
+                state.runnerRosterSpot[i] =
+                    static_cast<uint16_t>(runner.at("Runner Roster Loc").get<double>());
             }
 
             if (runner.count("Runner Char Id"))
@@ -415,41 +476,56 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
     }
 
     // === STAMINA ===
-    // Stamina is stored per-character in defensive stats.
-    // Your state expects it on a P1/P2 basis by roster ID.
-
-    if (j.count("Away Batter Roster Loc") && j.count("Home Batter Roster Loc"))
+    // Stamina is stored per character in "Defensive Stats", indexed by the HUD's roster slot (the
+    // game's own index for it). Keep that index; the generator maps it onto the booted order.
+    for (int i = 0; i < 9; i++)
     {
-        int awayStartingBatter = static_cast<int>(j.at("Away Batter Roster Loc").get<double>());
-        int homeStartingBatter = static_cast<int>(j.at("Home Batter Roster Loc").get<double>());
+        std::string p1Key = (p1IsAway ? "Away Roster " : "Home Roster ") + std::to_string(i);
+        std::string p2Key = (p1IsAway ? "Home Roster " : "Away Roster ") + std::to_string(i);
 
-        for (int i = 0; i < 9; i++)
+        if (j.count(p1Key))
         {
-            int awayAdjustedIndex = (i + awayStartingBatter) % 9;
-            int homeAdjustedIndex = (i + homeStartingBatter) % 9;
-
-            std::string p1Key = p1IsAway ? "Away Roster " + std::to_string(awayAdjustedIndex)
-                                                : "Home Roster " + std::to_string(homeAdjustedIndex);
-            std::string p2Key = p1IsAway ? "Home Roster " + std::to_string(homeAdjustedIndex)
-                                                : "Away Roster " + std::to_string(awayAdjustedIndex);
-
-            if (j.count(p1Key))
+            const picojson::object& roster = j.at(p1Key).get<picojson::object>();
+            if (roster.count("Defensive Stats"))
             {
-                const picojson::object& roster = j.at(p1Key).get<picojson::object>();
                 const picojson::object& defensiveStats = roster.at("Defensive Stats").get<picojson::object>();
                 if (defensiveStats.count("Stamina"))
                     state.pitcherStaminaP1[i] = static_cast<uint16_t>(defensiveStats.at("Stamina").get<double>());
             }
+        }
 
-            if (j.count(p2Key))
+        if (j.count(p2Key))
+        {
+            const picojson::object& roster = j.at(p2Key).get<picojson::object>();
+            if (roster.count("Defensive Stats"))
             {
-                const picojson::object& roster = j.at(p2Key).get<picojson::object>();
                 const picojson::object& defensiveStats = roster.at("Defensive Stats").get<picojson::object>();
                 if (defensiveStats.count("Stamina"))
                     state.pitcherStaminaP2[i] = static_cast<uint16_t>(defensiveStats.at("Stamina").get<double>());
             }
         }
     }
+    // The HUD's situation (count, score, inning, "Pitcher Stamina") is captured when the event
+    // starts, before the pitch, but "Defensive Stats" are read when the HUD is written, which for a
+    // post-play ("b") HUD is after the play has already drained stamina (runs scored, star pitch).
+    // Only the current pitcher's stamina changes during a play, so put that slot back to the
+    // pre-play value so it matches the situation the reset restores. (Same fix as PR #150 for the
+    // old menu-walk generator, indexed here by HUD roster slot.)
+    if (j.count("Pitcher Stamina") && j.count("Pitcher Roster Loc") && state.halfInning.has_value())
+    {
+        const bool homeIsPitching = (state.halfInning.value() == 0);
+        const bool p1IsPitching = (homeIsPitching != p1IsAway);
+        const int pitcherSlot = static_cast<int>(j.at("Pitcher Roster Loc").get<double>());
+        const uint16_t prePlayStamina = static_cast<uint16_t>(j.at("Pitcher Stamina").get<double>());
+        std::optional<uint16_t>* staminaBySlot = p1IsPitching ? state.pitcherStaminaP1 : state.pitcherStaminaP2;
+        if (pitcherSlot >= 0 && pitcherSlot < 9)
+        {
+            staminaBySlot[pitcherSlot] = prePlayStamina;
+            INFO_LOG_FMT(COMMON, "P{} pitcher (roster slot {}) set to pre-play stamina {}",
+                         p1IsPitching ? 1 : 2, pitcherSlot, prePlayStamina);
+        }
+    }
+
     for (int i = 0; i < 9; i++)
     {
         if (state.pitcherStaminaP1[i].has_value())
@@ -470,31 +546,33 @@ int allowLoadFromHUD(const std::string& path,
                      bool isNetplay,
                      HUDValidationDetails* outDetails)
 {
+    std::string json_str;
+    if (!ReadHUDFile(path, json_str))
+        return 2;
+
+    return allowLoadFromHUDJson(json_str, p1Username, p2Username, isNetplay, outDetails);
+}
+
+int allowLoadFromHUDJson(const std::string& json_str,
+                         const std::string& p1Username, const std::string& p2Username,
+                         bool isNetplay,
+                         HUDValidationDetails* outDetails)
+{
     INFO_LOG_FMT(COMMON, "Starting to check if HUD state load is allowed");
 
-    // ===== check HUD file exists and can be parsed. =====
-    std::ifstream file(path);
-    if (!file.is_open())
-    {
-        ERROR_LOG_FMT(COMMON, "Failed to open HUD file: {}", path);
-        return 2;
-    }
-
-    std::string json_str((std::istreambuf_iterator<char>(file)),
-                          std::istreambuf_iterator<char>());
-
+    // ===== check HUD can be parsed. =====
     picojson::value v;
     std::string err = picojson::parse(v, json_str);
 
     if (!err.empty())
     {
-        ERROR_LOG_FMT(COMMON, "Failed to parse HUD JSON from file: {} ({})", path, err);
+        ERROR_LOG_FMT(COMMON, "Failed to parse HUD JSON ({})", err);
         return 2;
     }
 
     if (!v.is<picojson::object>())
     {
-        ERROR_LOG_FMT(COMMON, "HUD JSON is not an object: {}", path);
+        ERROR_LOG_FMT(COMMON, "HUD JSON is not an object");
         return 2;
     }
 
