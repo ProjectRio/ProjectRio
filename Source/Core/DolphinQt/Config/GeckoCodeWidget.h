@@ -40,7 +40,11 @@ signals:
   void OpenAchievementSettings();
 #endif  // USE_RETRO_ACHIEVEMENTS
 
+protected:
+  void showEvent(QShowEvent* event) override;
+
 private:
+  void LoadCodes();
   void OnSelectionChanged();
   void OnItemChanged(QListWidgetItem* item);
   void OnListReordered();
