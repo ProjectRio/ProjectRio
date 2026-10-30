@@ -399,7 +399,7 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
       std::string typeOfContact;
       // CPU batters don't have a controller to read
       u8 inputDirection_Value =
-          BatterPort < 4 ? PowerPC::MMU::HostRead_U8(guard, stickDirectionAddr) & 0xF : 0;
+          IsHumanPort(BatterPort) ? PowerPC::MMU::HostRead_U8(guard, stickDirectionAddr) & 0xF : 0;
       std::string inputDirection;
       int chargeUp =
           static_cast<int>(roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aChargeUp)) * 100));
@@ -635,21 +635,21 @@ void DisplayPlayerNames(const Core::CPUThreadGuard& guard)
     // Run using Local Players
     else
     {
-      if (BatterPort < 4)
+      if (IsHumanPort(BatterPort))
         batterName = LocalPlayerList[BatterPort];
-      if (FielderPort < 4)
+      if (IsHumanPort(FielderPort))
         fielderName = LocalPlayerList[FielderPort];
     }
 
     // check for valid user
-    if (batterName != "" && BatterPort < 4)
+    if (batterName != "" && IsHumanPort(BatterPort))
     {
       OSD::AddTypedMessage(OSD::MessageType::CurrentBatter, fmt::format("B: {}", batterName),
                            OSD::Duration::SHORT, portColor[BatterPort]);
     }
 
     // check for valid user
-    if (fielderName != "" && FielderPort < 4)
+    if (fielderName != "" && IsHumanPort(FielderPort))
     {
       OSD::AddTypedMessage(OSD::MessageType::CurrentFielder,
                            fmt::format("F: {}", fielderName), OSD::Duration::SHORT,
@@ -687,7 +687,7 @@ void DisplayPlayerNames(const Core::CPUThreadGuard& guard)
     {
       GolferName = NetPlay::NetPlayClient::GetNetplayNames(GolferPort);
     }
-    else if (GolferPort < 4)
+    else if (IsHumanPort(GolferPort))
     {
       GolferName = LocalPlayerList[GolferPort];
     }
@@ -1886,6 +1886,11 @@ bool GameSupportsTagSets()
 int GetNextGolferID()
 {
   return nextGolferID;
+}
+
+bool IsHumanPort(int port)
+{
+  return port >= 0 && port < 4;
 }
 
 }  // namespace Core

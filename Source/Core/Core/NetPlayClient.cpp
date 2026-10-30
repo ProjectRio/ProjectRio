@@ -1790,7 +1790,7 @@ bool NetPlayClient::isGolfMode()
 std::string NetPlayClient::GetNetplayNames(u8 PortInt)
 {
     // NOTE: this is called every frame from DisplayPlayerNames(), so avoid logging here.
-    if (PortInt > 3)
+    if (!Core::IsHumanPort(PortInt))
         return "";
 
     PlayerId pid = netplay_client->m_pad_map[PortInt];
@@ -2810,7 +2810,7 @@ void NetPlayClient::AutoGolfMode()
 
   // if the player who should be the gofler isn't in the lobby, return
   int nextGolfer = Core::GetNextGolferID();
-  if (nextGolfer >= 4 || nextGolfer < 0)  // something's wrong. probably a CPU player
+  if (!Core::IsHumanPort(nextGolfer))  // something's wrong. probably a CPU player
     return;                               // return to avoid array out-of-range errors
   if (!PortHasPlayerAssigned(nextGolfer))
     return;

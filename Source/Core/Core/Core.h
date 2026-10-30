@@ -244,6 +244,8 @@ void SetAvgPing(const Core::CPUThreadGuard& guard);
 void SetNetplayerUserInfo();
 void RunDraftTimer(const Core::CPUThreadGuard& guard);
 int GetNextGolferID();
+// true for a controller port a person can play on (0->3). CPU teams and unset ports use higher values
+bool IsHumanPort(int port);
 
 //enum class GameMode
 //{
