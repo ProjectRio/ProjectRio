@@ -411,7 +411,7 @@ static const int cNumOfPositions = 9;
 
 //Addrs for triggering evts
 static const u32 aEndOfGameFlag    = 0x80892AB3;
-static const u32 aWhoQuit          = 0x802EBF93;
+static const u32 aPausedBy         = 0x8039D7D3; //who opened the pause menu: 1 == batting team, 2 == fielding team
 static const u32 aGameControlStateCurr = 0x80892aaa;
 static const u32 aGameControlStatePrev = 0x80892aab;
 static const u32 aLoadedRel        = 0x800E877C; //(halfword) 5 == game rel is loaded

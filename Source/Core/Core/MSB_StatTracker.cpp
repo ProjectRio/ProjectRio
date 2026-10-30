@@ -1960,8 +1960,14 @@ void StatTracker::initCaptains(const Core::CPUThreadGuard& guard)
 }
 
 void StatTracker::onGameQuit(const Core::CPUThreadGuard& guard){
-    u8 quitter_port = PowerPC::MMU::HostRead_U8(guard, aWhoQuit);
-    m_game_info.quitter_team = (quitter_port == m_game_info.away_port);
+    // only the team that opened the pause menu can quit from it
+    const u8 paused_by = PowerPC::MMU::HostRead_U8(guard, aPausedBy);
+    if (paused_by == 1 || paused_by == 2)
+    {
+        const u32 quitter_team = PowerPC::MMU::HostRead_U32(guard, paused_by == 1 ? aBattingTeam_P1P2 : aFieldingTeam_P1P2);
+        const u8 quitter_port = PowerPC::MMU::HostRead_U8(guard, quitter_team == 0 ? aPlayer1Port : aPlayer2Port);
+        m_game_info.quitter_team = (quitter_port == m_game_info.away_port);
+    }
     logGameInfo(guard);
 
     std::cout << "Quit detected\n";
