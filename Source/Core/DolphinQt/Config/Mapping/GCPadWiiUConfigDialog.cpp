@@ -36,16 +36,19 @@ void GCPadWiiUConfigDialog::CreateLayout()
 
   m_layout = new QVBoxLayout();
   m_status_label = new QLabel();
+  m_poll_rate_label = new QLabel();
   m_rumble = new QCheckBox(tr("Enable Rumble"));
   m_simulate_bongos = new QCheckBox(tr("Simulate DK Bongos"));
   m_button_box = new QDialogButtonBox(QDialogButtonBox::Ok);
 
   UpdateAdapterStatus();
+  UpdatePollRate();
 
   auto callback = [this] { QueueOnObject(this, &GCPadWiiUConfigDialog::UpdateAdapterStatus); };
   GCAdapter::SetAdapterCallback(callback);
 
   m_layout->addWidget(m_status_label);
+  m_layout->addWidget(m_poll_rate_label);
   m_layout->addWidget(m_rumble);
   m_layout->addWidget(m_simulate_bongos);
   m_layout->addWidget(m_button_box);
@@ -83,6 +86,13 @@ void GCPadWiiUConfigDialog::UpdateAdapterStatus()
 
   m_rumble->setEnabled(detected);
   m_simulate_bongos->setEnabled(detected);
+  m_poll_rate_label->setEnabled(detected);
+}
+
+void GCPadWiiUConfigDialog::UpdatePollRate()
+{
+  QString poll_rate_text = tr("Poll Rate: %1 hz").arg(1000.0 / GCAdapter::ReadRate());
+  m_poll_rate_label->setText(poll_rate_text);
 }
 
 void GCPadWiiUConfigDialog::LoadSettings()
