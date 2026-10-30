@@ -37,7 +37,11 @@ endforeach()
 # makes it sometimes break on libraries that do weird things with @rpath. Specify
 # equivalent search directories until https://gitlab.kitware.com/cmake/cmake/issues/16625
 # is fixed and in our minimum CMake version.
-set(extra_dirs "/usr/local/lib" "/lib" "/usr/lib")
+#
+# Homebrew's lib folders are listed too: some Homebrew libraries name their dependencies as
+# @rpath/<lib> (e.g. @rpath/libbrotlicommon.1.dylib), which fixup_bundle cannot otherwise find.
+# /opt/homebrew is Homebrew on Apple silicon, /usr/local on Intel.
+set(extra_dirs "/opt/homebrew/lib" "/usr/local/lib" "/lib" "/usr/lib")
 
 # BundleUtilities is overly verbose, so disable most of its messages
 function(message)
