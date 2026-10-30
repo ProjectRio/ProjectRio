@@ -25,6 +25,9 @@ public:
   std::string MarkDownToRichText(std::string str);
 
 private:
+  // Shown when we can't install the update ourselves: tells the user where to get it instead.
+  void ShowDownloadPrompt(const NewVersionInformation& info, const std::string& changes);
+
   QWidget* m_parent;
   std::string m_update_track;
   std::string m_hash_override;
