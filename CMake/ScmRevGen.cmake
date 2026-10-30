@@ -22,7 +22,7 @@ endif()
 
 # Project Rio version number (kept in sync with RIO_REV_STR in Version.cpp)
 set(DOLPHIN_VERSION_MAJOR "2")
-set(DOLPHIN_VERSION_MINOR "2")
+set(DOLPHIN_VERSION_MINOR "3")
 set(DOLPHIN_VERSION_PATCH_NUM "0")
 if(DOLPHIN_WC_BRANCH STREQUAL "stable")
   set(DOLPHIN_VERSION_PATCH "0")
