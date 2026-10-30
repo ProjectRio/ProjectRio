@@ -416,7 +416,7 @@ static const u32 aGameControlStateCurr = 0x80892aaa;
 static const u32 aGameControlStatePrev = 0x80892aab;
 static const u32 aLoadedRel        = 0x800E877C; //(halfword) 5 == game rel is loaded
 static const u32 aGameHasStarted   = 0x80892AB5; //set by the game at the first at bat. Only valid while the game rel is loaded
-static const u32 aExitingToMenu    = 0x80892AB4; //set by the game when it starts leaving the match for the main menu
+static const u32 aFramesExitingToMenu = 0x80892AAE; //counts up while the game fades out of the match to the main menu; 0 otherwise
 static const u32 aGameTypeSelected = 0x800E8703; //4 == title screen demo
 
 static const u32 aAB_PitchThrown     = 0x8088A81B;
@@ -1132,6 +1132,7 @@ public:
 
     //Not reset by init(): the flag stays set until the game rel is reloaded, so the finished game must not start a new one
     bool m_game_has_started_prev = false;
+    bool m_saw_game_start_movie = false;
 
     //Host's game id waiting to be applied by the CPU thread (0 == none). Not reset by init(): it can
     //arrive before this client's game has started

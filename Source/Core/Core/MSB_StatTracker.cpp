@@ -169,9 +169,17 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
         }
     }
 
+    //Only matches that play the game start movie are recorded (as before: not practice,
+    //minigames or the title screen demo). Remember it for as long as the game rel stays loaded
+    const bool game_rel_loaded = PowerPC::MMU::HostRead_U16(guard, aLoadedRel) == 5;
+    if (!game_rel_loaded)
+        m_saw_game_start_movie = false;
+    else if (PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr) == 0x5)
+        m_saw_game_start_movie = true;
+
     //Start recording on the frame the game flags the match as started (the first at bat).
     //This runs before the At Bat State Machine so the first event is created on this same frame
-    bool game_has_started = (PowerPC::MMU::HostRead_U16(guard, aLoadedRel) == 5) &&
+    bool game_has_started = game_rel_loaded && m_saw_game_start_movie &&
                             (PowerPC::MMU::HostRead_U8(guard, aGameTypeSelected) != 4) &&
                             (PowerPC::MMU::HostRead_U8(guard, aGameHasStarted) != 0);
     if (m_game_state == GAME_STATE::PREGAME && game_has_started && !m_game_has_started_prev) {
@@ -1865,11 +1873,13 @@ void StatTracker::applyPendingNetplayGameID()
   }
 }
 
-// The game is leaving the match before it finished: the player quit from the pause menu
+// The game is leaving the match before it finished: the player quit from the pause menu.
+// The exit fade starts about 50 frames after the quit is confirmed and the match data is still
+// intact until the game rel is unloaded about 50 frames later, so the quit is logged in between
 bool StatTracker::hasLeftGame(const Core::CPUThreadGuard& guard)
 {
   return PowerPC::MMU::HostRead_U16(guard, aLoadedRel) != 5 ||
-         PowerPC::MMU::HostRead_U8(guard, aExitingToMenu) != 0;
+         PowerPC::MMU::HostRead_U8(guard, aFramesExitingToMenu) != 0;
 }
 
 void StatTracker::initPlayerInfo(const Core::CPUThreadGuard& guard){
