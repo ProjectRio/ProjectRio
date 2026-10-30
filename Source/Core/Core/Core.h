@@ -241,6 +241,8 @@ void SetAvgPing(const Core::CPUThreadGuard& guard);
 void SetNetplayerUserInfo();
 void RunDraftTimer(const Core::CPUThreadGuard& guard);
 int GetNextGolferID();
+// true for a controller port a person can play on (0->3). CPU teams and unset ports use higher values
+bool IsHumanPort(int port);
 
 //enum class GameMode
 //{
@@ -253,7 +255,7 @@ int GetNextGolferID();
 
 using namespace Tag;
 
-void SetGameID(u32 gameID);
+void SetNetplayGameID(u64 gameID);
 std::optional<TagSet> GetActiveTagSet(bool netplay);
 void SetTagSet(std::optional<TagSet> tagset, bool netplay);
 bool isTagSetActive(std::optional<bool> netplay = std::nullopt);
@@ -262,9 +264,9 @@ std::optional<std::vector<std::string>> GetTagSetGeckoString();
 bool GameSupportsTagSets();
 
 static const u32 aRelState = 0x800E877C;
-static const u32 aOpponentPort = 0x802EBF92;
-static const u32 aFielderPort = 0x802EBF94;
-static const u32 aBatterPort = 0x802EBF95;
+static const u32 aBattingTeam = 0x80892990;   // team index (0 or 1), swaps each half inning
+static const u32 aFieldingTeam = 0x80892994;  // team index (0 or 1), swaps each half inning
+static const u32 aTeamPorts = 0x80892A78;     // u32[2], port (0->3) of each team; >= 4 is CPU
 static const u32 aIsField = 0x8089389B;
 static const u32 aIsInGame = 0x80871A6D;
 static const u32 aContactMade = 0x808909A1;
@@ -283,6 +285,7 @@ static const u32 aWhoPaused = 0x8039D7D3; // 2 == fielder, 1 == batter
 //static const u32 aMatchStarted = 0x8036F3B8;  // bool for if a game is in session
 static const u32 aSceneId = 0x800E877F;
 static const u32 aRelNumber = 0x800E877C;
+static const u32 aHasMatchStarted = 0x80892AB5;
 
 // toadstooltour addresses
 static const u32 aDistanceRemainingToHole = 0x802D7368;

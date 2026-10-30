@@ -10,6 +10,7 @@
 #include <queue>
 #include <mutex>
 #include <thread>
+#include <atomic>
 #include <condition_variable>
 #include "Core/HW/Memmap.h"
 #include <picojson.h>
@@ -409,11 +410,14 @@ static const int cNumOfTeams = 2;
 static const int cNumOfPositions = 9;
 
 //Addrs for triggering evts
-static const u32 aGameId           = 0x802EBF8C;
 static const u32 aEndOfGameFlag    = 0x80892AB3;
-static const u32 aWhoQuit          = 0x802EBF93;
+static const u32 aPausedBy         = 0x8039D7D3; //who opened the pause menu: 1 == batting team, 2 == fielding team
 static const u32 aGameControlStateCurr = 0x80892aaa;
 static const u32 aGameControlStatePrev = 0x80892aab;
+static const u32 aLoadedRel        = 0x800E877C; //(halfword) 5 == game rel is loaded
+static const u32 aGameHasStarted   = 0x80892AB5; //set by the game at the first at bat. Only valid while the game rel is loaded
+static const u32 aFramesExitingToMenu = 0x80892AAE; //counts up while the game fades out of the match to the main menu; 0 otherwise
+static const u32 aGameTypeSelected = 0x800E8703; //4 == title screen demo
 
 static const u32 aAB_PitchThrown     = 0x8088A81B;
 static const u32 aAB_ContactResult   = 0x808926B3; //0=InAir, 1=Landed, 2=Fielded, 3=Caught, FF=Foul
@@ -495,8 +499,6 @@ static const u8 c_offensive_stat_offset = 0x26;
 
 
 //Event Scenario 
-static const u32 aAB_BatterPort      = 0x802EBF95;
-static const u32 aAB_PitcherPort     = 0x802EBF94;
 static const u32 aAB_BatterRosterID  = 0x80890971;
 static const u32 aAB_Inning          = 0x808928A3;
 static const u32 aAB_HalfInning      = 0x8089294D;
@@ -598,8 +600,6 @@ static const u32 aAB_FinalResult = 0x80893BAA;
 static const u32 aAB_FrameOfSwing = 0x80890976; //(halfword) frame of swing animation; stops increasing when contact is made
 static const u32 aAB_FrameOfPitchSeqUponSwing    = 0x80890978; //(halfword) frame of pitch that the batter swung
 
-static const u32 aAB_FieldingPort = 0x802EBF94;
-static const u32 aAB_BattingPort = 0x802EBF95;
 
 //Fielder addrs
 //All of these addrs start with the pitcher. The rest are 0x268 away
@@ -660,7 +660,7 @@ public:
     };
 
     struct EndGameRosterOffensiveStats{
-        u32 game_id;
+        u64 game_id;
         u32 team_id;
         u32 roster_id;
 
@@ -876,7 +876,7 @@ public:
     };
     
     struct GameInfo{
-        u32 game_id;
+        u64 game_id;
         bool init_game = true;
         bool game_active = false;
         std::string start_unix_date_time;
@@ -1130,6 +1130,17 @@ public:
         m_event_state = EVENT_STATE::INIT_EVENT;
     }
 
+    //Not reset by init(): the flag stays set until the game rel is reloaded, so the finished game must not start a new one
+    bool m_game_has_started_prev = false;
+    bool m_saw_game_start_movie = false;
+
+    //Host's game id waiting to be applied by the CPU thread (0 == none). Not reset by init(): it can
+    //arrive before this client's game has started
+    std::atomic<u64> m_pending_netplay_game_id{0};
+    u64 generateGameID();
+    void applyPendingNetplayGameID();
+    bool hasLeftGame(const Core::CPUThreadGuard& guard);
+
     GAME_STATE  m_game_state  = GAME_STATE::PREGAME;
     GAME_STATE  m_game_state_prev = GAME_STATE::UNDEFINED;
     EVENT_STATE m_event_state = EVENT_STATE::INIT_EVENT;
@@ -1155,7 +1166,9 @@ public:
     void setAvgPing(int avgPing);
     void setLagSpikes(int nLagSpikes);
     void setNetplayerUserInfo(std::map<int, LocalPlayers::LocalPlayers::Player> userInfo);
-    void setGameID(u32 gameID);
+    // Called from the netplay thread when the host's id for the current game arrives
+    void setNetplayGameID(u64 gameID);
+    bool isGameInProgress() const { return m_game_state == GAME_STATE::INGAME; }
     // void setTags(std::vector tags);
     // void setTagSet(int tagset);
 

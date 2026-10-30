@@ -1748,10 +1748,9 @@ void NetPlayClient::OnChecksumMsg(sf::Packet& packet)
 
 void NetPlayClient::OnGameIDMsg(sf::Packet& packet)
 {
-  u32 gameID;
-  packet >> gameID;
+  const u64 gameID = Common::PacketReadU64(packet);
 
-  Core::SetGameID(gameID);
+  Core::SetNetplayGameID(gameID);
 }
 
 void NetPlayClient::OnStadiumMsg(sf::Packet& packet)
@@ -1791,7 +1790,7 @@ bool NetPlayClient::isGolfMode()
 std::string NetPlayClient::GetNetplayNames(u8 PortInt)
 {
     // NOTE: this is called every frame from DisplayPlayerNames(), so avoid logging here.
-    if (PortInt > 3)
+    if (!Core::IsHumanPort(PortInt))
         return "";
 
     PlayerId pid = netplay_client->m_pad_map[PortInt];
@@ -2763,16 +2762,23 @@ void NetPlayClient::RequestGolfControl()
   RequestGolfControl(m_local_player->pid);
 }
 
-void NetPlayClient::SendGameID(u32 gameId)
+// the host decides the game id for everyone (see StatTracker::generateGameID)
+void NetPlayClient::SendGameID(u64 gameId)
 {
-  // only golfer sends
-  if (netplay_client->m_local_player->pid != netplay_client->m_current_golfer)
+  if (!sIsHost())
     return;
 
   sf::Packet packet;
   packet << MessageID::GameID;
-  packet << gameId;
+  packet << sf::Uint64{gameId};
   netplay_client->SendAsync(std::move(packet));
+}
+
+bool NetPlayClient::sIsHost()
+{
+  std::lock_guard lk(crit_netplay_client);
+  return netplay_client && netplay_client->m_local_player &&
+         netplay_client->m_local_player->IsHost();
 }
 
 
@@ -2804,7 +2810,7 @@ void NetPlayClient::AutoGolfMode()
 
   // if the player who should be the gofler isn't in the lobby, return
   int nextGolfer = Core::GetNextGolferID();
-  if (nextGolfer >= 4 || nextGolfer < 0)  // something's wrong. probably a CPU player
+  if (!Core::IsHumanPort(nextGolfer))  // something's wrong. probably a CPU player
     return;                               // return to avoid array out-of-range errors
   if (!PortHasPlayerAssigned(nextGolfer))
     return;

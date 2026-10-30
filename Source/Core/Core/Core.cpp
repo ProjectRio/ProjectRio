@@ -238,7 +238,7 @@ void RunRioFunctions(const Core::CPUThreadGuard& guard)
     {
       PowerPC::MMU::HostWrite_U32(guard, 0x38600005, 0x8063F964);
     }
-    if (PowerPC::MMU::HostRead_U32(guard, aGameId) == 0)
+    if (!s_stat_tracker->isGameInProgress())
     {
       runNetplayGameFunctions = true;
     }
@@ -255,7 +255,6 @@ void RunRioFunctions(const Core::CPUThreadGuard& guard)
       if (runNetplayGameFunctions)
       {
         SetNetplayerUserInfo();
-        NetPlay::NetPlayClient::SendGameID(PowerPC::MMU::HostRead_U32(guard, aGameId));
         runNetplayGameFunctions = false;
       }
     }
@@ -296,14 +295,25 @@ void AutoGolfMode(const Core::CPUThreadGuard& guard)
   }
 }
 
+// the game stores which team (0 or 1) is batting/fielding; this converts that to the team's port
+// returns 0->3 for a human player. anything higher is a CPU or an invalid team
+static u8 MSSBGetTeamPort(const Core::CPUThreadGuard& guard, u32 aTeam)
+{
+  u32 team = PowerPC::MMU::HostRead_U32(guard, aTeam);
+  if (team > 1)
+    return 0xFF;
+
+  return static_cast<u8>(PowerPC::MMU::HostRead_U32(guard, aTeamPorts + (4 * team)));
+}
+
 void MSSBCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer)
 {
-  u8 BatterPort = PowerPC::MMU::HostRead_U8(guard, aBatterPort);
-  u8 FielderPort = PowerPC::MMU::HostRead_U8(guard, aFielderPort);
+  u8 BatterPort = MSSBGetTeamPort(guard, aBattingTeam);
+  u8 FielderPort = MSSBGetTeamPort(guard, aFieldingTeam);
   bool isField = PowerPC::MMU::HostRead_U8(guard, aIsField) == 1;
 
-  // means game hasn't started yet
-  if (BatterPort == 0)
+  RelNumber rel = static_cast<RelNumber>(PowerPC::MMU::HostRead_U16(guard, aRelNumber));
+  if (rel != RelNumber::InGame)
     return;
 
   // makes the player who paused the golfer
@@ -314,17 +324,23 @@ void MSSBCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer)
   int minigameId = PowerPC::MMU::HostRead_U8(guard, aMinigameID);
   if (minigameId == 3 || minigameId == 1)
   {
-    BatterPort = PowerPC::MMU::HostRead_U8(guard, aBarrelBatterPort) + 1;
+    BatterPort = PowerPC::MMU::HostRead_U8(guard, aBarrelBatterPort);
     isField = false;
   }
   else if (minigameId == 2)
   {
-    FielderPort = PowerPC::MMU::HostRead_U8(guard, aWallBallPort) + 1;
+    FielderPort = PowerPC::MMU::HostRead_U8(guard, aWallBallPort);
     isField = true;
   }
 
   // evaluate which player should be golfer here
-  nextGolfer = isField ? FielderPort - 1 : BatterPort - 1;  // subtract 1 since m_pad_map uses 0->3 instead of 1->4
+  // some of these values update a frame apart from each other, so wait until we get the same
+  // answer two frames in a row. otherwise the golfer can briefly swap to the wrong player
+  static int pendingGolfer = -1;
+  int candidate = isField ? FielderPort : BatterPort;
+  if (candidate == pendingGolfer)
+    nextGolfer = candidate;
+  pendingGolfer = candidate;
 }
 
 void MGTTCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer)
@@ -374,16 +390,16 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
     // Batting Training Mode stats
     if (ContactMade && !previousContactMade)
     {
-      u8 BatterPort = PowerPC::MMU::HostRead_U8(guard, aBatterPort);
-      if (BatterPort > 0)
-        BatterPort--;
+      u8 BatterPort = MSSBGetTeamPort(guard, aBattingTeam);
       u32 stickDirectionAddr = 0x8089392D + (0x10 * BatterPort);
       int contactQuality =
           static_cast<int>(roundf(PowerPC::MMU::HostRead_F32(guard, aAB_ContactQuality) * 100));
       u16 contactFrame = PowerPC::MMU::HostRead_U16(guard, aContactFrame);
       u8 typeOfContact_Value = PowerPC::MMU::HostRead_U8(guard, aTypeOfContact);
       std::string typeOfContact;
-      u8 inputDirection_Value = PowerPC::MMU::HostRead_U8(guard, stickDirectionAddr) & 0xF;
+      // CPU batters don't have a controller to read
+      u8 inputDirection_Value =
+          IsHumanPort(BatterPort) ? PowerPC::MMU::HostRead_U8(guard, stickDirectionAddr) & 0xF : 0;
       std::string inputDirection;
       int chargeUp =
           static_cast<int>(roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aChargeUp)) * 100));
@@ -532,14 +548,13 @@ void DisplayPlayerNames(const Core::CPUThreadGuard& guard)
   {
   case GameName::MarioBaseball:
   {
-    u8 BatterPort = PowerPC::MMU::HostRead_U8(guard, aBatterPort);
-    u8 FielderPort = PowerPC::MMU::HostRead_U8(guard, aFielderPort);
-    if (BatterPort == 0 || FielderPort == 0)  // game hasn't started yet; do not continue func
+    // aHasMatchStarted is only valid memory while the game rel is loaded
+    RelNumber rel = static_cast<RelNumber>(PowerPC::MMU::HostRead_U16(guard, aRelNumber));
+    if (rel != RelNumber::InGame || PowerPC::MMU::HostRead_U8(guard, aHasMatchStarted) == 0)
       break;
 
-    // subtract 1 from each port so they can be used as indeces in the arrays
-    BatterPort--;
-    FielderPort--;
+    u8 BatterPort = MSSBGetTeamPort(guard, aBattingTeam);
+    u8 FielderPort = MSSBGetTeamPort(guard, aFieldingTeam);
 
     std::string batterName = "";
     std::string fielderName = "";
@@ -553,21 +568,21 @@ void DisplayPlayerNames(const Core::CPUThreadGuard& guard)
     // Run using Local Players
     else
     {
-      if (BatterPort < 4)
+      if (IsHumanPort(BatterPort))
         batterName = LocalPlayerList[BatterPort];
-      if (FielderPort < 4)
+      if (IsHumanPort(FielderPort))
         fielderName = LocalPlayerList[FielderPort];
     }
 
     // check for valid user
-    if (batterName != "")
+    if (batterName != "" && IsHumanPort(BatterPort))
     {
       OSD::AddTypedMessage(OSD::MessageType::CurrentBatter, fmt::format("B: {}", batterName),
                            OSD::Duration::SHORT, portColor[BatterPort]);
     }
 
     // check for valid user
-    if (fielderName != "")
+    if (fielderName != "" && IsHumanPort(FielderPort))
     {
       OSD::AddTypedMessage(OSD::MessageType::CurrentFielder,
                            fmt::format("F: {}", fielderName), OSD::Duration::SHORT,
@@ -605,7 +620,7 @@ void DisplayPlayerNames(const Core::CPUThreadGuard& guard)
     {
       GolferName = NetPlay::NetPlayClient::GetNetplayNames(GolferPort);
     }
-    else if (GolferPort < 4)
+    else if (IsHumanPort(GolferPort))
     {
       GolferName = LocalPlayerList[GolferPort];
     }
@@ -696,10 +711,8 @@ void SetAvgPing(const Core::CPUThreadGuard& guard)
   if (!NetPlay::IsNetPlayRunning())
     return;
 
-  // checks if GameID is set and that the end game flag hasn't been hit yet
-  bool inGame = PowerPC::MMU::HostRead_U32(guard, aGameId) != 0 /*&& PowerPC::MMU::HostRead_U8(aEndOfGameFlag) == 0*/ ?
-                    true :
-                    false;
+  // only average the ping while the stat tracker is recording a game
+  bool inGame = s_stat_tracker && s_stat_tracker->isGameInProgress();
   if (!inGame) {
     avgPing = 0;
     nPing = 0;
@@ -1704,7 +1717,7 @@ CPUThreadGuard::~CPUThreadGuard()
     PauseAndLock(m_system, false, m_was_unpaused);
 }
 
-void SetGameID(u32 gameID)
+void SetNetplayGameID(u64 gameID)
 {
   if (!s_stat_tracker)
   {
@@ -1712,7 +1725,7 @@ void SetGameID(u32 gameID)
     s_stat_tracker->init();
   }
 
-  s_stat_tracker->setGameID(gameID);
+  s_stat_tracker->setNetplayGameID(gameID);
 }
 
 std::optional<TagSet> GetActiveTagSet(bool netplay)
@@ -1788,6 +1801,11 @@ bool GameSupportsTagSets()
 int GetNextGolferID()
 {
   return nextGolferID;
+}
+
+bool IsHumanPort(int port)
+{
+  return port >= 0 && port < 4;
 }
 
 }  // namespace Core

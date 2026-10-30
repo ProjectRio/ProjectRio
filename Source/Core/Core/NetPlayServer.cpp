@@ -941,13 +941,16 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
 
     case MessageID::GameID:
   {
-    u32 id;
-    packet >> id;
+    const u64 id = Common::PacketReadU64(packet);
 
-    // send codes to other clients
+    // only the host decides the game id
+    if (player.pid != 1)
+      break;
+
+    // send the host's game id to every client
     sf::Packet spac;
     spac << MessageID::GameID;
-    spac << id;
+    spac << sf::Uint64{id};
 
     SendToClients(spac);
   }
