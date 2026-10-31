@@ -206,7 +206,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
         if (m_game_info.tag_set_id.has_value()){
             tag_set_id_str = std::to_string(m_game_info.tag_set_id.value());
         }
-        std::cout << "PREGAME->INGAME (GameID=" << std::to_string(m_game_info.game_id) << ", TagSetID=" << tag_set_id_str <<")\n";
+        std::cout << "PREGAME->INGAME (GameID=" << gameIDToHex(m_game_info.game_id) << ", TagSetID=" << tag_set_id_str <<")\n";
         std::cout << "                (Netplay=" << m_game_info.netplay << ")\n";
     }
     m_game_has_started_prev = game_has_started;
@@ -1024,7 +1024,7 @@ std::string StatTracker::getStatJsonPath(std::string prefix){
     
     std::string file_name = prefix + datetime_c + "_" + away_player_name 
                    + "-Vs-" + home_player_name
-                   + "_" + std::to_string(m_game_info.game_id) + ".json";
+                   + "_" + gameIDToHex(m_game_info.game_id) + ".json";
 
     std::string full_file_path = File::GetUserPath(D_MSSBFILES_IDX) + file_name;
 
@@ -1042,7 +1042,7 @@ std::string StatTracker::getStatJSON(bool inDecode, bool hide_riokey){
     std::string stadium = (inDecode) ? "\"" + cStadiumIdToStadiumName.at(m_game_info.stadium) + "\"" : std::to_string(m_game_info.stadium);
     std::string start_date_time = (inDecode) ? m_game_info.start_local_date_time : m_game_info.start_unix_date_time;
     std::string end_date_time = (inDecode) ? m_game_info.end_local_date_time : m_game_info.end_unix_date_time;
-    json_stream << "  \"GameID\": \"" << m_game_info.game_id << "\",\n";
+    json_stream << "  \"GameID\": \"" << gameIDToHex(m_game_info.game_id) << "\",\n";
     json_stream << "  \"Date - Start\": \"" << start_date_time << "\",\n";
     json_stream << "  \"Date - End\": \"" << end_date_time << "\",\n";
     
@@ -1390,7 +1390,7 @@ std::string StatTracker::getHUDJSON(std::string in_event_num, Event& in_curr_eve
 
     json_stream << "{\n";
 
-    json_stream << "  \"GameID\": \"" << m_game_info.game_id << "\",\n";
+    json_stream << "  \"GameID\": \"" << gameIDToHex(m_game_info.game_id) << "\",\n";
     std::string tag_set_id_str = "-1";
     if (m_game_info.tag_set_id.has_value()){
         tag_set_id_str = std::to_string(m_game_info.tag_set_id.value());
@@ -1881,6 +1881,12 @@ void StatTracker::setNetplayGameID(u64 gameID)
   m_pending_netplay_game_id = gameID;
 }
 
+// The server parses GameID as hex. fmt skips the digit grouping a stream's locale would add
+std::string StatTracker::gameIDToHex(u64 game_id)
+{
+  return fmt::format("{:x}", game_id);
+}
+
 // A random id for the game that just started. On netplay the host's id is used by everyone: the
 // host sends its own, and a client takes the host's if it has arrived already, or uses a
 // placeholder that applyPendingNetplayGameID() replaces when it does
@@ -1895,7 +1901,7 @@ u64 StatTracker::generateGameID()
 
   u64 id = 0;
   while (id == 0)
-    id = Common::Random::GenerateValue<u64>();
+    id = Common::Random::GenerateValue<u64>() & 0xFFFFFFFFFFFFF; // 52 bits: fits the server's BIGINT and stays exact in JavaScript
 
   if (m_state.m_netplay_session && NetPlay::NetPlayClient::sIsHost())
     NetPlay::NetPlayClient::SendGameID(id);
@@ -1908,7 +1914,7 @@ void StatTracker::applyPendingNetplayGameID()
   const u64 host_id = m_pending_netplay_game_id.exchange(0);
   if (host_id != 0 && host_id != m_game_info.game_id)
   {
-    std::cout << "GameID " << m_game_info.game_id << " replaced by host's " << host_id << "\n";
+    std::cout << "GameID " << gameIDToHex(m_game_info.game_id) << " replaced by host's " << gameIDToHex(host_id) << "\n";
     m_game_info.game_id = host_id;
   }
 }
@@ -2261,7 +2267,7 @@ void StatTracker::postOngoingGame(Event& in_curr_event){
 
     json_stream << "{\n";
     std::string start_date_time = m_game_info.start_unix_date_time;
-    json_stream << "  \"GameID\": \"" << m_game_info.game_id << "\",\n";
+    json_stream << "  \"GameID\": \"" << gameIDToHex(m_game_info.game_id) << "\",\n";
     json_stream << "  \"Date - Start\": \"" << start_date_time << "\",\n";
 
     std::string tag_set_id_str = "-1";
@@ -2395,7 +2401,7 @@ void StatTracker::updateOngoingGame(Event& in_curr_event){
     std::stringstream json_stream;
 
     json_stream << "{\n";
-    json_stream << "  \"GameID\": \"" << m_game_info.game_id << "\",\n";
+    json_stream << "  \"GameID\": \"" << gameIDToHex(m_game_info.game_id) << "\",\n";
     json_stream << "  \"Inning\": "                  << std::to_string(in_curr_event.inning) << ",\n";
     json_stream << "  \"Half Inning\": "             << std::to_string(in_curr_event.half_inning) << ",\n";
     json_stream << "  \"Away Score\": "              << std::dec << in_curr_event.away_score << ",\n";
