@@ -294,6 +294,21 @@ static const std::map<u8, std::string> cTypeOfSwing = {
     {4, "Bunt"}
 };
 
+// moonShotInd in mssb-dtk, plus FAILED_ATTEMPT. Decoded by cMoonShotStatus
+// FAILED_ATTEMPT avoids the FAILED macro in the Windows headers
+enum class MOON_SHOT_STATUS : u8
+{
+    NONE           = 0x00,
+    MOONSHOT       = 0x01,
+    FAILED_ATTEMPT = 0x02  // Non-perfect contact. Set by the stat tracker, never written by the game
+};
+
+static const std::map<u8, std::string> cMoonShotStatus = {
+    {0, "None"},
+    {1, "Moonshot"},
+    {2, "Failed Moonshot"}
+};
+
 static const std::map<u8, std::string> cPosition = {
     {0, "P"},
     {1, "C"},
@@ -604,7 +619,9 @@ static const u32 aAB_ChargeDown     = 0x8089096C;
 static const u32 aAB_BatterHand     = 0x8089098B; //Right=0, Left=1
 static const u32 aAB_InputDirection = 0x808909B9; //0=None, 1=PullingStickTowardsHitting, 2=PushStickAway
 static const u32 aAB_StarSwing      = 0x808909b1; 
-static const u32 aAB_MoonShot       = 0x808909B5;
+static const u32 aAB_MoonShot       = 0x808909B5; //Cleared by the game on non-perfect contact
+static const u32 aAB_FullyCharged   = 0x808909AE; //Stays set on a star swing, unlike aAB_ChargeUp/aAB_ChargeDown
+static const u8 cMoonShot_StarCost  = 5;
 static const u32 aAB_TypeOfContact  = 0x808909A2; //0=Sour, 1=Nice, 2=Perfect, 3=Nice, 4=Sour
 static const u32 aAB_RBI            = 0x80893B9A; //RBI for the AB
 static const u32 aAB_FramesUnitlBallArrivesBatter  = 0x80890AF2;
@@ -777,6 +794,7 @@ public:
 
         //Hit Status
         TrackerAdr<u8> type_of_contact = TrackerAdr<u8>("Type of Contact", aAB_TypeOfContact, 0xFF);
+        //MOON_SHOT_STATUS
         TrackerAdr<u8> moon_shot = TrackerAdr<u8>("Star Swing Five-Star", aAB_MoonShot, 0xFF);
 
         //Charge Power

@@ -816,6 +816,14 @@ void StatTracker::logContact(const Core::CPUThreadGuard& guard, Event& in_event)
     contact->input_direction_push_pull.read_value(guard);
     contact->frame_of_swing.read_value(guard);
 
+    //The game clears aAB_MoonShot on non-perfect contact, so detect the attempt from its trigger conditions.
+    //Uses the stars from the start of the event since the swing has already spent them.
+    u8 batter_stars = (in_event.half_inning == 0) ? in_event.away_stars : in_event.home_stars;
+    if (contact->moon_shot.get_value() == static_cast<u8>(MOON_SHOT_STATUS::NONE) && PowerPC::MMU::HostRead_U8(guard, aAB_StarSwing) != 0
+        && PowerPC::MMU::HostRead_U8(guard, aAB_FullyCharged) != 0 && batter_stars >= cMoonShot_StarCost) {
+        contact->moon_shot.set_value(static_cast<u8>(MOON_SHOT_STATUS::FAILED_ATTEMPT));
+    }
+
     //More ball flight info
     contact->ball_max_height.read_value(guard);
     contact->ball_hang_time.read_value(guard);
@@ -1241,7 +1249,7 @@ std::string StatTracker::getStatJSON(bool inDecode, bool hide_riokey){
                 json_stream << "          \"" << contact->type_of_contact.name << "\":" << decode("Contact", contact->type_of_contact.get_value(), inDecode) << ",\n";
                 json_stream << "          \"" << contact->charge_power_up.name << "\": " << floatConverter(contact->charge_power_up.get_value()) << ",\n";
                 json_stream << "          \"" << contact->charge_power_down.name << "\": " << floatConverter(contact->charge_power_down.get_value()) << ",\n";
-                json_stream << "          \"" << contact->moon_shot.name << "\": " << contact->moon_shot.get_key_value_string().second << ",\n"; 
+                json_stream << "          \"" << contact->moon_shot.name << "\": " << decode("MoonShot", contact->moon_shot.get_value(), inDecode) << ",\n";
                 json_stream << "          \"" << contact->input_direction_push_pull.name << "\": " << decode("Stick", contact->input_direction_push_pull.get_value(), inDecode) << ",\n";
                 json_stream << "          \"" << contact->input_direction_stick.name << "\": " << decode("StickVec", contact->input_direction_stick.get_value(), inDecode) << ",\n";
                 json_stream << "          \"" << contact->frame_of_swing.name << "\": \"" << std::dec << contact->frame_of_swing.get_value() << "\",\n";
@@ -1589,7 +1597,7 @@ std::string StatTracker::getHUDJSON(std::string in_event_num, Event& in_curr_eve
             json_stream << "        \"" << contact->type_of_contact.name << "\":" << decode("Contact", contact->type_of_contact.get_value(), inDecode) << ",\n";
             json_stream << "        \"" << contact->charge_power_up.name << "\": " << floatConverter(contact->charge_power_up.get_value()) << ",\n";
             json_stream << "        \"" << contact->charge_power_down.name << "\": " << floatConverter(contact->charge_power_down.get_value()) << ",\n";
-            json_stream << "        \"" << contact->moon_shot.name << "\": " << contact->moon_shot.get_key_value_string().second << ",\n"; 
+            json_stream << "        \"" << contact->moon_shot.name << "\": " << decode("MoonShot", contact->moon_shot.get_value(), inDecode) << ",\n";
             json_stream << "        \"" << contact->input_direction_push_pull.name << "\": " << decode("Stick", contact->input_direction_push_pull.get_value(), inDecode) << ",\n";
             json_stream << "        \"" << contact->input_direction_stick.name << "\": " << decode("StickVec", contact->input_direction_stick.get_value(), inDecode) << ",\n";
             json_stream << "        \"" << contact->frame_of_swing.name << "\": \"" << std::dec << contact->frame_of_swing.get_value() << "\",\n";
@@ -2137,6 +2145,11 @@ std::string StatTracker::decode(std::string type, u8 value, bool decode){
     else if (type == "Swing"){
         if (cTypeOfSwing.count(value)){
             retVal = cTypeOfSwing.at(value);
+        }
+    }
+    else if (type == "MoonShot"){
+        if (cMoonShotStatus.count(value)){
+            retVal = cMoonShotStatus.at(value);
         }
     }
     else if (type == "Position"){
