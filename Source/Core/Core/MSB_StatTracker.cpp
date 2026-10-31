@@ -888,7 +888,8 @@ void StatTracker::logContactResult(const Core::CPUThreadGuard& guard, Contact* i
 
     //Log primary contact result (and secondary if possible)
     if (result == static_cast<u8>(BALL_RESULT_TYPE::LANDED) || result == static_cast<u8>(BALL_RESULT_TYPE::FIELDED)){
-        in_contact->primary_contact_result = result+1; //Landed Fair
+        in_contact->primary_contact_result = static_cast<u8>(result == static_cast<u8>(BALL_RESULT_TYPE::LANDED) ?
+                                                             PRIMARY_CONTACT_RESULT::FAIR : PRIMARY_CONTACT_RESULT::FIELDED);
         in_contact->ball_x_pos.read_value(guard);
         in_contact->ball_y_pos.read_value(guard);
         in_contact->ball_z_pos.read_value(guard);
@@ -897,8 +898,8 @@ void StatTracker::logContactResult(const Core::CPUThreadGuard& guard, Contact* i
         in_contact->collect_fielder = logFielderWithBall(guard);
     }
     else if (result == static_cast<u8>(BALL_RESULT_TYPE::CAUGHT)){
-        in_contact->primary_contact_result = 0; //Out (secondary=caught)
-        in_contact->secondary_contact_result = 0; //Out (secondary=caught)
+        in_contact->primary_contact_result = static_cast<u8>(PRIMARY_CONTACT_RESULT::CAUGHT);
+        in_contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::OUT_CAUGHT);
 
         //If the ball is caught, use the balls position from the frame before to avoid the ball_pos
         //from matching the fielders
@@ -920,15 +921,15 @@ void StatTracker::logContactResult(const Core::CPUThreadGuard& guard, Contact* i
                   << " Swapped=" << std::to_string(in_contact->collect_fielder->fielder_swapped_for_batter) << "\n";
     }
     else if (result == static_cast<u8>(BALL_RESULT_TYPE::FOUL)){ // Known bug: this will be true for foul or HR. Correct when adjusting secondary contact later
-        in_contact->primary_contact_result = 1; //Foul
-        in_contact->secondary_contact_result = 3; //Foul
+        in_contact->primary_contact_result = static_cast<u8>(PRIMARY_CONTACT_RESULT::FOUL);
+        in_contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::FOUL);
         in_contact->ball_x_pos.read_value(guard);
         in_contact->ball_y_pos.read_value(guard);
         in_contact->ball_z_pos.read_value(guard);
     }
     else{
         in_contact->primary_contact_result = result;
-        in_contact->secondary_contact_result = 0xFF; //???
+        in_contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::NONE);
         in_contact->ball_x_pos.read_value(guard);
         in_contact->ball_y_pos.read_value(guard);
         in_contact->ball_z_pos.read_value(guard);
@@ -948,15 +949,21 @@ void StatTracker::logFinalResults(const Core::CPUThreadGuard& guard, Event& in_e
         if (in_event.result_of_atbat >= static_cast<u8>(AT_BAT_RESULT::SINGLE) &&
             in_event.result_of_atbat <= static_cast<u8>(AT_BAT_RESULT::DOUBLE_PLAY)){
             contact->secondary_contact_result = in_event.result_of_atbat;
-            contact->primary_contact_result = 2; // Correct if set to foul
+            contact->primary_contact_result = static_cast<u8>(PRIMARY_CONTACT_RESULT::FAIR); // Correct if set to foul
         }
-        else if ((in_event.runner_batter->out_type == static_cast<u8>(OUT_TYPE::FORCE)) ||
-                 (in_event.runner_batter->out_type == static_cast<u8>(OUT_TYPE::TAG))){
-            contact->secondary_contact_result = in_event.runner_batter->out_type;
+        else if (in_event.runner_batter->out_type == static_cast<u8>(OUT_TYPE::FORCE)){
+            contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::OUT_FORCE);
+        }
+        else if (in_event.runner_batter->out_type == static_cast<u8>(OUT_TYPE::TAG)){
+            contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::OUT_TAG);
+        }
+        else if (in_event.runner_batter->out_type == static_cast<u8>(OUT_TYPE::CAUGHT)){
+            //The ball may not have been caught when logContactResult ran, so this can't be set only there
+            contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::OUT_CAUGHT);
         }
         else if ((in_event.runner_batter->out_type == static_cast<u8>(OUT_TYPE::NONE)) &&
                  (in_event.result_of_atbat == static_cast<u8>(AT_BAT_RESULT::OUT_ON_PLAY))){
-            contact->secondary_contact_result = in_event.result_of_atbat;
+            contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::BATTER_SAFE_RUNNER_OUT);
         }
     }
 

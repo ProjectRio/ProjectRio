@@ -117,6 +117,28 @@ enum class BALL_RESULT_TYPE : u8
     FOUL    = 0xFF
 };
 
+// Tracker only, not game values. Decoded by cPrimaryContactResult
+// CAUGHT avoids the OUT macro in the Windows headers
+enum class PRIMARY_CONTACT_RESULT : u8
+{
+    CAUGHT  = 0x00,
+    FOUL    = 0x01,
+    FAIR    = 0x02,
+    FIELDED = 0x03
+};
+
+// Tracker only, not game values. Decoded by cSecondaryContactResult
+// 0x07 to 0x0F are also used, copied directly from AT_BAT_RESULT
+enum class SECONDARY_CONTACT_RESULT : u8
+{
+    OUT_CAUGHT             = 0x00,
+    OUT_FORCE              = 0x01,
+    OUT_TAG                = 0x02,
+    FOUL                   = 0x03,
+    BATTER_SAFE_RUNNER_OUT = 0x04,
+    NONE                   = 0xFF
+};
+
 // From Nuche
 enum class GAME_CONTROL_STATE : u8
 {
@@ -418,7 +440,8 @@ static const std::map<u8, std::string> cSecondaryContactResult = {
     {0xD,  "Bunt"},
     {0xE,  "SacFly"},
     {0xF,  "Ground ball double Play"},
-    {0x10, "Foul catch"}
+    {0x10, "Foul catch"},
+    {0xFF, "None"}
 };
 
 static const std::map<u8, std::string> cAtBatResult = {
@@ -841,22 +864,11 @@ public:
         TrackerAdr<u32> ball_max_height = TrackerAdr<u32>("Ball Max Height", 0x8089250c, 0xFFFFFFFF);
         TrackerAdr<u16> ball_hang_time = TrackerAdr<u16>("Ball Hang Time", 0x80892696, 0xFFFF);
 
-        //0=Out
-        //1=Foul
-        //2=Fair
-        //3=Unknown
+        //PRIMARY_CONTACT_RESULT
         u8 primary_contact_result;
 
-        //0=Out-caught
-        //1=Out-force
-        //2=Out-tag
-        //3=foul
-        //7=single
-        //8=double
-        //9=triple
-        //A=HR
-        //A+=other (sac-fly??, sac-bunt??, GRD??)
-        u8 secondary_contact_result;
+        //SECONDARY_CONTACT_RESULT, or AT_BAT_RESULT from SINGLE to DOUBLE_PLAY
+        u8 secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::NONE);
 
         std::optional<Fielder> first_fielder;
         std::optional<Fielder> collect_fielder;
