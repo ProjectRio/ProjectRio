@@ -73,6 +73,50 @@ enum class SPECIAL_LIVE_BALL_REASON : u8
     STEAL   = 2
 };
 
+// Runner.outType in mssb-dtk
+enum class OUT_TYPE : u8
+{
+    NONE             = 0x00,
+    CAUGHT           = 0x01, // Batter only
+    FORCE            = 0x02,
+    TAG              = 0x03,
+    WHILE_TAGGING_UP = 0x04, // Failed to return after a catch
+    STRIKEOUT        = 0x10  // Set by the stat tracker, never written by the game
+};
+
+// AT_BAT_RESULT in mssb-dtk
+// OUT_ON_PLAY and FIELDING_ERROR avoid the OUT and ERROR macros in the Windows headers
+enum class AT_BAT_RESULT : u8
+{
+    NONE              = 0x00,
+    STRIKEOUT         = 0x01,
+    WALK              = 0x02,
+    HIT_BY_PITCH      = 0x03,
+    OUT_ON_PLAY       = 0x04,
+    CAUGHT_LINE_DRIVE = 0x05,
+    CAUGHT            = 0x06,
+    SINGLE            = 0x07,
+    DOUBLE            = 0x08,
+    TRIPLE            = 0x09,
+    HOME_RUN          = 0x0A,
+    FIELDING_ERROR    = 0x0B,
+    FIELDERS_CHOICE   = 0x0C,
+    BUNT              = 0x0D, // Successful sacrifice-style bunt, the batter may still be out
+    SAC_FLY           = 0x0E,
+    DOUBLE_PLAY       = 0x0F, // Ball not caught, includes triple plays
+    FOUL_CATCH        = 0x10  // AT_BAT_RESULT_CAUGHT_INFIELD_FLY in mssb-dtk, but only set for foul balls
+};
+
+// BALL_RESULT_TYPE in mssb-dtk. The game stores this as an s16, we read the low byte
+enum class BALL_RESULT_TYPE : u8
+{
+    IN_AIR  = 0x00,
+    LANDED  = 0x01,
+    FIELDED = 0x02,
+    CAUGHT  = 0x03,
+    FOUL    = 0xFF
+};
+
 // From Nuche
 enum class GAME_CONTROL_STATE : u8
 {
@@ -458,7 +502,7 @@ static const u32 aFramesExitingToMenu = 0x80892AAE; //counts up while the game f
 static const u32 aGameTypeSelected = 0x800E8703; //4 == title screen demo
 
 static const u32 aAB_PitchThrown            = 0x8088A81B; // 1 when windup starts, cleared when pitch over or steal attempt completed.
-static const u32 aAB_ContactResult          = 0x808926B3; //0=InAir, 1=Landed, 2=Fielded, 3=Caught, FF=Foul
+static const u32 aAB_ContactResult          = 0x808926B3; //BALL_RESULT_TYPE
 static const u32 aAB_ContactMade            = 0x808909a1; //Boolean, from Roeming
 static const u32 aAB_SpecialLiveBallReason  = 0x80892857; //0=None, 1=Pickoff, 2=Steal
 
@@ -632,7 +676,7 @@ static const u32 aAB_NumOutsDuringPlay = 0x808938AD;
 static const u32 aAB_HitByPitch = 0x808909A3;
 
 static const u32 aAB_DeadBallReason = 0x80892709; //0 = n/a, 1 = HR, 2=foul, 3=ground rule double, 4 = ball dead
-static const u32 aAB_FinalResult = 0x80893BAA;
+static const u32 aAB_FinalResult = 0x80893BAA; //AT_BAT_RESULT
 
 //Frame Data. Capture once play is over
 static const u32 aAB_FrameOfSwing = 0x80890976; //(halfword) frame of swing animation; stops increasing when contact is made
@@ -666,7 +710,7 @@ static const u8 cRoster_Offset = 0x8;
 static const u32 aRunner_BasepathPercentage = 0x8088EE7C;
 static const u32 aRunner_RosterLoc = 0x8088EEF9;
 static const u32 aRunner_CharId = 0x8088EEFB;
-static const u32 aRunner_OutType = 0x8088EF44;
+static const u32 aRunner_OutType = 0x8088EF44; //OUT_TYPE
 static const u32 aRunner_OutLoc = 0x8088EF3F; //Technically holds the next base
 static const u32 aRunner_CurrentBase = 0x8088EF3D;
 static const u32 aRunner_Stealing = 0x8088EF66;
