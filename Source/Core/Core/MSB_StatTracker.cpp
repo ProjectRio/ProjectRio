@@ -70,7 +70,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                 ));
             
                             
-                if (m_game_info.getCurrentEvent().result_of_atbat != 0) {
+                if (m_game_info.getCurrentEvent().result_of_atbat != static_cast<u8>(AT_BAT_RESULT::NONE)) {
                     u8 half_inning = m_game_info.getCurrentEvent().half_inning;
 
                     u8 batter_char_id = m_game_info.character_summaries[half_inning][m_game_info.getCurrentEvent().batter_roster_loc].char_id;
@@ -413,7 +413,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                 break;
             case (EVENT_STATE::CONTACT_RESULT):                
-                if (PowerPC::MMU::HostRead_U8(guard, aAB_ContactResult) != 0){
+                if (PowerPC::MMU::HostRead_U8(guard, aAB_ContactResult) != static_cast<u8>(BALL_RESULT_TYPE::IN_AIR)){
                     //Indicate that pitch resulted in contact and log contact details
                     m_game_info.getCurrentEvent().pitch->pitch_result = 6;
                     logContactResult(guard, &m_game_info.getCurrentEvent().pitch->contact.value()); //Land vs Caught vs Foul, Landing POS.
@@ -446,6 +446,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                     static_cast<SPECIAL_LIVE_BALL_REASON>(PowerPC::MMU::HostRead_U8(guard, aAB_SpecialLiveBallReason)) != SPECIAL_LIVE_BALL_REASON::PICKOFF){
                     m_game_info.getCurrentEvent().dead_ball_reason = PowerPC::MMU::HostRead_U8(guard, aAB_DeadBallReason);
                     m_game_info.getCurrentEvent().result_of_atbat = PowerPC::MMU::HostRead_U8(guard, aAB_FinalResult);
+                    m_game_info.getCurrentEvent().final_ball_result = PowerPC::MMU::HostRead_U8(guard, aAB_ContactResult);
                     m_event_state = EVENT_STATE::PLAY_OVER;
                 }
                 else {
@@ -485,7 +486,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                     // Clear result of AB for pickoffs
                     if (m_game_info.getCurrentEvent().pick_off_attempt) {
-                        m_game_info.getCurrentEvent().result_of_atbat = 0;
+                        m_game_info.getCurrentEvent().result_of_atbat = static_cast<u8>(AT_BAT_RESULT::NONE);
                     }
 
                     m_event_state = EVENT_STATE::FINAL_RESULT;
@@ -552,7 +553,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                     std::cout << "Logging Final Result\n" << "Game Over\n\n";
                 }
                 else if ((m_game_info.getCurrentEvent().outs + m_game_info.getCurrentEvent().num_outs_during_play.get_value() < 3) &&
-                         m_game_info.getCurrentEvent().result_of_atbat == 0) {
+                         m_game_info.getCurrentEvent().result_of_atbat == static_cast<u8>(AT_BAT_RESULT::NONE)) {
                     ++m_game_info.event_num;
                     m_event_state = EVENT_STATE::INIT_EVENT;
                     std::cout << "Logging Final Result\n" << "Starting next pitch of AB\n\n";
@@ -895,18 +896,19 @@ void StatTracker::logContactResult(const Core::CPUThreadGuard& guard, Contact* i
     u8 result = PowerPC::MMU::HostRead_U8(guard, aAB_ContactResult);
 
     //Log primary contact result (and secondary if possible)
-    if (result == 1 || result == 2){
-        in_contact->primary_contact_result = result+1; //Landed Fair
+    if (result == static_cast<u8>(BALL_RESULT_TYPE::LANDED) || result == static_cast<u8>(BALL_RESULT_TYPE::FIELDED)){
+        in_contact->primary_contact_result = static_cast<u8>(result == static_cast<u8>(BALL_RESULT_TYPE::LANDED) ?
+                                                             PRIMARY_CONTACT_RESULT::FAIR : PRIMARY_CONTACT_RESULT::FIELDED);
         in_contact->ball_x_pos.read_value(guard);
         in_contact->ball_y_pos.read_value(guard);
         in_contact->ball_z_pos.read_value(guard);
 
-        //If 2, ball has been caught. Log this as final fielder. If ball has been bobbled they will be logged as bobble
+        //If fielded, log this as final fielder. If ball has been bobbled they will be logged as bobble
         in_contact->collect_fielder = logFielderWithBall(guard);
     }
-    else if (result == 3){
-        in_contact->primary_contact_result = 0; //Out (secondary=caught)
-        in_contact->secondary_contact_result = 0; //Out (secondary=caught)
+    else if (result == static_cast<u8>(BALL_RESULT_TYPE::CAUGHT)){
+        in_contact->primary_contact_result = static_cast<u8>(PRIMARY_CONTACT_RESULT::CAUGHT);
+        in_contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::OUT_CAUGHT);
 
         //If the ball is caught, use the balls position from the frame before to avoid the ball_pos
         //from matching the fielders
@@ -927,16 +929,16 @@ void StatTracker::logContactResult(const Core::CPUThreadGuard& guard, Contact* i
                   << " Fielder Roster=" << std::to_string(in_contact->collect_fielder->fielder_roster_loc)
                   << " Swapped=" << std::to_string(in_contact->collect_fielder->fielder_swapped_for_batter) << "\n";
     }
-    else if (result == 0xFF){ // Known bug: this will be true for foul or HR. Correct when adjusting secondary contact later
-        in_contact->primary_contact_result = 1; //Foul
-        in_contact->secondary_contact_result = 3; //Foul
+    else if (result == static_cast<u8>(BALL_RESULT_TYPE::FOUL)){ // Known bug: this will be true for foul or HR. Correct when adjusting secondary contact later
+        in_contact->primary_contact_result = static_cast<u8>(PRIMARY_CONTACT_RESULT::FOUL);
+        in_contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::FOUL);
         in_contact->ball_x_pos.read_value(guard);
         in_contact->ball_y_pos.read_value(guard);
         in_contact->ball_z_pos.read_value(guard);
     }
     else{
         in_contact->primary_contact_result = result;
-        in_contact->secondary_contact_result = 0xFF; //???
+        in_contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::NONE);
         in_contact->ball_x_pos.read_value(guard);
         in_contact->ball_y_pos.read_value(guard);
         in_contact->ball_z_pos.read_value(guard);
@@ -946,24 +948,43 @@ void StatTracker::logContactResult(const Core::CPUThreadGuard& guard, Contact* i
 void StatTracker::logFinalResults(const Core::CPUThreadGuard& guard, Event& in_event){
 
     //Indicate strikeout in the runner_batter
-    if (in_event.result_of_atbat == 1){
-        //0x10 in runner_batter denotes strikeout
-        in_event.runner_batter->out_type = 0x10;
+    if (in_event.result_of_atbat == static_cast<u8>(AT_BAT_RESULT::STRIKEOUT)){
+        in_event.runner_batter->out_type = static_cast<u8>(OUT_TYPE::STRIKEOUT);
     }
 
     if (in_event.pitch.has_value() && in_event.pitch->contact.has_value()){
         Contact* contact = &in_event.pitch->contact.value();
         //Fill in secondary result for contact
-        if (in_event.result_of_atbat >= 0x7 && in_event.result_of_atbat <= 0xF){
-            //0x10 in runner_batter denotes strikeout
+        if (in_event.result_of_atbat >= static_cast<u8>(AT_BAT_RESULT::SINGLE) &&
+            in_event.result_of_atbat <= static_cast<u8>(AT_BAT_RESULT::DOUBLE_PLAY)){
             contact->secondary_contact_result = in_event.result_of_atbat;
-            contact->primary_contact_result = 2; // Correct if set to foul
+            //A home run reads as foul in logContactResult. Keep any other value so a caught sac fly stays CAUGHT
+            if (contact->primary_contact_result == static_cast<u8>(PRIMARY_CONTACT_RESULT::FOUL)){
+                contact->primary_contact_result = static_cast<u8>(PRIMARY_CONTACT_RESULT::FAIR);
+            }
         }
-        else if ((in_event.runner_batter->out_type == 2) || (in_event.runner_batter->out_type == 3)){
-            contact->secondary_contact_result = in_event.runner_batter->out_type;
+        else if (in_event.runner_batter->out_type == static_cast<u8>(OUT_TYPE::FORCE)){
+            contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::OUT_FORCE);
         }
-        else if ((in_event.runner_batter->out_type == 0) && (in_event.result_of_atbat == 4)){
-            contact->secondary_contact_result = in_event.result_of_atbat;
+        else if (in_event.runner_batter->out_type == static_cast<u8>(OUT_TYPE::TAG)){
+            contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::OUT_TAG);
+        }
+        else if (in_event.runner_batter->out_type == static_cast<u8>(OUT_TYPE::CAUGHT)){
+            //The game can also call the batter out as caught without a catch (infield fly), so logContactResult can't set this alone
+            contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::OUT_CAUGHT);
+        }
+        else if ((in_event.runner_batter->out_type == static_cast<u8>(OUT_TYPE::NONE)) &&
+                 (in_event.result_of_atbat == static_cast<u8>(AT_BAT_RESULT::OUT_ON_PLAY))){
+            contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::BATTER_SAFE_RUNNER_OUT);
+        }
+        else if (((in_event.result_of_atbat == static_cast<u8>(AT_BAT_RESULT::NONE)) ||
+                  (in_event.result_of_atbat == static_cast<u8>(AT_BAT_RESULT::STRIKEOUT))) &&
+                 (in_event.final_ball_result == static_cast<u8>(BALL_RESULT_TYPE::FOUL))){
+            //The ball may have landed before the game called it foul, in which case logContactResult
+            //saw it as LANDED. Result NONE alone isn't enough, a real hit can read NONE if the game
+            //writes the result after aAB_PitchThrown clears, or if the play is cut off
+            contact->primary_contact_result = static_cast<u8>(PRIMARY_CONTACT_RESULT::FOUL);
+            contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::FOUL);
         }
     }
 
@@ -973,7 +994,7 @@ void StatTracker::logFinalResults(const Core::CPUThreadGuard& guard, Event& in_e
     m_fielder_tracker[!m_game_info.getCurrentEvent().half_inning].incrementBatterOutForPosition(num_outs);
 
     //If the runner got out at first (forced), increment outs for the fielder who first touched the ball
-    if (in_event.runner_batter->out_type == 2) {
+    if (in_event.runner_batter->out_type == static_cast<u8>(OUT_TYPE::FORCE)) {
         //First fielder to touch the ball
         Fielder* fielder;
 
@@ -2039,12 +2060,12 @@ bool StatTracker::anyRunnerStealing(const Core::CPUThreadGuard& guard, Event& in
 
 void StatTracker::logRunnerEvents(const Core::CPUThreadGuard& guard, Runner* in_runner){
     //Return if no runner
-    if (in_runner->out_type != 0 ) { return; }
+    if (in_runner->out_type != static_cast<u8>(OUT_TYPE::NONE) ) { return; }
 
     //Return if runner has already gotten out, or the ball is dead due to HR, GRD, or Ball Dead.
     in_runner->out_type = PowerPC::MMU::HostRead_U8(guard, aRunner_OutType + (in_runner->initial_base * cRunner_Offset));
     u8 dead_ball_reason = PowerPC::MMU::HostRead_U8(guard, aAB_DeadBallReason);
-    if (in_runner->out_type != 0) {
+    if (in_runner->out_type != static_cast<u8>(OUT_TYPE::NONE)) {
         in_runner->out_location = PowerPC::MMU::HostRead_U8(guard, aRunner_CurrentBase + (in_runner->initial_base * cRunner_Offset));
         in_runner->result_base = 0xFF;
         in_runner->basepath_location = PowerPC::MMU::HostRead_U32(guard, aRunner_BasepathPercentage + (in_runner->initial_base * cRunner_Offset));

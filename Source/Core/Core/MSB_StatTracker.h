@@ -73,6 +73,72 @@ enum class SPECIAL_LIVE_BALL_REASON : u8
     STEAL   = 2
 };
 
+// Runner.outType in mssb-dtk
+enum class OUT_TYPE : u8
+{
+    NONE             = 0x00,
+    CAUGHT           = 0x01, // Batter only
+    FORCE            = 0x02,
+    TAG              = 0x03,
+    WHILE_TAGGING_UP = 0x04, // Failed to return after a catch
+    STRIKEOUT        = 0x10  // Set by the stat tracker, never written by the game
+};
+
+// AT_BAT_RESULT in mssb-dtk
+// OUT_ON_PLAY and FIELDING_ERROR avoid the OUT and ERROR macros in the Windows headers
+enum class AT_BAT_RESULT : u8
+{
+    NONE              = 0x00,
+    STRIKEOUT         = 0x01,
+    WALK              = 0x02,
+    HIT_BY_PITCH      = 0x03,
+    OUT_ON_PLAY       = 0x04,
+    CAUGHT_LINE_DRIVE = 0x05,
+    CAUGHT            = 0x06,
+    SINGLE            = 0x07,
+    DOUBLE            = 0x08,
+    TRIPLE            = 0x09,
+    HOME_RUN          = 0x0A,
+    FIELDING_ERROR    = 0x0B,
+    FIELDERS_CHOICE   = 0x0C,
+    BUNT              = 0x0D, // Successful sacrifice-style bunt, the batter may still be out
+    SAC_FLY           = 0x0E,
+    DOUBLE_PLAY       = 0x0F, // Ball not caught, includes triple plays
+    FOUL_CATCH        = 0x10  // AT_BAT_RESULT_CAUGHT_FOUL in mssb-dtk
+};
+
+// BALL_RESULT_TYPE in mssb-dtk. The game stores this as an s16, we read the low byte
+enum class BALL_RESULT_TYPE : u8
+{
+    IN_AIR  = 0x00,
+    LANDED  = 0x01,
+    FIELDED = 0x02,
+    CAUGHT  = 0x03,
+    FOUL    = 0xFF
+};
+
+// Tracker only, not game values. Decoded by cPrimaryContactResult
+// CAUGHT avoids the OUT macro in the Windows headers
+enum class PRIMARY_CONTACT_RESULT : u8
+{
+    CAUGHT  = 0x00,
+    FOUL    = 0x01,
+    FAIR    = 0x02,
+    FIELDED = 0x03
+};
+
+// Tracker only, not game values. Decoded by cSecondaryContactResult
+// 0x07 to 0x0F are also used, copied directly from AT_BAT_RESULT
+enum class SECONDARY_CONTACT_RESULT : u8
+{
+    OUT_CAUGHT             = 0x00,
+    OUT_FORCE              = 0x01,
+    OUT_TAG                = 0x02,
+    FOUL                   = 0x03,
+    BATTER_SAFE_RUNNER_OUT = 0x04,
+    NONE                   = 0xFF
+};
+
 // From Nuche
 enum class GAME_CONTROL_STATE : u8
 {
@@ -384,12 +450,12 @@ static const std::map<u8, std::string> cSecondaryContactResult = {
     {0x8,  "Double"},
     {0x9,  "Triple"},
     {0xA,  "HR"},
-    {0xB,  "Error - Input"},
-    {0xC,  "Error - Chem"},
+    {0xB,  "Error"},
+    {0xC,  "Fielders Choice"},
     {0xD,  "Bunt"},
     {0xE,  "SacFly"},
     {0xF,  "Ground ball double Play"},
-    {0x10, "Foul catch"}
+    {0xFF, "None"}
 };
 
 static const std::map<u8, std::string> cAtBatResult = {
@@ -398,14 +464,14 @@ static const std::map<u8, std::string> cAtBatResult = {
     {0x2,  "Walk (BB)"},
     {0x3,  "Walk (HBP)"},
     {0x4,  "Out"},
-    {0x5,  "Caught"},
-    {0x6,  "Caught line-drive"},
+    {0x5,  "Caught line-drive"},
+    {0x6,  "Caught"},
     {0x7,  "Single"},
     {0x8,  "Double"},
     {0x9,  "Triple"},
     {0xA,  "HR"},
-    {0xB,  "Error - Input"},
-    {0xC,  "Error - Chem"},
+    {0xB,  "Error"},
+    {0xC,  "Fielders Choice"},
     {0xD,  "Bunt"},
     {0xE,  "SacFly"},
     {0xF,  "Ground ball double Play"},
@@ -473,7 +539,7 @@ static const u32 aFramesExitingToMenu = 0x80892AAE; //counts up while the game f
 static const u32 aGameTypeSelected = 0x800E8703; //4 == title screen demo
 
 static const u32 aAB_PitchThrown            = 0x8088A81B; // 1 when windup starts, cleared when pitch over or steal attempt completed.
-static const u32 aAB_ContactResult          = 0x808926B3; //0=InAir, 1=Landed, 2=Fielded, 3=Caught, FF=Foul
+static const u32 aAB_ContactResult          = 0x808926B3; //BALL_RESULT_TYPE
 static const u32 aAB_ContactMade            = 0x808909a1; //Boolean, from Roeming
 static const u32 aAB_SpecialLiveBallReason  = 0x80892857; //0=None, 1=Pickoff, 2=Steal
 
@@ -649,7 +715,7 @@ static const u32 aAB_NumOutsDuringPlay = 0x808938AD;
 static const u32 aAB_HitByPitch = 0x808909A3;
 
 static const u32 aAB_DeadBallReason = 0x80892709; //0 = n/a, 1 = HR, 2=foul, 3=ground rule double, 4 = ball dead
-static const u32 aAB_FinalResult = 0x80893BAA;
+static const u32 aAB_FinalResult = 0x80893BAA; //AT_BAT_RESULT
 
 //Frame Data. Capture once play is over
 static const u32 aAB_FrameOfSwing = 0x80890976; //(halfword) frame of swing animation; stops increasing when contact is made
@@ -683,7 +749,7 @@ static const u8 cRoster_Offset = 0x8;
 static const u32 aRunner_BasepathPercentage = 0x8088EE7C;
 static const u32 aRunner_RosterLoc = 0x8088EEF9;
 static const u32 aRunner_CharId = 0x8088EEFB;
-static const u32 aRunner_OutType = 0x8088EF44;
+static const u32 aRunner_OutType = 0x8088EF44; //OUT_TYPE
 static const u32 aRunner_OutLoc = 0x8088EF3F; //Technically holds the next base
 static const u32 aRunner_CurrentBase = 0x8088EF3D;
 static const u32 aRunner_Stealing = 0x8088EF66;
@@ -815,22 +881,11 @@ public:
         TrackerAdr<u32> ball_max_height = TrackerAdr<u32>("Ball Max Height", 0x8089250c, 0xFFFFFFFF);
         TrackerAdr<u16> ball_hang_time = TrackerAdr<u16>("Ball Hang Time", 0x80892696, 0xFFFF);
 
-        //0=Out
-        //1=Foul
-        //2=Fair
-        //3=Unknown
+        //PRIMARY_CONTACT_RESULT
         u8 primary_contact_result;
 
-        //0=Out-caught
-        //1=Out-force
-        //2=Out-tag
-        //3=foul
-        //7=single
-        //8=double
-        //9=triple
-        //A=HR
-        //A+=other (sac-fly??, sac-bunt??, GRD??)
-        u8 secondary_contact_result;
+        //SECONDARY_CONTACT_RESULT, or AT_BAT_RESULT from SINGLE to DOUBLE_PLAY
+        u8 secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::NONE);
 
         std::optional<Fielder> first_fielder;
         std::optional<Fielder> collect_fielder;
@@ -917,6 +972,8 @@ public:
         u8 rbi;
         u8 dead_ball_reason;
         u8 result_of_atbat;
+        //BALL_RESULT_TYPE when the play ended. Unlike dead_ball_reason, this is set on every foul
+        u8 final_ball_result = static_cast<u8>(BALL_RESULT_TYPE::IN_AIR);
 
         //Partial game. indicates this game has not been finished
         std::pair<bool, bool> write_hud_ab = {true, true};
