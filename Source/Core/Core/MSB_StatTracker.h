@@ -104,7 +104,7 @@ enum class AT_BAT_RESULT : u8
     BUNT              = 0x0D, // Successful sacrifice-style bunt, the batter may still be out
     SAC_FLY           = 0x0E,
     DOUBLE_PLAY       = 0x0F, // Ball not caught, includes triple plays
-    FOUL_CATCH        = 0x10  // AT_BAT_RESULT_CAUGHT_INFIELD_FLY in mssb-dtk, but only set for foul balls
+    FOUL_CATCH        = 0x10  // AT_BAT_RESULT_CAUGHT_FOUL in mssb-dtk
 };
 
 // BALL_RESULT_TYPE in mssb-dtk. The game stores this as an s16, we read the low byte

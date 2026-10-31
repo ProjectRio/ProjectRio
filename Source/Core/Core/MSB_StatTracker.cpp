@@ -894,7 +894,7 @@ void StatTracker::logContactResult(const Core::CPUThreadGuard& guard, Contact* i
         in_contact->ball_y_pos.read_value(guard);
         in_contact->ball_z_pos.read_value(guard);
 
-        //If 2, ball has been caught. Log this as final fielder. If ball has been bobbled they will be logged as bobble
+        //If fielded, log this as final fielder. If ball has been bobbled they will be logged as bobble
         in_contact->collect_fielder = logFielderWithBall(guard);
     }
     else if (result == static_cast<u8>(BALL_RESULT_TYPE::CAUGHT)){
@@ -964,6 +964,13 @@ void StatTracker::logFinalResults(const Core::CPUThreadGuard& guard, Event& in_e
         else if ((in_event.runner_batter->out_type == static_cast<u8>(OUT_TYPE::NONE)) &&
                  (in_event.result_of_atbat == static_cast<u8>(AT_BAT_RESULT::OUT_ON_PLAY))){
             contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::BATTER_SAFE_RUNNER_OUT);
+        }
+        else if ((in_event.result_of_atbat == static_cast<u8>(AT_BAT_RESULT::NONE)) ||
+                 (in_event.result_of_atbat == static_cast<u8>(AT_BAT_RESULT::STRIKEOUT))){
+            //A play with contact only ends like this on a foul. The ball may have landed before the
+            //game called it foul, in which case logContactResult saw it as LANDED
+            contact->primary_contact_result = static_cast<u8>(PRIMARY_CONTACT_RESULT::FOUL);
+            contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::FOUL);
         }
     }
 
