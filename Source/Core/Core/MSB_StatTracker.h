@@ -954,6 +954,8 @@ public:
         u8 rbi;
         u8 dead_ball_reason;
         u8 result_of_atbat;
+        //BALL_RESULT_TYPE when the play ended. Unlike dead_ball_reason, this is set on every foul
+        u8 final_ball_result = static_cast<u8>(BALL_RESULT_TYPE::IN_AIR);
 
         //Partial game. indicates this game has not been finished
         std::pair<bool, bool> write_hud_ab = {true, true};

@@ -446,6 +446,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                     static_cast<SPECIAL_LIVE_BALL_REASON>(PowerPC::MMU::HostRead_U8(guard, aAB_SpecialLiveBallReason)) != SPECIAL_LIVE_BALL_REASON::PICKOFF){
                     m_game_info.getCurrentEvent().dead_ball_reason = PowerPC::MMU::HostRead_U8(guard, aAB_DeadBallReason);
                     m_game_info.getCurrentEvent().result_of_atbat = PowerPC::MMU::HostRead_U8(guard, aAB_FinalResult);
+                    m_game_info.getCurrentEvent().final_ball_result = PowerPC::MMU::HostRead_U8(guard, aAB_ContactResult);
                     m_event_state = EVENT_STATE::PLAY_OVER;
                 }
                 else {
@@ -949,7 +950,10 @@ void StatTracker::logFinalResults(const Core::CPUThreadGuard& guard, Event& in_e
         if (in_event.result_of_atbat >= static_cast<u8>(AT_BAT_RESULT::SINGLE) &&
             in_event.result_of_atbat <= static_cast<u8>(AT_BAT_RESULT::DOUBLE_PLAY)){
             contact->secondary_contact_result = in_event.result_of_atbat;
-            contact->primary_contact_result = static_cast<u8>(PRIMARY_CONTACT_RESULT::FAIR); // Correct if set to foul
+            //A home run reads as foul in logContactResult. Keep any other value so a caught sac fly stays CAUGHT
+            if (contact->primary_contact_result == static_cast<u8>(PRIMARY_CONTACT_RESULT::FOUL)){
+                contact->primary_contact_result = static_cast<u8>(PRIMARY_CONTACT_RESULT::FAIR);
+            }
         }
         else if (in_event.runner_batter->out_type == static_cast<u8>(OUT_TYPE::FORCE)){
             contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::OUT_FORCE);
@@ -958,17 +962,19 @@ void StatTracker::logFinalResults(const Core::CPUThreadGuard& guard, Event& in_e
             contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::OUT_TAG);
         }
         else if (in_event.runner_batter->out_type == static_cast<u8>(OUT_TYPE::CAUGHT)){
-            //The ball may not have been caught when logContactResult ran, so this can't be set only there
+            //The game can also call the batter out as caught without a catch (infield fly), so logContactResult can't set this alone
             contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::OUT_CAUGHT);
         }
         else if ((in_event.runner_batter->out_type == static_cast<u8>(OUT_TYPE::NONE)) &&
                  (in_event.result_of_atbat == static_cast<u8>(AT_BAT_RESULT::OUT_ON_PLAY))){
             contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::BATTER_SAFE_RUNNER_OUT);
         }
-        else if ((in_event.result_of_atbat == static_cast<u8>(AT_BAT_RESULT::NONE)) ||
-                 (in_event.result_of_atbat == static_cast<u8>(AT_BAT_RESULT::STRIKEOUT))){
-            //A play with contact only ends like this on a foul. The ball may have landed before the
-            //game called it foul, in which case logContactResult saw it as LANDED
+        else if (((in_event.result_of_atbat == static_cast<u8>(AT_BAT_RESULT::NONE)) ||
+                  (in_event.result_of_atbat == static_cast<u8>(AT_BAT_RESULT::STRIKEOUT))) &&
+                 (in_event.final_ball_result == static_cast<u8>(BALL_RESULT_TYPE::FOUL))){
+            //The ball may have landed before the game called it foul, in which case logContactResult
+            //saw it as LANDED. Result NONE alone isn't enough, a real hit can read NONE if the game
+            //writes the result after aAB_PitchThrown clears, or if the play is cut off
             contact->primary_contact_result = static_cast<u8>(PRIMARY_CONTACT_RESULT::FOUL);
             contact->secondary_contact_result = static_cast<u8>(SECONDARY_CONTACT_RESULT::FOUL);
         }
