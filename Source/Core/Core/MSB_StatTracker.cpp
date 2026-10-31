@@ -814,9 +814,9 @@ void StatTracker::logContact(const Core::CPUThreadGuard& guard, Event& in_event)
     //The game clears aAB_MoonShot on non-perfect contact, so detect the attempt from its trigger conditions.
     //Uses the stars from the start of the event since the swing has already spent them.
     u8 batter_stars = (in_event.half_inning == 0) ? in_event.away_stars : in_event.home_stars;
-    if (contact->moon_shot.get_value() == 0 && PowerPC::MMU::HostRead_U8(guard, aAB_StarSwing) != 0
+    if (contact->moon_shot.get_value() == static_cast<u8>(MOON_SHOT_STATUS::NONE) && PowerPC::MMU::HostRead_U8(guard, aAB_StarSwing) != 0
         && PowerPC::MMU::HostRead_U8(guard, aAB_FullyCharged) != 0 && batter_stars >= cMoonShot_StarCost) {
-        contact->moon_shot.set_value(2);
+        contact->moon_shot.set_value(static_cast<u8>(MOON_SHOT_STATUS::FAILED_ATTEMPT));
     }
 
     //More ball flight info

@@ -256,6 +256,15 @@ static const std::map<u8, std::string> cTypeOfSwing = {
     {4, "Bunt"}
 };
 
+// moonShotInd in mssb-dtk, plus FAILED_ATTEMPT. Decoded by cMoonShotStatus
+// FAILED_ATTEMPT avoids the FAILED macro in the Windows headers
+enum class MOON_SHOT_STATUS : u8
+{
+    NONE           = 0x00,
+    MOONSHOT       = 0x01,
+    FAILED_ATTEMPT = 0x02  // Non-perfect contact. Set by the stat tracker, never written by the game
+};
+
 static const std::map<u8, std::string> cMoonShotStatus = {
     {0, "None"},
     {1, "Moonshot"},
@@ -748,7 +757,7 @@ public:
 
         //Hit Status
         TrackerAdr<u8> type_of_contact = TrackerAdr<u8>("Type of Contact", aAB_TypeOfContact, 0xFF);
-        //0=No attempt, 1=Moonshot, 2=Moonshot attempted with non-perfect contact
+        //MOON_SHOT_STATUS
         TrackerAdr<u8> moon_shot = TrackerAdr<u8>("Star Swing Five-Star", aAB_MoonShot, 0xFF);
 
         //Charge Power
