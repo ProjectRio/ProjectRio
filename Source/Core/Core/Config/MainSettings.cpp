@@ -465,8 +465,15 @@ const Info<bool> MAIN_FIFOPLAYER_EARLY_MEMORY_UPDATES{
 
 // Main.AutoUpdate
 
-const Info<std::string> MAIN_AUTOUPDATE_UPDATE_TRACK{{System::Main, "AutoUpdate", "UpdateTrack"},
-                                                     Common::GetScmUpdateTrackStr()};
+// Project Rio has a single release stream on GitHub, so the track is really just an on/off switch:
+// an empty track turns the startup update check off. Builds can still name one at compile time
+// through DOLPHIN_DEFAULT_UPDATE_TRACK.
+// Stored under a new key: 2.2.0 and earlier saved an empty "UpdateTrack" whenever the General
+// settings were saved, while still checking on every startup. Reading that key would silently
+// turn the startup check off for all of those users.
+const Info<std::string> MAIN_AUTOUPDATE_UPDATE_TRACK{
+    {System::Main, "AutoUpdate", "RioUpdateTrack"},
+    Common::GetScmUpdateTrackStr().empty() ? "release" : Common::GetScmUpdateTrackStr()};
 const Info<std::string> MAIN_AUTOUPDATE_HASH_OVERRIDE{{System::Main, "AutoUpdate", "HashOverride"},
                                                       ""};
 

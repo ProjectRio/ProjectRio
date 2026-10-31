@@ -28,7 +28,7 @@ private:
   void CreateLayout();
   void ConnectLayout();
   void CreateBasic();
-  // void CreateAutoUpdate();
+  void CreateAutoUpdate();
   void CreateFallbackRegion();
 
   void LoadConfig();
@@ -38,8 +38,8 @@ private:
   // Widgets
   QVBoxLayout* m_main_layout;
   QComboBox* m_combobox_speedlimit;
-  QComboBox* m_combobox_update_track;
   QComboBox* m_combobox_fallback_region;
+  QCheckBox* m_checkbox_auto_update;
   QCheckBox* m_checkbox_dualcore;
   //QCheckBox* m_checkbox_cheats;
   QCheckBox* m_checkbox_override_region_settings;

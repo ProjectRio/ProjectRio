@@ -34,13 +34,10 @@
 #include "UICommon/DiscordPresence.h"
 #endif
 
-constexpr int AUTO_UPDATE_DISABLE_INDEX = 0;
-constexpr int AUTO_UPDATE_BETA_INDEX = 1;
-constexpr int AUTO_UPDATE_DEV_INDEX = 2;
-
+// Project Rio publishes a single release stream on GitHub, so the update track config value is
+// only ever "on" or "off"; an empty track stops the check that runs at startup.
 constexpr const char* AUTO_UPDATE_DISABLE_STRING = "";
-constexpr const char* AUTO_UPDATE_BETA_STRING = "beta";
-constexpr const char* AUTO_UPDATE_DEV_STRING = "dev";
+constexpr const char* AUTO_UPDATE_ENABLE_STRING = "release";
 
 constexpr int FALLBACK_REGION_NTSCJ_INDEX = 0;
 constexpr int FALLBACK_REGION_NTSCU_INDEX = 1;
@@ -67,9 +64,7 @@ void GeneralPane::CreateLayout()
   // Create layout here
   CreateBasic();
 
-  //if (AutoUpdateChecker::SystemSupportsAutoUpdates())
-  //  CreateAutoUpdate();
-
+  CreateAutoUpdate();
 
   CreateFallbackRegion();
 
@@ -109,13 +104,9 @@ void GeneralPane::ConnectLayout()
   connect(m_checkbox_discord_presence, &QCheckBox::toggled, this, &GeneralPane::OnSaveConfig);
 #endif
 
-  // if (AutoUpdateChecker::SystemSupportsAutoUpdates())
-  // {
-  //   connect(m_combobox_update_track, &QComboBox::currentIndexChanged, this,
-  //           &GeneralPane::OnSaveConfig);
-  //   connect(&Settings::Instance(), &Settings::AutoUpdateTrackChanged, this,
-  //           &GeneralPane::LoadConfig);
-  // }
+  connect(m_checkbox_auto_update, &QCheckBox::toggled, this, &GeneralPane::OnSaveConfig);
+  connect(&Settings::Instance(), &Settings::AutoUpdateTrackChanged, this,
+          &GeneralPane::LoadConfig);
 
   // Advanced
   connect(m_combobox_speedlimit, &QComboBox::currentIndexChanged, [this]() {
@@ -179,26 +170,19 @@ void GeneralPane::CreateBasic()
   speed_limit_layout->addRow(tr("&Speed Limit:"), m_combobox_speedlimit);
 }
 
-/*
 void GeneralPane::CreateAutoUpdate()
 {
   auto* auto_update_group = new QGroupBox(tr("Auto Update Settings"));
-  auto* auto_update_group_layout = new QFormLayout;
+  auto* auto_update_group_layout = new QVBoxLayout;
   auto_update_group->setLayout(auto_update_group_layout);
   m_main_layout->addWidget(auto_update_group);
 
-  auto_update_group_layout->setFormAlignment(Qt::AlignLeft | Qt::AlignTop);
-  auto_update_group_layout->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-
-  m_combobox_update_track = new QComboBox(this);
-
-  auto_update_group_layout->addRow(tr("&Auto Update:"), m_combobox_update_track);
-
-  for (const QString& option :
-       {tr("Don't Update"), tr("Beta (once a month)"), tr("Dev (multiple times a day)")})
-    m_combobox_update_track->addItem(option);
+  m_checkbox_auto_update = new QCheckBox(tr("Check for Updates on Startup"));
+  m_checkbox_auto_update->setToolTip(
+      tr("Checks the Project Rio GitHub releases page for a newer version when Rio starts, and "
+         "offers to install it."));
+  auto_update_group_layout->addWidget(m_checkbox_auto_update);
 }
-*/
 
 void GeneralPane::CreateFallbackRegion()
 {
@@ -245,19 +229,8 @@ void GeneralPane::LoadConfig()
 {
   const QSignalBlocker blocker(this);
 
-  //if (AutoUpdateChecker::SystemSupportsAutoUpdates())
-  //{
-  //  const auto track = Settings::Instance().GetAutoUpdateTrack().toStdString();
-
-  //  // If the track doesn't match any known value, set to "beta" which is the
-  //  // default config value on Dolphin release builds.
-  //  if (track == AUTO_UPDATE_DISABLE_STRING)
-  //    SignalBlocking(m_combobox_update_track)->setCurrentIndex(AUTO_UPDATE_DISABLE_INDEX);
-  //  else if (track == AUTO_UPDATE_DEV_STRING)
-  //    SignalBlocking(m_combobox_update_track)->setCurrentIndex(AUTO_UPDATE_DEV_INDEX);
-  //  else
-  //    SignalBlocking(m_combobox_update_track)->setCurrentIndex(AUTO_UPDATE_BETA_INDEX);
-  //}
+  const auto track = Settings::Instance().GetAutoUpdateTrack().toStdString();
+  SignalBlocking(m_checkbox_auto_update)->setChecked(track != AUTO_UPDATE_DISABLE_STRING);
 
 #if defined(USE_ANALYTICS) && USE_ANALYTICS
   SignalBlocking(m_checkbox_enable_analytics)
@@ -291,26 +264,6 @@ void GeneralPane::LoadConfig()
     SignalBlocking(m_combobox_fallback_region)->setCurrentIndex(FALLBACK_REGION_NTSCJ_INDEX);
 }
 
-//static QString UpdateTrackFromIndex(int index)
-//{
-//  QString value;
-//
-//  switch (index)
-//  {
-//  case AUTO_UPDATE_DISABLE_INDEX:
-//    value = QString::fromStdString(AUTO_UPDATE_DISABLE_STRING);
-//    break;
-//  case AUTO_UPDATE_BETA_INDEX:
-//    value = QString::fromStdString(AUTO_UPDATE_BETA_STRING);
-//    break;
-//  case AUTO_UPDATE_DEV_INDEX:
-//    value = QString::fromStdString(AUTO_UPDATE_DEV_STRING);
-//    break;
-//  }
-//
-//  return value;
-//}
-
 static DiscIO::Region UpdateFallbackRegionFromIndex(int index)
 {
   DiscIO::Region value = DiscIO::Region::Unknown;
@@ -341,11 +294,9 @@ void GeneralPane::OnSaveConfig()
   Config::ConfigChangeCallbackGuard config_guard;
 
   auto& settings = SConfig::GetInstance();
-  //if (AutoUpdateChecker::SystemSupportsAutoUpdates())
-  //{
-  //  Settings::Instance().SetAutoUpdateTrack(
-  //      UpdateTrackFromIndex(m_combobox_update_track->currentIndex()));
-  //}
+  Settings::Instance().SetAutoUpdateTrack(
+      QString::fromStdString(m_checkbox_auto_update->isChecked() ? AUTO_UPDATE_ENABLE_STRING :
+                                                                   AUTO_UPDATE_DISABLE_STRING));
 
 #ifdef USE_DISCORD_PRESENCE
   Discord::SetDiscordPresenceEnabled(m_checkbox_discord_presence->isChecked());

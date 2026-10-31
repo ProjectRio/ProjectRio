@@ -238,7 +238,7 @@ void RunRioFunctions(const Core::CPUThreadGuard& guard)
     {
       PowerPC::MMU::HostWrite_U32(guard, 0x38600005, 0x8063F964);
     }
-    if (PowerPC::MMU::HostRead_U32(guard, aGameId) == 0)
+    if (!s_stat_tracker->isGameInProgress())
     {
       runNetplayGameFunctions = true;
     }
@@ -255,7 +255,6 @@ void RunRioFunctions(const Core::CPUThreadGuard& guard)
       if (runNetplayGameFunctions)
       {
         SetNetplayerUserInfo();
-        NetPlay::NetPlayClient::SendGameID(PowerPC::MMU::HostRead_U32(guard, aGameId));
         runNetplayGameFunctions = false;
       }
     }
@@ -296,14 +295,25 @@ void AutoGolfMode(const Core::CPUThreadGuard& guard)
   }
 }
 
+// the game stores which team (0 or 1) is batting/fielding; this converts that to the team's port
+// returns 0->3 for a human player. anything higher is a CPU or an invalid team
+static u8 MSSBGetTeamPort(const Core::CPUThreadGuard& guard, u32 aTeam)
+{
+  u32 team = PowerPC::MMU::HostRead_U32(guard, aTeam);
+  if (team > 1)
+    return 0xFF;
+
+  return static_cast<u8>(PowerPC::MMU::HostRead_U32(guard, aTeamPorts + (4 * team)));
+}
+
 void MSSBCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer)
 {
-  u8 BatterPort = PowerPC::MMU::HostRead_U8(guard, aBatterPort);
-  u8 FielderPort = PowerPC::MMU::HostRead_U8(guard, aFielderPort);
+  u8 BatterPort = MSSBGetTeamPort(guard, aBattingTeam);
+  u8 FielderPort = MSSBGetTeamPort(guard, aFieldingTeam);
   bool isField = PowerPC::MMU::HostRead_U8(guard, aIsField) == 1;
 
-  // means game hasn't started yet
-  if (BatterPort == 0)
+  RelNumber rel = static_cast<RelNumber>(PowerPC::MMU::HostRead_U16(guard, aRelNumber));
+  if (rel != RelNumber::InGame)
     return;
 
   // makes the player who paused the golfer
@@ -314,17 +324,23 @@ void MSSBCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer)
   int minigameId = PowerPC::MMU::HostRead_U8(guard, aMinigameID);
   if (minigameId == 3 || minigameId == 1)
   {
-    BatterPort = PowerPC::MMU::HostRead_U8(guard, aBarrelBatterPort) + 1;
+    BatterPort = PowerPC::MMU::HostRead_U8(guard, aBarrelBatterPort);
     isField = false;
   }
   else if (minigameId == 2)
   {
-    FielderPort = PowerPC::MMU::HostRead_U8(guard, aWallBallPort) + 1;
+    FielderPort = PowerPC::MMU::HostRead_U8(guard, aWallBallPort);
     isField = true;
   }
 
   // evaluate which player should be golfer here
-  nextGolfer = isField ? FielderPort - 1 : BatterPort - 1;  // subtract 1 since m_pad_map uses 0->3 instead of 1->4
+  // some of these values update a frame apart from each other, so wait until we get the same
+  // answer two frames in a row. otherwise the golfer can briefly swap to the wrong player
+  static int pendingGolfer = -1;
+  int candidate = isField ? FielderPort : BatterPort;
+  if (candidate == pendingGolfer)
+    nextGolfer = candidate;
+  pendingGolfer = candidate;
 }
 
 void MGTTCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer)
@@ -368,22 +384,22 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
   if (mGameBeingPlayed == GameName::MarioBaseball)
   {
     // bool isPitchThrown = PowerPC::MMU::HostRead_U8(0x80895D6C) == 1 ? true : false;
-    bool isField = PowerPC::MMU::HostRead_U8(guard, aIsField) == 1 ? true : false;
     bool isInGame = PowerPC::MMU::HostRead_U8(guard, aIsInGame) == 1 ? true : false;
     bool ContactMade = PowerPC::MMU::HostRead_U8(guard, aContactMade) == 1 ? true : false;
 
     // Batting Training Mode stats
     if (ContactMade && !previousContactMade)
     {
-      u8 BatterPort = PowerPC::MMU::HostRead_U8(guard, aBatterPort);
-      if (BatterPort > 0)
-        BatterPort--;
+      u8 BatterPort = MSSBGetTeamPort(guard, aBattingTeam);
       u32 stickDirectionAddr = 0x8089392D + (0x10 * BatterPort);
-      float contactQuality = PowerPC::MMU::HostRead_F32(guard, aAB_ContactQuality);
+      int contactQuality =
+          static_cast<int>(roundf(PowerPC::MMU::HostRead_F32(guard, aAB_ContactQuality) * 100));
       u16 contactFrame = PowerPC::MMU::HostRead_U16(guard, aContactFrame);
       u8 typeOfContact_Value = PowerPC::MMU::HostRead_U8(guard, aTypeOfContact);
       std::string typeOfContact;
-      u8 inputDirection_Value = PowerPC::MMU::HostRead_U8(guard, stickDirectionAddr) & 0xF;
+      // CPU batters don't have a controller to read
+      u8 inputDirection_Value =
+          IsHumanPort(BatterPort) ? PowerPC::MMU::HostRead_U8(guard, stickDirectionAddr) & 0xF : 0;
       std::string inputDirection;
       int chargeUp =
           static_cast<int>(roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aChargeUp)) * 100));
@@ -392,14 +408,6 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
 
       float angle = roundf((float)PowerPC::MMU::HostRead_U16(guard, aBallAngle) * 36000 / 4096) /
                     100;  // 0x400 == 90°, 0x800 == 180°, 0x1000 == 360°
-      float xVelocity =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallVelocity_X)) * 6000) /
-          100;  // * 60 cause default units are meters per frame
-      float yVelocity =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallVelocity_Y)) * 6000) / 100;
-      float zVelocity =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallVelocity_Z)) * 6000) / 100;
-      float netVelocity = vectorMagnitude(xVelocity, yVelocity, zVelocity);
 
       // convert type of contact to string
       if (typeOfContact_Value == 0)
@@ -446,101 +454,42 @@ void TrainingMode(const Core::CPUThreadGuard& guard)
                            fmt::format("Batting Data:                    \n"
                                        "Contact Frame:  {}\n"
                                        "Type of Contact:  {}\n"
-                                       "Contact Quality: {}\n"
+                                       "Contact Quality: {}%\n"
                                        "Input Direction:  {}\n"
                                        "Charge Percent:  {}%\n"
-                                       "Ball Angle:  {}°\n\n"
-                                       "Exit Velocities:  \n"
-                                       "X :  {} m/s  -->  {} mph\n"
-                                       "Y:  {} m/s  -->  {} mph\n"
-                                       "Z :  {} m/s  -->  {} mph\n"
-                                       "Net:  {} m/s  -->  {} mph",
+                                       "Ball Angle:  {}°",
                                        contactFrame, typeOfContact, contactQuality, inputDirection,
-                                       totalCharge, angle, xVelocity, ms_to_mph(xVelocity),
-                                       yVelocity, ms_to_mph(yVelocity), zVelocity,
-                                       ms_to_mph(zVelocity), netVelocity, ms_to_mph(netVelocity)),
+                                       totalCharge, angle),
                            8000);  // message time & color
     }
 
     // Coordinate data
     if (isInGame)
     {
-      float BallPos_X =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallPosition_X)) * 100) / 100;
-      float BallPos_Y =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallPosition_Y)) * 100) / 100;
-      float BallPos_Z =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallPosition_Z)) * 100) / 100;
-      float BallVel_X =
-          isField ?
-              roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallVelocity_X)) * 6000) / 100 :
-              roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aPitchedBallVelocity_X)) * 6000) /
-                  100;
-      float BallVel_Y =
-          isField ? RoundZ(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallVelocity_Y)) * 6000) /
-                        100 :  // floor small decimal to prevent weirdness
-              RoundZ(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aPitchedBallVelocity_Y)) * 6000) /
-                  100;
-      float BallVel_Z =
-          isField ?
-              roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallVelocity_Z)) * 6000) / 100 :
-              roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aPitchedBallVelocity_Z)) * 6000) /
-                  100;
-      float BallVel_Net = roundf(vectorMagnitude(BallVel_X, BallVel_Y, BallVel_Z) * 100) / 100;
+      float BallPos_X = u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallPosition_X));
+      float BallPos_Y = u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallPosition_Y));
+      float BallPos_Z = u32ToFloat(PowerPC::MMU::HostRead_U32(guard, aBallPosition_Z));
 
       int baseOffset = 0x268 * PowerPC::MMU::HostRead_U8(
                                    guard, 0x80892801);  // used to get offsed for baseFielderAddr
       u32 baseFielderAddr = 0x8088F368 + baseOffset;    // 0x0 == x; 0x8 == y; 0xc == z
 
-      float FielderPos_X =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr)) * 100) / 100;
-      float FielderPos_Y =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr + 0xc)) * 100) / 100;
-      float FielderPos_Z =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr + 0x8)) * 100) / 100;
-      float FielderVel_X =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr + 0x30)) * 6000) /
-          100;
-      // float FielderVel_Y = roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(baseFielderAddr + 0x15C))
-      // * 6000) / 100; // this addr is wrong
-      float FielderVel_Z =
-          roundf(u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr + 0x34)) * 6000) /
-          100;
-      float FielderVel_Net =
-          roundf(vectorMagnitude(FielderVel_X, 0 /*FielderVel_Y*/, FielderVel_Z) * 100) / 100;
+      float FielderPos_X = u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr));
+      float FielderPos_Y = u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr + 0xc));
+      float FielderPos_Z = u32ToFloat(PowerPC::MMU::HostRead_U32(guard, baseFielderAddr + 0x8));
 
-      OSD::AddTypedMessage(
-          OSD::MessageType::TrainingModeBallCoordinates,
-          fmt::format("Ball Coordinates:                \n"
-                      "X:  {}\n"
-                      "Y:  {}\n"
-                      "Z:  {}\n\n"
-                      "Ball Velocity:  \n"
-                      "X:  {} m/s  -->  {} mph\n"
-                      "Y:  {} m/s  -->  {} mph\n"
-                      "Z:  {} m/s  -->  {} mph\n"
-                      "Net:  {} m/s  -->  {} mph\n",
-                      BallPos_X, BallPos_Y, BallPos_Z, BallVel_X, ms_to_mph(BallVel_X), BallVel_Y,
-                      ms_to_mph(BallVel_Y), BallVel_Z, ms_to_mph(BallVel_Z), BallVel_Net,
-                      ms_to_mph(BallVel_Net)),
-          200, OSD::Color::CYAN);  // short time cause we don't want this info to linger
-
-      OSD::AddTypedMessage(OSD::MessageType::TrainingModeFielderCoordinates,
-                           fmt::format("Fielder Coordinates:             \n"
-                                       "X:  {}\n"
-                                       "Y:  {}\n"
-                                       "Z:  {}\n\n"
-                                       "Fielder Velocity: \n"
-                                       "X:  {} m/s  -->  {} mph\n"
-                                       //"Y:  {} m/s  -->  {} mph\n"
-                                       "Z:  {} m/s  -->  {} mph\n"
-                                       "Net:  {} m/s  -->  {} mph",
-                                       FielderPos_X, FielderPos_Y, FielderPos_Z, FielderVel_X,
-                                       ms_to_mph(FielderVel_X),
-                                       // FielderVel_Y, ms_to_mph(FielderVel_Y),
-                                       FielderVel_Z, ms_to_mph(FielderVel_Z), FielderVel_Net,
-                                       ms_to_mph(FielderVel_Net)),
-                           200, OSD::Color::CYAN);
+      OSD::AddTypedMessage(OSD::MessageType::TrainingModeCoordinates,
+                           fmt::format("Ball Coordinates:                \n"
+                                       "X:  {:.1f}\n"
+                                       "Y:  {:.1f}\n"
+                                       "Z:  {:.1f}\n\n"
+                                       "Fielder Coordinates:             \n"
+                                       "X:  {:.1f}\n"
+                                       "Y:  {:.1f}\n"
+                                       "Z:  {:.1f}",
+                                       BallPos_X, BallPos_Y, BallPos_Z, FielderPos_X, FielderPos_Y,
+                                       FielderPos_Z),
+                           200, OSD::Color::CYAN);  // short time cause we don't want this info to linger
     }
 
     previousContactMade = ContactMade;
@@ -599,14 +548,13 @@ void DisplayPlayerNames(const Core::CPUThreadGuard& guard)
   {
   case GameName::MarioBaseball:
   {
-    u8 BatterPort = PowerPC::MMU::HostRead_U8(guard, aBatterPort);
-    u8 FielderPort = PowerPC::MMU::HostRead_U8(guard, aFielderPort);
-    if (BatterPort == 0 || FielderPort == 0)  // game hasn't started yet; do not continue func
+    // aHasMatchStarted is only valid memory while the game rel is loaded
+    RelNumber rel = static_cast<RelNumber>(PowerPC::MMU::HostRead_U16(guard, aRelNumber));
+    if (rel != RelNumber::InGame || PowerPC::MMU::HostRead_U8(guard, aHasMatchStarted) == 0)
       break;
 
-    // subtract 1 from each port so they can be used as indeces in the arrays
-    BatterPort--;
-    FielderPort--;
+    u8 BatterPort = MSSBGetTeamPort(guard, aBattingTeam);
+    u8 FielderPort = MSSBGetTeamPort(guard, aFieldingTeam);
 
     std::string batterName = "";
     std::string fielderName = "";
@@ -620,21 +568,21 @@ void DisplayPlayerNames(const Core::CPUThreadGuard& guard)
     // Run using Local Players
     else
     {
-      if (BatterPort < 4)
+      if (IsHumanPort(BatterPort))
         batterName = LocalPlayerList[BatterPort];
-      if (FielderPort < 4)
+      if (IsHumanPort(FielderPort))
         fielderName = LocalPlayerList[FielderPort];
     }
 
     // check for valid user
-    if (batterName != "")
+    if (batterName != "" && IsHumanPort(BatterPort))
     {
       OSD::AddTypedMessage(OSD::MessageType::CurrentBatter, fmt::format("B: {}", batterName),
                            OSD::Duration::SHORT, portColor[BatterPort]);
     }
 
     // check for valid user
-    if (fielderName != "")
+    if (fielderName != "" && IsHumanPort(FielderPort))
     {
       OSD::AddTypedMessage(OSD::MessageType::CurrentFielder,
                            fmt::format("F: {}", fielderName), OSD::Duration::SHORT,
@@ -672,7 +620,7 @@ void DisplayPlayerNames(const Core::CPUThreadGuard& guard)
     {
       GolferName = NetPlay::NetPlayClient::GetNetplayNames(GolferPort);
     }
-    else if (GolferPort < 4)
+    else if (IsHumanPort(GolferPort))
     {
       GolferName = LocalPlayerList[GolferPort];
     }
@@ -735,10 +683,9 @@ void MSBQuickMatchBattingOrderMsg(const Core::CPUThreadGuard& guard, MSBQuickMat
       OSD::MessageType::QuickMatchBattingOrder,
       fmt::format
       (
-        "Quick Match Setup V1 \n"
-        "The match will load to 1 pitch before the crash.\n"
-        "Everything will be set automatically.\n"
-        "Just press A and ignore the graphics.\n"
+        "Quick Match Setup V2\n"
+        "The match will load to 1 pitch before the crash/desync.\n"
+        "Everything will be set automatically."
       ), 
       OSD::Duration::NORMAL,
       OSD::Color::BLUE
@@ -758,33 +705,13 @@ float u32ToFloat(u32 value)
   return float_converter.fnum;
 }
 
-float ms_to_mph(float MetersPerSecond)
-{
-  return roundf(MetersPerSecond * 223.7) / 100;
-}
-
-float vectorMagnitude(float x, float y, float z)
-{
-  float sum = pow(x, 2) + pow(y, 2) + pow(z, 2);
-  return roundf(sqrt(sum) * 100) / 100;
-}
-
-float RoundZ(float num)
-{
-  if (num < 50 && num > -50)
-    num = 0;
-  return roundf(num);
-}
-
 void SetAvgPing(const Core::CPUThreadGuard& guard)
 {
   if (!NetPlay::IsNetPlayRunning())
     return;
 
-  // checks if GameID is set and that the end game flag hasn't been hit yet
-  bool inGame = PowerPC::MMU::HostRead_U32(guard, aGameId) != 0 /*&& PowerPC::MMU::HostRead_U8(aEndOfGameFlag) == 0*/ ?
-                    true :
-                    false;
+  // only average the ping while the stat tracker is recording a game
+  bool inGame = s_stat_tracker && s_stat_tracker->isGameInProgress();
   if (!inGame) {
     avgPing = 0;
     nPing = 0;
@@ -1789,7 +1716,7 @@ CPUThreadGuard::~CPUThreadGuard()
     PauseAndLock(m_system, false, m_was_unpaused);
 }
 
-void SetGameID(u32 gameID)
+void SetNetplayGameID(u64 gameID)
 {
   if (!s_stat_tracker)
   {
@@ -1797,7 +1724,7 @@ void SetGameID(u32 gameID)
     s_stat_tracker->init();
   }
 
-  s_stat_tracker->setGameID(gameID);
+  s_stat_tracker->setNetplayGameID(gameID);
 }
 
 std::optional<TagSet> GetActiveTagSet(bool netplay)
@@ -1873,6 +1800,11 @@ bool GameSupportsTagSets()
 int GetNextGolferID()
 {
   return nextGolferID;
+}
+
+bool IsHumanPort(int port)
+{
+  return port >= 0 && port < 4;
 }
 
 }  // namespace Core

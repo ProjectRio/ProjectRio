@@ -13,7 +13,7 @@ int main(int argc, const char** argv)
 
     [alert setMessageText:@"This updater is not meant to be launched directly."];
     [alert setAlertStyle:NSAlertStyleWarning];
-    [alert setInformativeText:@"Configure Auto-Update in Dolphin's settings instead."];
+    [alert setInformativeText:@"Configure Auto-Update in Project Rio's settings instead."];
     [alert runModal];
 
     return 1;

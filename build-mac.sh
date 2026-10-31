@@ -17,6 +17,12 @@ CMAKE_FLAGS+=' -DMACOS_CODE_SIGNING="OFF"'
 
 CMAKE_FLAGS+=' -DCMAKE_POLICY_VERSION_MINIMUM=3.5'
 
+# Always build the SDL in Externals/ rather than using Homebrew's. Homebrew's sdl2 (pulled in by
+# ffmpeg) is sdl2-compat, a shim that dlopen()s libSDL3 at runtime. fixup_bundle only follows link
+# dependencies, so the shim gets bundled without the SDL3 it needs and the app dies with
+# "Failed loading SDL3 library" on any Mac that doesn't have Homebrew's SDL3 installed.
+CMAKE_FLAGS+=' -DUSE_SYSTEM_SDL2=OFF'
+
 # Use ccache if available
 if command -v ccache &> /dev/null; then
     CMAKE_FLAGS+=' -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache'
@@ -26,6 +32,10 @@ mkdir -p build
 pushd build
 cmake ${CMAKE_FLAGS} ..
 cmake --build . --target dolphin-emu -- -j$(sysctl -n hw.logicalcpu)
+# The auto-updater. It ships as its own bundle next to ProjectRio.app, because that is where
+# AutoUpdateChecker::UpdaterPath() looks for it (GetExeDirectory() is the directory *containing*
+# the bundle on macOS). Both have to be in the release archive for updates to work.
+cmake --build . --target MacUpdater -- -j$(sysctl -n hw.logicalcpu)
 popd
 
 echo "Copying Sys files into the bundle"
@@ -199,3 +209,15 @@ codesign --force --sign - "${APP}"
 # missed signature on the main binary). --deep would re-hash every nested
 # Mach-O a second time — not worth the time on CI for ad-hoc builds.
 codesign --verify --strict --verbose=2 "${APP}"
+
+# Sign the updater too. It is a separate bundle beside ProjectRio.app rather than something nested
+# inside it, so the seal above does not cover it. It links everything statically and has no
+# embedded frameworks, so one pass over the bundle is enough.
+UPDATER="./build/Binaries/Project Rio Updater.app"
+if [ -d "${UPDATER}" ]; then
+    echo "Ad-hoc signing updater bundle..."
+    codesign --force --sign - "${UPDATER}"
+    codesign --verify --strict --verbose=2 "${UPDATER}"
+else
+    echo "Updater bundle not found, skipping (auto-update will fall back to a download prompt)."
+fi

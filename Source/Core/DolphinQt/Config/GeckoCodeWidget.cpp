@@ -43,6 +43,21 @@ GeckoCodeWidget::GeckoCodeWidget(std::string game_id, std::string gametdb_id, u1
   CreateWidgets();
   ConnectWidgets();
 
+  LoadCodes();
+}
+
+GeckoCodeWidget::~GeckoCodeWidget() = default;
+
+void GeckoCodeWidget::showEvent(QShowEvent* event)
+{
+  // This widget is kept alive between openings (the Mods dialog is created once and reused), so
+  // re-read the ini every time it's shown to pick up codes added since (e.g. by CGecko).
+  LoadCodes();
+  QWidget::showEvent(event);
+}
+
+void GeckoCodeWidget::LoadCodes()
+{
   if (!m_game_id.empty())
   {
     Common::IniFile game_ini_local;
@@ -58,8 +73,6 @@ GeckoCodeWidget::GeckoCodeWidget(std::string game_id, std::string gametdb_id, u1
 
   UpdateList();
 }
-
-GeckoCodeWidget::~GeckoCodeWidget() = default;
 
 void GeckoCodeWidget::CreateWidgets()
 {

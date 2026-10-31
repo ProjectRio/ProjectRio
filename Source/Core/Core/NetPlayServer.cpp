@@ -577,6 +577,14 @@ unsigned int NetPlayServer::OnDisconnect(const Client& player)
     m_start_pending = false;
   }
 
+  // don't keep a fast reset HUD sync waiting on a player who left
+  {
+    std::lock_guard lkg(m_crit.game);
+    m_fast_reset_hud_reports.erase(pid);
+    if (m_fast_reset_hud_pending.erase(pid) > 0)
+      FinishFastResetHUDSyncIfReady();
+  }
+
   sf::Packet spac;
   spac << MessageID::PlayerLeave;
   spac << pid;
@@ -763,12 +771,98 @@ void NetPlayServer::AdjustFastResetFromHUD(const bool load_from_hud)
   std::lock_guard lkg(m_crit.game);
   m_current_fast_reset_from_HUD_value = load_from_hud;
 
-  // tell clients to enable loading game from HUD
+  if (load_from_hud)
+    BeginFastResetHUDSync();
+  else
+    CancelFastResetHUDSync();
+
+  // Disabling takes effect on the clients right away. Enabling only asks every client to report
+  // its HUD file; the clients enable once the HUD to boot from has been picked.
   sf::Packet spac;
   spac << MessageID::FastResetFromHUD;
   spac << m_current_fast_reset_from_HUD_value;
 
   SendAsyncToClients(std::move(spac));
+}
+
+void NetPlayServer::BeginFastResetHUDSync()
+{
+  std::lock_guard lkg(m_crit.game);
+  std::lock_guard lkp(m_crit.players);
+
+  m_fast_reset_hud_reports.clear();
+  m_fast_reset_hud_pending.clear();
+  for (const auto& player : m_players)
+    m_fast_reset_hud_pending.insert(player.first);
+  m_fast_reset_hud_sync_active = true;
+}
+
+void NetPlayServer::CancelFastResetHUDSync()
+{
+  std::lock_guard lkg(m_crit.game);
+
+  m_fast_reset_hud_sync_active = false;
+  m_fast_reset_hud_pending.clear();
+  m_fast_reset_hud_reports.clear();
+}
+
+// called from ---NETPLAY--- thread
+void NetPlayServer::FinishFastResetHUDSyncIfReady()
+{
+  std::lock_guard lkg(m_crit.game);
+
+  if (!m_fast_reset_hud_sync_active || !m_fast_reset_hud_pending.empty())
+    return;
+
+  // Clients can hold different "latest" HUDs when they noticed a desync or crash at different
+  // times. Boot everyone from the earliest one, which every client is known to have reached.
+  // Event numbers only compare within one game, so HUDs from a different game than the
+  // reference (the host's, else the first valid one) are left out.
+  const FastResetHUDReport* selected = nullptr;
+  PlayerId selected_pid = 0;
+  const auto host_report = m_fast_reset_hud_reports.find(1);
+  if (host_report != m_fast_reset_hud_reports.end() && host_report->second.valid)
+  {
+    selected = &host_report->second;
+    selected_pid = host_report->first;
+  }
+  for (const auto& [pid, report] : m_fast_reset_hud_reports)
+  {
+    if (!report.valid)
+      continue;
+    if (!selected)
+    {
+      selected = &report;
+      selected_pid = pid;
+    }
+    else if (report.game_id == selected->game_id && report.event_order < selected->event_order)
+    {
+      selected = &report;
+      selected_pid = pid;
+    }
+  }
+
+  sf::Packet spac;
+  spac << MessageID::FastResetHUDSelected;
+  spac << (selected != nullptr);
+  if (selected)
+  {
+    std::string source_name;
+    {
+      std::lock_guard lkp(m_crit.players);
+      const auto it = m_players.find(selected_pid);
+      if (it != m_players.end())
+        source_name = it->second.name;
+    }
+    INFO_LOG_FMT(NETPLAY, "Fast reset: using the HUD of player {} (event {})", selected_pid,
+                 selected->event_num);
+    spac << source_name;
+    spac << selected->event_num;
+    spac << selected->hud_json;
+  }
+  SendToClients(spac);
+
+  CancelFastResetHUDSync();
 }
 
 void NetPlayServer::SetTagSet(bool exists, int tagset_id)
@@ -941,13 +1035,16 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
 
     case MessageID::GameID:
   {
-    u32 id;
-    packet >> id;
+    const u64 id = Common::PacketReadU64(packet);
 
-    // send codes to other clients
+    // only the host decides the game id
+    if (player.pid != 1)
+      break;
+
+    // send the host's game id to every client
     sf::Packet spac;
     spac << MessageID::GameID;
-    spac << id;
+    spac << sf::Uint64{id};
 
     SendToClients(spac);
   }
@@ -986,12 +1083,40 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
     bool load_from_hud;
     packet >> load_from_hud;
 
+    {
+      std::lock_guard lkg(m_crit.game);
+      m_current_fast_reset_from_HUD_value = load_from_hud;
+      if (load_from_hud)
+        BeginFastResetHUDSync();
+      else
+        CancelFastResetHUDSync();
+    }
+
     // send codes to other clients
     sf::Packet spac;
     spac << MessageID::FastResetFromHUD;
     spac << load_from_hud;
 
     SendToClients(spac);
+  }
+  break;
+
+  case MessageID::FastResetHUDReport:
+  {
+    FastResetHUDReport report;
+    packet >> report.valid;
+    packet >> report.game_id;
+    packet >> report.event_order;
+    packet >> report.event_num;
+    packet >> report.hud_json;
+
+    std::lock_guard lkg(m_crit.game);
+    // Only the reports asked for by the current sync count.
+    if (m_fast_reset_hud_sync_active && m_fast_reset_hud_pending.erase(player.pid) > 0)
+    {
+      m_fast_reset_hud_reports[player.pid] = std::move(report);
+      FinishFastResetHUDSyncIfReady();
+    }
   }
   break;
 
@@ -1670,7 +1795,10 @@ bool NetPlayServer::SetupNetSettings()
   settings.sync_gpu_min_distance = Config::Get(Config::MAIN_SYNC_GPU_MIN_DISTANCE);
   settings.sync_gpu_overclock = Config::Get(Config::MAIN_SYNC_GPU_OVERCLOCK);
   settings.jit_follow_branch = Config::Get(Config::MAIN_JIT_FOLLOW_BRANCH);
-  settings.fast_disc_speed = Config::Get(Config::MAIN_FAST_DISC_SPEED);
+  // Project Rio: always on. Emulated disc read timing otherwise depends on where each file sits
+  // on the disc, which differs between a good ISO, an NKit image and an extracted folder (all
+  // accepted as the same game), and the players would drift apart on every load.
+  settings.fast_disc_speed = true;
   settings.mmu = Config::Get(Config::MAIN_MMU);
   settings.fastmem = Config::Get(Config::MAIN_FASTMEM);
   settings.skip_ipl = Config::Get(Config::MAIN_SKIP_IPL) || !DoAllPlayersHaveIPLDump();
@@ -1741,6 +1869,18 @@ struct SaveSyncInfo
 bool NetPlayServer::RequestStartGame()
 {
   INFO_LOG_FMT(NETPLAY, "Start Game requested.");
+
+  {
+    // Starting now would boot the clients that already have the fast reset state without the
+    // ones that are still waiting for it.
+    std::lock_guard lkg(m_crit.game);
+    if (m_fast_reset_hud_sync_active)
+    {
+      m_dialog->AppendChat(
+          "Fast Reset is still syncing the game state between players. Try again in a moment.");
+      return false;
+    }
+  }
 
   if (!SetupNetSettings())
     return false;
