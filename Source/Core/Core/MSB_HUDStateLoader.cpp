@@ -48,12 +48,12 @@ bool GetHUDEventInfo(const std::string& json, HUDEventInfo& outInfo)
 
     outInfo.eventNum = eventNum;
     outInfo.eventOrder = event * 2 + ((eventNum.find('b', digits) != std::string::npos) ? 1 : 0);
-    // The game id is written with the writer's locale (digit grouping), so keep the digits only.
+    // Hex from 2.3.0. Older game ids have the writer's locale (digit grouping), so keep the digits only.
     outInfo.gameId.clear();
     if (j.count("GameID") && j.at("GameID").is<std::string>())
     {
         for (const char c : j.at("GameID").get<std::string>())
-            if (c >= '0' && c <= '9')
+            if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))
                 outInfo.gameId += c;
     }
     return true;

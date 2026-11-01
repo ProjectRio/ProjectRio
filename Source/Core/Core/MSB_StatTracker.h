@@ -1251,6 +1251,7 @@ public:
     //arrive before this client's game has started
     std::atomic<u64> m_pending_netplay_game_id{0};
     u64 generateGameID();
+    static std::string gameIDToHex(u64 game_id);
     void applyPendingNetplayGameID();
     bool hasLeftGame(const Core::CPUThreadGuard& guard);
 
