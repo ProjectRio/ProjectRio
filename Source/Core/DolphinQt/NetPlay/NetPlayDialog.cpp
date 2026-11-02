@@ -794,10 +794,13 @@ void NetPlayDialog::show(bool use_traversal)
   // server/client may exist yet and we don't want to fire the broadcast handlers here.
   m_night_stadium->blockSignals(true);
   m_disable_replays->blockSignals(true);
+  m_fast_reset_from_HUD->blockSignals(true);
   m_night_stadium->setChecked(false);
   m_disable_replays->setChecked(false);
+  m_fast_reset_from_HUD->setChecked(false);
   m_night_stadium->blockSignals(false);
   m_disable_replays->blockSignals(false);
+  m_fast_reset_from_HUD->blockSignals(false);
 
   UpdateLobbyLayout();
   SetOptionsEnabled(true);
