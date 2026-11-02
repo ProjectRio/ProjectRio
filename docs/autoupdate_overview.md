@@ -35,8 +35,9 @@ Set `RIO_REV_STR` in Common/Version.cpp to the new version, merge, then push a t
 that version (`2.3.0`, or `v2.3.0`). The "Draft release" job in .github/workflows/main.yml builds
 every platform, refuses to continue if the tag and `RIO_REV_STR` differ, and attaches the builds
 to a **draft** GitHub release under the names below. The same job refuses to continue unless
-Source/Core/UpdaterCommon/UpdateKeys.h holds two to five production keys, and no workflow or build
-script enables the updater's test key.
+Source/Core/UpdaterCommon/UpdateKeys.h holds two to five production keys, no workflow or build
+script enables the updater's test key, and Tools/check-no-test-key.py finds no trace of that key in
+the finished Windows and macOS zips.
 
 CI can't sign, so the draft can't install anywhere yet. On a maintainer's own machine:
 

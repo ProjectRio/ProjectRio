@@ -404,6 +404,14 @@ jobs:
           one '*.AppImage'                    Project_Rio_Linux.AppImage
           one '*.flatpak'                     Project_Rio_SteamOS.flatpak
           ls -l release
+      - name: "Check the packages don't contain the test key"
+        # Checks the finished builds, so it catches the test key however it got enabled. The
+        # installer is compressed and can't be searched, but it's built from what the zip holds.
+        run: |
+          python3 Tools/check-no-test-key.py Source/Core/UpdaterCommon/UpdateKeys.h \
+            release/Project_Rio_Windows.zip \
+            release/Project_Rio_macOS-Apple_silicon.zip \
+            release/Project_Rio_macOS-Intel.zip
       - name: "Create draft release"
         env:
           GH_TOKEN: ${{ github.token }}
