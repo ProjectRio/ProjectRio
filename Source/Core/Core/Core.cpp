@@ -246,7 +246,7 @@ void RunRioFunctions(const Core::CPUThreadGuard& guard)
     if (NetPlay::IsNetPlayRunning())
     {
       // send checksum for desync detection
-      if (frame % 60)
+      if (frame % 60 == 0)
       {
         u8 checksumId = (frame / 60) & 0xF;
         u32 checksum = PowerPC::MMU::HostRead_U32(guard, 0x802EBFB8);
