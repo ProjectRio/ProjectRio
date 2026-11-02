@@ -390,7 +390,8 @@ void resetNetplayGameOptions()
 //     m_game_info.fastResetFromHUD (the "Loaded from HUD" stat) and then immediately clears it,
 //     so the flag applies only to the game it was booted for and never leaks into the next game
 //     played in the same session.
-//   - Also cleared by the UI/netplay paths above when fast reset is disabled or emulation stops.
+//   - Also cleared by the UI/netplay paths above when fast reset is disabled or emulation stops,
+//     and when a netplay session ends (~NetPlayClient).
 bool isLoadingFromHUD = false;
 MSBQuickMatchGameState HUDState;
 

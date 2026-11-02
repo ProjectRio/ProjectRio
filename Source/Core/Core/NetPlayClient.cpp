@@ -114,6 +114,9 @@ NetPlayClient::~NetPlayClient()
     m_dialog->HideChunkedProgressDialog();
   }
 
+  // a HUD selected in this lobby must not boot the next local game
+  Gecko::setFastResetFromHUD(false);
+
   if (m_server)
   {
     Disconnect();
