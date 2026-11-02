@@ -40,6 +40,7 @@
     <ClCompile Include="$(ExternalsDir)gtest\googletest\src\gtest-all.cc" />
     <!--Lump all of the tests (and supporting code) into one binary-->
     <ClCompile Include="UnitTestsMain.cpp" />
+    <ClCompile Include="Common\AutoUpdateTest.cpp" />
     <ClCompile Include="Common\BitFieldTest.cpp" />
     <ClCompile Include="Common\BitSetTest.cpp" />
     <ClCompile Include="Common\BitUtilsTest.cpp" />
@@ -59,6 +60,7 @@
     <ClCompile Include="Common\SPSCQueueTest.cpp" />
     <ClCompile Include="Common\StringUtilTest.cpp" />
     <ClCompile Include="Common\SwapTest.cpp" />
+    <ClCompile Include="Common\UpdateManifestTest.cpp" />
     <ClCompile Include="Core\CoreTimingTest.cpp" />
     <ClCompile Include="Core\DSP\DSPAcceleratorTest.cpp" />
     <ClCompile Include="Core\DSP\DSPAssemblyTest.cpp" />
@@ -101,7 +103,9 @@
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(ExternalsDir)Bochs_disasm\exports.props" />
+  <Import Project="$(ExternalsDir)ed25519\exports.props" />
   <Import Project="$(ExternalsDir)fmt\exports.props" />
+  <Import Project="$(ExternalsDir)mbedtls\exports.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

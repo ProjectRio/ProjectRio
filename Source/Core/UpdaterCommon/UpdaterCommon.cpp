@@ -3,7 +3,6 @@
 
 #include "UpdaterCommon/UpdaterCommon.h"
 
-#include <array>
 #include <optional>
 #include <set>
 #include <string>
@@ -11,7 +10,6 @@
 #include <vector>
 
 #include <OptionParser.h>
-#include <mbedtls/sha256.h>
 #include <mz_compat.h>
 
 #include "Common/CommonFuncs.h"
@@ -23,8 +21,12 @@
 #include "Common/MinizipUtil.h"
 #include "Common/ScopeGuard.h"
 #include "Common/StringUtil.h"
+#include "Common/Version.h"
+#include "UICommon/AutoUpdate.h"
 #include "UpdaterCommon/Platform.h"
 #include "UpdaterCommon/UI.h"
+#include "UpdaterCommon/UpdateKeys.h"
+#include "UpdaterCommon/UpdateManifest.h"
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -59,10 +61,10 @@ struct Options
 {
   std::string package_url;
   std::string package_filename;
-  // "sha256:<hex>" as reported by the GitHub API, empty if the release did not provide one.
-  std::string package_digest;
-  // The version being installed (the release's tag). Optional; only used for bookkeeping.
+  // The version being installed (the release's tag). The signed manifest has to agree with it.
   std::string package_version;
+  std::string manifest_url;
+  std::string manifest_signature_url;
   std::string install_base_path;
   std::optional<std::string> binary_to_restart;
   std::optional<u32> parent_pid;
@@ -73,19 +75,6 @@ bool ProgressCallback(s64 total, s64 now, s64, s64)
 {
   UI::SetCurrentProgress(static_cast<int>(now), static_cast<int>(total));
   return true;
-}
-
-std::string HexEncode(const u8* buffer, size_t size)
-{
-  std::string out(size * 2, '\0');
-
-  for (size_t i = 0; i < size; ++i)
-  {
-    out[2 * i] = "0123456789abcdef"[buffer[i] >> 4];
-    out[2 * i + 1] = "0123456789abcdef"[buffer[i] & 0xF];
-  }
-
-  return out;
 }
 
 void FlushLog()
@@ -102,41 +91,103 @@ void FatalError(const std::string& message)
   UI::Error(message);
 }
 
-// The GitHub API reports a sha256 for every release asset. That is not a signature - it arrives in
-// the same TLS-protected response as the download URL - but it does catch a truncated or corrupted
-// download before we unpack or execute it.
-bool VerifyDigest(const std::vector<u8>& data, const std::string& digest)
+// Downloads a file into memory, giving up once it passes the size limit for signature files.
+std::optional<std::vector<u8>> DownloadSmallFile(const std::string& url)
 {
-  constexpr std::string_view SHA256_PREFIX = "sha256:";
+  const auto within_limit = [](s64, s64 now, s64, s64) {
+    return now <= static_cast<s64>(UpdateManifest::MAX_FILE_SIZE);
+  };
 
-  if (digest.empty())
+  Common::HttpRequest req(std::chrono::seconds(30), within_limit);
+  req.FollowRedirects(10);  // Release assets redirect to GitHub's asset host.
+  const auto resp = req.Get(url);
+  if (!resp)
   {
-    LogToFile("Release provided no digest for this package, skipping verification.\n");
-    return true;
+    LogToFile("Download of %s failed.\n", url.c_str());
+    return std::nullopt;
   }
-  if (!digest.starts_with(SHA256_PREFIX))
+  // The progress callback doesn't run for every chunk, so it can't be the only check.
+  if (resp->size() > UpdateManifest::MAX_FILE_SIZE)
   {
-    LogToFile("Unsupported package digest \"%s\".\n", digest.c_str());
-    return false;
+    LogToFile("%s is too large.\n", url.c_str());
+    return std::nullopt;
   }
-
-  std::array<u8, 32> hash;
-  mbedtls_sha256_ret(data.data(), data.size(), hash.data(), false);
-  const std::string computed = HexEncode(hash.data(), hash.size());
-
-  std::string expected(digest.substr(SHA256_PREFIX.size()));
-  Common::ToLower(&expected);
-  if (computed != expected)
-  {
-    LogToFile("Package hash mismatch: expected %s, got %s.\n", expected.c_str(), computed.c_str());
-    return false;
-  }
-
-  LogToFile("Package hash %s verified.\n", computed.c_str());
-  return true;
+  return resp;
 }
 
-bool DownloadPackage(const Options& opts, const std::string& destination)
+// Makes sure a maintainer signed this release, and that it is the update we were asked to install.
+// Returns the package's entry in the manifest. See "Signing" in docs/autoupdate_overview.md.
+std::optional<UpdateManifest::Asset> VerifyRelease(const Options& opts)
+{
+  UI::SetDescription("Verifying update...");
+  UI::SetTotalMarquee(true);
+  UI::SetCurrentMarquee(true);
+
+  const auto signature = DownloadSmallFile(opts.manifest_signature_url);
+  if (!signature)
+    return std::nullopt;
+  const auto manifest_bytes = DownloadSmallFile(opts.manifest_url);
+  if (!manifest_bytes)
+    return std::nullopt;
+
+  std::string error;
+  const std::string_view signature_text(reinterpret_cast<const char*>(signature->data()),
+                                        signature->size());
+  if (!UpdateManifest::VerifySignatures(*manifest_bytes, signature_text, TrustedUpdateKeys(),
+                                        &error))
+  {
+    LogToFile("Signature check failed: %s\n", error.c_str());
+    return std::nullopt;
+  }
+
+  // Nothing in the manifest can be trusted, or even looked at, before this point.
+  const std::string_view manifest_text(reinterpret_cast<const char*>(manifest_bytes->data()),
+                                       manifest_bytes->size());
+  const std::optional<UpdateManifest::Manifest> manifest =
+      UpdateManifest::Parse(manifest_text, &error);
+  if (!manifest)
+  {
+    LogToFile("Manifest check failed: %s\n", error.c_str());
+    return std::nullopt;
+  }
+
+  if (!AutoUpdateChecker::IsSameVersion(manifest->version, opts.package_version))
+  {
+    LogToFile("Manifest is for version %s, but we were asked to install %s.\n",
+              manifest->version.c_str(), opts.package_version.c_str());
+    return std::nullopt;
+  }
+
+  // The version we were built as, not anything from the command line: a validly signed old release
+  // must not be installable as a downgrade.
+  const std::string& installed_version = Common::GetRioRevStr();
+  if (!AutoUpdateChecker::IsNewerVersion(manifest->version, installed_version))
+  {
+    LogToFile("Manifest version %s is not newer than the installed %s.\n",
+              manifest->version.c_str(), installed_version.c_str());
+    return std::nullopt;
+  }
+
+  const auto asset = manifest->assets.find(opts.package_filename);
+  if (asset == manifest->assets.end())
+  {
+    LogToFile("Manifest does not list %s.\n", opts.package_filename.c_str());
+    return std::nullopt;
+  }
+
+  LogToFile("Signature and manifest verified for version %s.\n", manifest->version.c_str());
+  return asset->second;
+}
+
+enum class DownloadResult
+{
+  Success,
+  DownloadFailed,
+  VerificationFailed,
+};
+
+DownloadResult DownloadPackage(const Options& opts, const UpdateManifest::Asset& asset,
+                               const std::string& destination)
 {
   UI::SetDescription("Downloading " + opts.package_filename + "...");
   UI::SetTotalMarquee(true);
@@ -150,21 +201,26 @@ bool DownloadPackage(const Options& opts, const std::string& destination)
   if (!resp)
   {
     LogToFile("Download of %s failed.\n", opts.package_url.c_str());
-    return false;
+    return DownloadResult::DownloadFailed;
   }
 
   UI::SetDescription("Verifying " + opts.package_filename + "...");
   UI::SetCurrentMarquee(true);
-  if (!VerifyDigest(*resp, opts.package_digest))
-    return false;
+  std::string error;
+  if (!UpdateManifest::VerifyPackage(asset, *resp, &error))
+  {
+    LogToFile("%s\n", error.c_str());
+    return DownloadResult::VerificationFailed;
+  }
+  LogToFile("Package hash %s verified.\n", asset.sha256.c_str());
 
   File::IOFile out(destination, "wb");
   if (!out || !out.WriteBytes(resp->data(), resp->size()))
   {
     LogToFile("Could not write %s.\n", destination.c_str());
-    return false;
+    return DownloadResult::DownloadFailed;
   }
-  return true;
+  return DownloadResult::Success;
 }
 
 #ifdef __APPLE__
@@ -752,14 +808,18 @@ std::optional<Options> ParseCommandLine(std::vector<std::string>& args)
       .dest("package-filename")
       .help("Filename of the release asset. Its extension decides how it gets installed.")
       .metavar("NAME");
-  parser.add_option("--package-digest")
-      .dest("package-digest")
-      .help("(optional) \"sha256:<hex>\" digest the downloaded package must match.")
-      .metavar("DIGEST");
   parser.add_option("--package-version")
       .dest("package-version")
-      .help("(optional) Version being installed, e.g. the release's tag.")
+      .help("Version being installed, e.g. the release's tag.")
       .metavar("VERSION");
+  parser.add_option("--manifest-url")
+      .dest("manifest-url")
+      .help("URL of the release's update_manifest.json.")
+      .metavar("URL");
+  parser.add_option("--manifest-signature-url")
+      .dest("manifest-signature-url")
+      .help("URL of the release's update_manifest.sig.")
+      .metavar("URL");
   parser.add_option("--install-base-path")
       .dest("install-base-path")
       .help("Base path of the Project Rio install to be updated.")
@@ -784,7 +844,8 @@ std::optional<Options> ParseCommandLine(std::vector<std::string>& args)
   Options opts;
 
   // Required arguments.
-  std::vector<std::string> required{"package-url", "package-filename", "install-base-path"};
+  std::vector<std::string> required{"package-url",  "package-filename",       "package-version",
+                                    "manifest-url", "manifest-signature-url", "install-base-path"};
   for (const auto& req : required)
   {
     if (!options.is_set(req) || options[req].empty())
@@ -795,6 +856,9 @@ std::optional<Options> ParseCommandLine(std::vector<std::string>& args)
   }
   opts.package_url = options["package-url"];
   opts.package_filename = options["package-filename"];
+  opts.package_version = options["package-version"];
+  opts.manifest_url = options["manifest-url"];
+  opts.manifest_signature_url = options["manifest-signature-url"];
   opts.install_base_path = options["install-base-path"];
 
   // The filename is used to build a path in our temp directory, so make sure it is only a name.
@@ -803,15 +867,15 @@ std::optional<Options> ParseCommandLine(std::vector<std::string>& args)
   {
     return {};
   }
-  // The URL comes from the GitHub API, which only ever serves assets over https from github.com.
-  if (!opts.package_url.starts_with("https://github.com/"))
-    return {};
+  // The URLs come from the GitHub API, which only ever serves assets over https from github.com.
+  for (const std::string* const url :
+       {&opts.package_url, &opts.manifest_url, &opts.manifest_signature_url})
+  {
+    if (!url->starts_with("https://github.com/"))
+      return {};
+  }
 
   // Optional arguments.
-  if (options.is_set("package-digest"))
-    opts.package_digest = options["package-digest"];
-  if (options.is_set("package-version"))
-    opts.package_version = options["package-version"];
   if (options.is_set("binary-to-restart"))
     opts.binary_to_restart = options["binary-to-restart"];
   if (options.is_set("parent-pid"))
@@ -876,10 +940,22 @@ bool RunUpdater(std::vector<std::string> args)
   }
   Common::ScopeGuard temp_dir_guard{[&] { File::DeleteDirRecursively(temp_dir); }};
 
-  const std::string package_path = temp_dir + DIR_SEP + opts.package_filename;
-  if (!DownloadPackage(opts, package_path))
+  constexpr char VERIFICATION_FAILED[] = "Could not verify this update, so nothing was changed.";
+
+  const std::optional<UpdateManifest::Asset> asset = VerifyRelease(opts);
+  if (!asset)
   {
-    FatalError("Failed to download the update.");
+    FatalError(VERIFICATION_FAILED);
+    return false;
+  }
+
+  const std::string package_path = temp_dir + DIR_SEP + opts.package_filename;
+  const DownloadResult download_result = DownloadPackage(opts, *asset, package_path);
+  if (download_result != DownloadResult::Success)
+  {
+    FatalError(download_result == DownloadResult::VerificationFailed ?
+                   VERIFICATION_FAILED :
+                   "Failed to download the update.");
     return false;
   }
 

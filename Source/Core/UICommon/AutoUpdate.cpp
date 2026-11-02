@@ -48,6 +48,10 @@ bool s_update_triggered = false;
 // the version number, and the release assets are the packages we install.
 constexpr char UPDATE_REPO[] = "ProjectRio/ProjectRio";
 
+// Attached to every release by Tools/sign-release.py.
+constexpr char MANIFEST_NAME[] = "update_manifest.json";
+constexpr char MANIFEST_SIGNATURE_NAME[] = "update_manifest.sig";
+
 // Setting RIO_UPDATE_REPO (e.g. "someone/ProjectRio") checks and downloads from that repo's
 // releases instead, so the whole update flow can be tested against a throwaway release on a fork.
 std::string UpdateRepo()
@@ -129,45 +133,6 @@ void CleanupFromPreviousUpdate()
 
 #endif
 
-// Parses "2.3.0" (or "v2.3.0") into its numeric components. Returns nothing if the string is not
-// purely dot-separated numbers, so callers can fall back to comparing the strings as-is.
-std::optional<std::vector<u32>> ParseVersion(std::string_view version)
-{
-  if (version.starts_with('v') || version.starts_with('V'))
-    version.remove_prefix(1);
-  if (version.empty())
-    return std::nullopt;
-
-  std::vector<u32> components;
-  for (const std::string& part : SplitString(std::string(version), '.'))
-  {
-    u32 value;
-    if (!TryParse(part, &value, 10))
-      return std::nullopt;
-    components.push_back(value);
-  }
-  return components;
-}
-
-// True if the release tagged `candidate` is newer than the version we are running.
-bool IsNewerVersion(const std::string& candidate, const std::string& current)
-{
-  auto candidate_parts = ParseVersion(candidate);
-  auto current_parts = ParseVersion(current);
-  if (!candidate_parts || !current_parts)
-  {
-    // Not a version we know how to order (a dated tag, a hash, ...). Treat anything different as
-    // an update rather than silently never updating again.
-    return candidate != current;
-  }
-
-  // "2.3" and "2.3.0" are the same version, so pad both to the same length before comparing.
-  const size_t size = std::max(candidate_parts->size(), current_parts->size());
-  candidate_parts->resize(size, 0);
-  current_parts->resize(size, 0);
-  return *candidate_parts > *current_parts;
-}
-
 // Scores a release asset by how well it fits the platform we are running on. 0 means "not for this
 // platform", higher is a better match. Asset names have drifted between releases
 // (Project-Rio-Windows.exe, Project.Rio.Windows.zip, Project_Rio_Windows_Installer.exe, ...), so
@@ -214,7 +179,8 @@ int ScoreAssetName(std::string name)
 #endif
 }
 
-// Picks the best asset of a GitHub release for this platform, if the release has one at all.
+// Picks the best asset of a GitHub release for this platform, if the release has one at all, along
+// with the release's signature files. A release without those can't be installed.
 void SelectPackage(const picojson::array& assets, AutoUpdateChecker::NewVersionInformation* nvi)
 {
   int best_score = 0;
@@ -234,6 +200,15 @@ void SelectPackage(const picojson::array& assets, AutoUpdateChecker::NewVersionI
     const std::string& name = name_it->second.get<std::string>();
     const std::string& url = url_it->second.get<std::string>();
 
+    if (name == MANIFEST_NAME || name == MANIFEST_SIGNATURE_NAME)
+    {
+      if (url.starts_with(ReleaseAssetUrlPrefix()))
+        (name == MANIFEST_NAME ? nvi->manifest_url : nvi->manifest_signature_url) = url;
+      else
+        WARN_LOG_FMT(COMMON, "Auto-update: ignoring asset {} with unexpected URL {}", name, url);
+      continue;
+    }
+
     const int score = ScoreAssetName(name);
     if (score <= best_score)
       continue;
@@ -246,13 +221,76 @@ void SelectPackage(const picojson::array& assets, AutoUpdateChecker::NewVersionI
     best_score = score;
     nvi->package_url = url;
     nvi->package_filename = name;
-    nvi->package_digest.clear();
-    const auto digest_it = obj.find("digest");
-    if (digest_it != obj.end() && digest_it->second.is<std::string>())
-      nvi->package_digest = digest_it->second.get<std::string>();
+  }
+
+  if (nvi->manifest_url.empty() || nvi->manifest_signature_url.empty())
+  {
+    WARN_LOG_FMT(COMMON, "Auto-update: release is not signed, not offering to install it");
+    nvi->package_url.clear();
+    nvi->package_filename.clear();
   }
 }
 }  // namespace
+
+std::optional<std::vector<u32>> AutoUpdateChecker::ParseVersion(std::string_view version)
+{
+  if (version.starts_with('v') || version.starts_with('V'))
+    version.remove_prefix(1);
+  if (version.empty())
+    return std::nullopt;
+
+  // SplitString() drops a trailing empty part, which "2.3." must not get away with.
+  if (version.ends_with('.'))
+    return std::nullopt;
+
+  std::vector<u32> components;
+  for (const std::string& part : SplitString(std::string(version), '.'))
+  {
+    // TryParse() goes by strtoull, which also takes an empty string, whitespace and a sign.
+    const auto is_digit = [](char c) { return c >= '0' && c <= '9'; };
+    u32 value;
+    if (part.empty() || !std::all_of(part.begin(), part.end(), is_digit) ||
+        !TryParse(part, &value, 10))
+    {
+      return std::nullopt;
+    }
+    components.push_back(value);
+  }
+  return components;
+}
+
+bool AutoUpdateChecker::IsNewerVersion(const std::string& candidate, const std::string& current)
+{
+  auto candidate_parts = ParseVersion(candidate);
+  auto current_parts = ParseVersion(current);
+  if (!candidate_parts || !current_parts)
+  {
+    // Not a version we know how to order (a dated tag, a hash, ...). The updater uses this to
+    // refuse older releases, so anything we can't order has to count as not newer.
+    WARN_LOG_FMT(COMMON, "Auto-update: can't compare versions \"{}\" and \"{}\"", candidate,
+                 current);
+    return false;
+  }
+
+  // "2.3" and "2.3.0" are the same version, so pad both to the same length before comparing.
+  const size_t size = std::max(candidate_parts->size(), current_parts->size());
+  candidate_parts->resize(size, 0);
+  current_parts->resize(size, 0);
+  return *candidate_parts > *current_parts;
+}
+
+bool AutoUpdateChecker::IsSameVersion(const std::string& first, const std::string& second)
+{
+  auto first_parts = ParseVersion(first);
+  auto second_parts = ParseVersion(second);
+  if (!first_parts || !second_parts)
+    return false;
+
+  const size_t size = std::max(first_parts->size(), second_parts->size());
+  first_parts->resize(size, 0);
+  second_parts->resize(size, 0);
+  return *first_parts == *second_parts;
+}
 
 bool AutoUpdateChecker::SystemSupportsAutoUpdates()
 {
@@ -367,8 +405,9 @@ void AutoUpdateChecker::TriggerUpdate(const AutoUpdateChecker::NewVersionInforma
   std::map<std::string, std::string> updater_flags;
   updater_flags["package-url"] = info.package_url;
   updater_flags["package-filename"] = info.package_filename;
-  updater_flags["package-digest"] = info.package_digest;
   updater_flags["package-version"] = info.new_shortrev;
+  updater_flags["manifest-url"] = info.manifest_url;
+  updater_flags["manifest-signature-url"] = info.manifest_signature_url;
   updater_flags["parent-pid"] = std::to_string(GetOwnProcessId());
   updater_flags["install-base-path"] = File::GetExeDirectory();
   updater_flags["log-file"] = File::GetUserPath(D_LOGS_IDX) + UPDATER_LOG_FILE;

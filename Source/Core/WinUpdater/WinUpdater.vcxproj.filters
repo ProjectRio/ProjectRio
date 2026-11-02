@@ -4,6 +4,7 @@
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="WinUI.cpp" />
     <ClCompile Include="..\UpdaterCommon\UpdaterCommon.cpp" />
+    <ClCompile Include="..\UpdaterCommon\UpdateManifest.cpp" />
     <ClCompile Include="Platform.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -13,5 +14,7 @@
     <ClInclude Include="..\UpdaterCommon\Platform.h" />
     <ClInclude Include="..\UpdaterCommon\UI.h" />
     <ClInclude Include="..\UpdaterCommon\UpdaterCommon.h" />
+    <ClInclude Include="..\UpdaterCommon\UpdateKeys.h" />
+    <ClInclude Include="..\UpdaterCommon\UpdateManifest.h" />
   </ItemGroup>
 </Project>

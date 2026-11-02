@@ -560,6 +560,8 @@
     <ClInclude Include="UICommon\USBUtils.h" />
     <ClInclude Include="UpdaterCommon\UI.h" />
     <ClInclude Include="UpdaterCommon\UpdaterCommon.h" />
+    <ClInclude Include="UpdaterCommon\UpdateKeys.h" />
+    <ClInclude Include="UpdaterCommon\UpdateManifest.h" />
     <ClInclude Include="VideoBackends\D3D\D3DBase.h" />
     <ClInclude Include="VideoBackends\D3D\D3DBoundingBox.h" />
     <ClInclude Include="VideoBackends\D3D\D3DPerfQuery.h" />
@@ -1213,6 +1215,7 @@
     <ClCompile Include="UICommon\UICommon.cpp" />
     <ClCompile Include="UICommon\USBUtils.cpp" />
     <ClCompile Include="UpdaterCommon\UpdaterCommon.cpp" />
+    <ClCompile Include="UpdaterCommon\UpdateManifest.cpp" />
     <ClCompile Include="VideoBackends\D3D\D3DBase.cpp" />
     <ClCompile Include="VideoBackends\D3D\D3DBoundingBox.cpp" />
     <ClCompile Include="VideoBackends\D3D\D3DMain.cpp" />

@@ -342,6 +342,23 @@ jobs:
             echo "::error::Tag ${GITHUB_REF_NAME} does not match RIO_REV_STR \"${CODE_VERSION}\" in Source/Core/Common/Version.cpp"
             exit 1
           fi
+      - name: "Check the update keys"
+        # Installs only trust the keys they were built with, so a release without enough real keys
+        # couldn't install the next one. The test key must never be enabled for a release, and the
+        # brackets keep this step from matching its own text.
+        run: |
+          KEY_FILE=Source/Core/UpdaterCommon/UpdateKeys.h
+          KEYS=$(grep -c '// rio-update-key' "${KEY_FILE}" || true)
+          echo "update keys: ${KEYS}"
+          if [ "${KEYS}" -lt 2 ] || [ "${KEYS}" -gt 5 ]; then
+            echo "::error::${KEY_FILE} needs between two and five production keys, found ${KEYS}"
+            exit 1
+          fi
+          if grep -rnE '[R]IO_UPDATER_TEST_KEYS|[R]ioUpdaterTestKeys' .github/workflows build-*.sh \
+              build-windows.bat BuildMacOSUniversalBinary.py CMakeSettings.json Tools/flatpak.yml; then
+            echo "::error::A workflow or build script enables the updater's test key"
+            exit 1
+          fi
       - name: "Download builds"
         # Through the API rather than actions/download-artifact: some jobs upload a zipped folder
         # and others (the AppImage, the Flatpak) a single raw file, and this handles both.
