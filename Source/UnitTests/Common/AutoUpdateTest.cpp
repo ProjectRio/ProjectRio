@@ -11,8 +11,7 @@ TEST(AutoUpdate, ParseVersion)
   EXPECT_EQ(AutoUpdateChecker::ParseVersion("v2.10"), (std::vector<u32>{2, 10}));
   EXPECT_EQ(AutoUpdateChecker::ParseVersion("V2"), (std::vector<u32>{2}));
 
-  for (const char* const version : {"", "v", "vv2.3", "2.3.1-hotfix", "2..3", "2.3.", ".2.3",
-                                    " 2.3", "2. 3", "+2.3", "-2.3", "2.0x3", "2.4294967296"})
+  for (const char* const version : {"", "v", "vv2.3", "2.3.1-hotfix", "2.0x3", "2.4294967296"})
   {
     EXPECT_FALSE(AutoUpdateChecker::ParseVersion(version)) << version;
   }

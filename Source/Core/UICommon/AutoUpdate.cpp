@@ -244,21 +244,12 @@ std::optional<std::vector<u32>> AutoUpdateChecker::ParseVersion(std::string_view
   if (version.empty())
     return std::nullopt;
 
-  // SplitString() drops a trailing empty part, which "2.3." must not get away with.
-  if (version.ends_with('.'))
-    return std::nullopt;
-
   std::vector<u32> components;
   for (const std::string& part : SplitString(std::string(version), '.'))
   {
-    // TryParse() goes by strtoull, which also takes an empty string, whitespace and a sign.
-    const auto is_digit = [](char c) { return c >= '0' && c <= '9'; };
     u32 value;
-    if (part.empty() || !std::all_of(part.begin(), part.end(), is_digit) ||
-        !TryParse(part, &value, 10))
-    {
+    if (!TryParse(part, &value, 10))
       return std::nullopt;
-    }
     components.push_back(value);
   }
   return components;

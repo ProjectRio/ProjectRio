@@ -16,6 +16,8 @@ namespace Common
 #else
 #define BUILD_TYPE_STR ""
 #endif
+// Always exactly three numbers. CI only builds tags in that form, and the auto-updater can't order
+// a version with a suffix such as -hotfix, so it would never offer that release.
 #define RIO_REV_STR "2.3.0"
 
 const std::string& GetScmRevStr()

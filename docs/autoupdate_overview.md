@@ -58,7 +58,9 @@ ignore the signature, but signing 2.3.0 proves the process before an update depe
 
 ## Release requirements
 The release job takes care of these. For auto-update to work, a release needs:
-* A tag name that is just the version number, e.g. `2.3.0` (a leading `v` is also accepted). It has
+* A tag name that is just the version number, e.g. `2.3.0` (a leading `v` is also accepted). It
+  must be exactly three numbers: CI doesn't build any other form, and a suffix such as `-hotfix`
+  breaks version comparison, so installs would never be offered that release. The tag has
   to match `RIO_REV_STR` in Common/Version.cpp in the build being released — if the tag is bumped
   but `RIO_REV_STR` isn't, the updated build still reports the old version and prompts to install
   the same release on every launch.

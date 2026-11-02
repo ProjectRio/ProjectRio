@@ -164,8 +164,8 @@ def command_sign(args):
         raise SigningError(f"{directory} is not a folder.")
     if args.version.startswith(("v", "V")):
         raise SigningError("--version must not start with a v.")
-    if not re.fullmatch(r"\d+(\.\d+)*", args.version):
-        raise SigningError("--version must be numbers separated by dots.")
+    if not re.fullmatch(r"\d+\.\d+\.\d+", args.version):
+        raise SigningError("--version must be three numbers, such as 2.3.1.")
 
     assets = hash_assets(directory)
     if not args.allow_missing_assets:
