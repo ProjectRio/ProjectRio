@@ -1266,6 +1266,19 @@ void NetPlayDialog::OnPlayerDisconnect(const std::string& player)
   DisplayMessage(tr("%1 has left").arg(QString::fromStdString(player)), "darkcyan");
 }
 
+void NetPlayDialog::OnPadMappingChanged()
+{
+  // the selected HUD's player names and second player port came from the old pad map, so make the
+  // host select it again. the box is disabled while a game runs, which leaves a running game alone.
+  QueueOnObject(this, [this] {
+    if (m_fast_reset_from_HUD->isVisible() && m_fast_reset_from_HUD->isEnabled() &&
+        m_fast_reset_from_HUD->isChecked())
+    {
+      m_fast_reset_from_HUD->setChecked(false);
+    }
+  });
+}
+
 void NetPlayDialog::OnPadBufferChanged(u32 buffer)
 {
   QueueOnObject(this, [this, buffer] {

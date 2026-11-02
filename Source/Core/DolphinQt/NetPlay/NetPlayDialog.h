@@ -63,6 +63,7 @@ public:
   void OnMsgPowerButton() override;
   void OnPlayerConnect(const std::string& player) override;
   void OnPlayerDisconnect(const std::string& player) override;
+  void OnPadMappingChanged() override;
   void OnPadBufferChanged(u32 buffer) override;
   void OnHostInputAuthorityChanged(bool enabled) override;
   void OnDesync(u32 frame, const std::string& player) override;

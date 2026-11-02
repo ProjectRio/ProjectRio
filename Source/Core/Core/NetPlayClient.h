@@ -10,6 +10,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <string>
 #include <thread>
@@ -70,6 +71,7 @@ public:
   virtual void OnMsgPowerButton() = 0;
   virtual void OnPlayerConnect(const std::string& player) = 0;
   virtual void OnPlayerDisconnect(const std::string& player) = 0;
+  virtual void OnPadMappingChanged() = 0;
   virtual void OnPadBufferChanged(u32 buffer) = 0;
   virtual void OnHostInputAuthorityChanged(bool enabled) = 0;
   virtual void OnDesync(u32 frame, const std::string& player) = 0;
@@ -374,7 +376,8 @@ private:
   void OnDisableReplaysMsg(sf::Packet& packet);
   void OnFastResetFromHUDMsg(sf::Packet& packet);
   void OnFastResetHUDSelectedMsg(sf::Packet& packet);
-  void GetFastResetPlayerNames(std::string& p1_username, std::string& p2_username) const;
+  std::optional<u8> GetFastResetPlayerNames(std::string& p1_username,
+                                            std::string& p2_username) const;
 
   // Result of validating our own HUD file for the last fast reset request, shown if no player
   // turns out to have a usable HUD.
