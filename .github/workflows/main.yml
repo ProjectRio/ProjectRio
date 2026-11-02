@@ -310,6 +310,12 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+      - name: Stamp the revision into the manifest
+        # flatpak-builder works from a copy of the source that may not have .git, and netplay only
+        # accepts an exact revision match, so tell the build which commit this is.
+        run: |
+          sed -i "/^      - -DDISTRIBUTOR=Project Rio$/a\      - -DRIO_SCM_REVISION=${GITHUB_SHA}" Tools/flatpak.yml
+          grep -q "RIO_SCM_REVISION=${GITHUB_SHA}" Tools/flatpak.yml
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@bf5cafdfd97dcf5a89c7475bbc86a616e1f86acb # v6.7
         with:
