@@ -296,11 +296,11 @@ void AutoGolfMode(const Core::CPUThreadGuard& guard)
 }
 
 // the game stores which team (0 or 1) is batting/fielding; this converts that to the team's port
-// returns 0->3 for a human player. anything higher is a CPU or an invalid team
+// returns 0->3 for a human player, and 0xFF for a CPU or an invalid team
 static u8 MSSBGetTeamPort(const Core::CPUThreadGuard& guard, u32 aTeam)
 {
   u32 team = PowerPC::MMU::HostRead_U32(guard, aTeam);
-  if (team > 1)
+  if (team > 1 || PowerPC::MMU::HostRead_U8(guard, aTeamIsCPU + team) != 0)
     return 0xFF;
 
   return static_cast<u8>(PowerPC::MMU::HostRead_U32(guard, aTeamPorts + (4 * team)));

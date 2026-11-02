@@ -266,7 +266,8 @@ bool GameSupportsTagSets();
 static const u32 aRelState = 0x800E877C;
 static const u32 aBattingTeam = 0x80892990;   // team index (0 or 1), swaps each half inning
 static const u32 aFieldingTeam = 0x80892994;  // team index (0 or 1), swaps each half inning
-static const u32 aTeamPorts = 0x80892A78;     // u32[2], port (0->3) of each team; >= 4 is CPU
+static const u32 aTeamPorts = 0x80892A78;     // u32[2], port (0->3) of each team. Also 0->3 for a CPU team, so check aTeamIsCPU
+static const u32 aTeamIsCPU = 0x80892ACA;     // u8[2], 1 if the team is CPU controlled
 static const u32 aIsField = 0x8089389B;
 static const u32 aIsInGame = 0x80871A6D;
 static const u32 aContactMade = 0x808909A1;
