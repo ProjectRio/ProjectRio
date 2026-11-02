@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <mutex>
 #include <optional>
 
@@ -164,8 +165,8 @@ static std::optional<Config::ConfigChangedCallbackID> s_config_callback_id = std
 static bool s_is_adapter_wanted = false;
 static std::array<bool, SerialInterface::MAX_SI_CHANNELS> s_config_rumble_enabled{};
 
-static u64 s_consecutive_slow_transfers = 0;
-static double s_read_rate = 0.0;
+// Successful reads from the adapter. Written by the read thread, read by the config dialog.
+static std::atomic<u64> s_read_count = 0;
 
 static void ReadThreadFunc()
 {
@@ -203,8 +204,6 @@ static void ReadThreadFunc()
   // Reset rumble once on initial reading
   ResetRumble();
 
-  s_read_rate = 0.0;
-
   while (s_read_adapter_thread_running.IsSet())
   {
 #if GCADAPTER_USE_LIBUSB_IMPLEMENTATION
@@ -212,25 +211,11 @@ static void ReadThreadFunc()
 
     int payload_size = 0;
 
-    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
-
     int error = libusb_interrupt_transfer(s_handle, s_endpoint_in, input_buffer.data(),
                                           int(input_buffer.size()), &payload_size, USB_TIMEOUT_MS);
 
-    std::chrono::high_resolution_clock::time_point now = std::chrono::high_resolution_clock::now();
-
-    double elapsed_ms = std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count() / 1000000.0;
-
-    if (elapsed_ms > 15.0)
-    {
-      s_consecutive_slow_transfers++;
-    }
-    else
-    {
-      s_consecutive_slow_transfers = 0;
-    }
-
-    s_read_rate = elapsed_ms;
+    if (error == LIBUSB_SUCCESS)
+      s_read_count.fetch_add(1, std::memory_order_relaxed);
 
     if (error != LIBUSB_SUCCESS)
     {
@@ -507,9 +492,9 @@ void StopScanThread()
   }
 }
 
-double ReadRate()
+u64 ReadCount()
 {
-  return s_read_rate;
+  return s_read_count.load(std::memory_order_relaxed);
 }
 
 static void Setup()

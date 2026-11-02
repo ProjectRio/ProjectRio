@@ -6,6 +6,7 @@
 #include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QLabel>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include "Core/Config/MainSettings.h"
@@ -36,13 +37,17 @@ void GCPadWiiUConfigDialog::CreateLayout()
 
   m_layout = new QVBoxLayout();
   m_status_label = new QLabel();
-  m_poll_rate_label = new QLabel();
+  m_poll_rate_label = new QLabel(tr("Poll Rate: N/A"));
+  m_poll_rate_timer = new QTimer(this);
   m_rumble = new QCheckBox(tr("Enable Rumble"));
   m_simulate_bongos = new QCheckBox(tr("Simulate DK Bongos"));
   m_button_box = new QDialogButtonBox(QDialogButtonBox::Ok);
 
   UpdateAdapterStatus();
-  UpdatePollRate();
+
+  m_last_read_count = GCAdapter::ReadCount();
+  m_poll_rate_elapsed.start();
+  m_poll_rate_timer->start(1000);
 
   auto callback = [this] { QueueOnObject(this, &GCPadWiiUConfigDialog::UpdateAdapterStatus); };
   GCAdapter::SetAdapterCallback(callback);
@@ -61,6 +66,7 @@ void GCPadWiiUConfigDialog::ConnectWidgets()
   connect(m_rumble, &QCheckBox::toggled, this, &GCPadWiiUConfigDialog::SaveSettings);
   connect(m_simulate_bongos, &QCheckBox::toggled, this, &GCPadWiiUConfigDialog::SaveSettings);
   connect(m_button_box, &QDialogButtonBox::accepted, this, &GCPadWiiUConfigDialog::accept);
+  connect(m_poll_rate_timer, &QTimer::timeout, this, &GCPadWiiUConfigDialog::UpdatePollRate);
 }
 
 void GCPadWiiUConfigDialog::UpdateAdapterStatus()
@@ -91,8 +97,19 @@ void GCPadWiiUConfigDialog::UpdateAdapterStatus()
 
 void GCPadWiiUConfigDialog::UpdatePollRate()
 {
-  QString poll_rate_text = tr("Poll Rate: %1 hz").arg(1000.0 / GCAdapter::ReadRate());
-  m_poll_rate_label->setText(poll_rate_text);
+  const u64 read_count = GCAdapter::ReadCount();
+  const u64 reads = read_count - m_last_read_count;
+  const qint64 elapsed_ms = m_poll_rate_elapsed.restart();
+  m_last_read_count = read_count;
+
+  // no reads means there's no adapter, or it isn't in use
+  if (reads == 0 || elapsed_ms <= 0)
+  {
+    m_poll_rate_label->setText(tr("Poll Rate: N/A"));
+    return;
+  }
+
+  m_poll_rate_label->setText(tr("Poll Rate: %1 Hz").arg(qRound(reads * 1000.0 / elapsed_ms)));
 }
 
 void GCPadWiiUConfigDialog::LoadSettings()
