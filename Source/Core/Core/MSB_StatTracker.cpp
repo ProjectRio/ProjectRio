@@ -1181,7 +1181,7 @@ std::string StatTracker::getStatJSON(bool inDecode, bool hide_riokey){
     //=== Events === 
     json_stream << "  \"Events\": [\n";
     for (auto event_map_iter = m_game_info.events.begin(); event_map_iter != m_game_info.events.end(); event_map_iter++) {
-        u8 event_num = event_map_iter->first;
+        u16 event_num = event_map_iter->first;
         Event& event = event_map_iter->second;
 
         //Don't log events with inning == 0. Means game has crashed/quit and this is an empty event
