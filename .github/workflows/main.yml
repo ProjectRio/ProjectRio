@@ -17,6 +17,10 @@ on:
       - "**.md"
       - "**.ini"
 
+# The release job asks for what it needs on top of this.
+permissions:
+  contents: read
+
 jobs:
   windows:
     strategy:
@@ -33,7 +37,7 @@ jobs:
     runs-on: windows-2022
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v2
+        uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2.8.0
         with:
           submodules: recursive
       - name: 'Fetch Git Tags'
@@ -45,8 +49,8 @@ jobs:
           echo "GIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "GIT_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
           echo "CURR_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
-      - uses: seanmiddleditch/gha-setup-ninja@master
-      - uses: egor-tensin/vs-shell@v2
+      - uses: seanmiddleditch/gha-setup-ninja@3b1f8f94a2f8254bd26914c4ab9474d4f0015f67 # v6
+      - uses: egor-tensin/vs-shell@7710434f30f873ff4ab78184b74cc576a10726d6 # v2.2.3
       - name: "Build ${{ matrix.build_type }} Dolphin"
         shell: cmd
         working-directory: ${{ github.workspace }}
@@ -85,7 +89,7 @@ jobs:
           mv "Installer/projectrio-x64-${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-installer.exe" "artifact/${FILE_NAME}.exe"
       - name: "Publish"
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ matrix.artifact_name }}
           path: "./artifact/"
@@ -102,7 +106,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v2
+        uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2.8.0
         with:
           submodules: recursive
       - name: 'Fetch Git Tags'
@@ -166,7 +170,7 @@ jobs:
             libudev-dev \
             libsystemd-dev
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@5ebbd400eff9e74630f759d94ddd7b6c26299639 # v1.2.20
         with:
           create-symlink: true
       - name: "Build ${{ matrix.build_type }} Project Rio"
@@ -180,7 +184,7 @@ jobs:
           git config core.fileMode false ; bash ./build-appimage.sh
       - name: "Publish"
         if: success()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.artifact_name }}
           path: ./build/Binaries/${{ matrix.artifact_name }}.AppImage
@@ -201,7 +205,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v2
+        uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2.8.0
         with:
           submodules: recursive
       - name: "Fetch Git Tags"
@@ -212,18 +216,18 @@ jobs:
           echo "GIT_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
           echo "CURR_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
       - name: "Set up Python"
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
         with:
           python-version: "3.11"
       - name: "Cache Homebrew downloads"
-        uses: actions/cache@v3
+        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3.5.0
         with:
           path: ~/Library/Caches/Homebrew
           key: ${{ runner.os }}-${{ matrix.arch }}-brew-${{ hashFiles('.github/workflows/main.yml') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-brew-
       - name: "Cache ccache"
-        uses: actions/cache@v3
+        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3.5.0
         with:
           path: ~/.ccache
           key: ${{ runner.os }}-${{ matrix.arch }}-ccache-${{ github.sha }}
@@ -286,7 +290,7 @@ jobs:
           mv "${FILE_NAME}" ../../artifact/
       - name: "Publish"
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ matrix.artifact_name }}
           path: "./artifact/"
@@ -306,7 +310,7 @@ jobs:
             artifact_name: ProjectRio-steamOS
     steps:
       - name: Checkout (with submodules)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
           fetch-depth: 1
@@ -336,7 +340,7 @@ jobs:
       actions: read
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: "Check the tag matches the version in the code"
         # A build reports RIO_REV_STR as its version. If the tag is ahead of it, every updated
         # install still looks out of date and offers the same update on every launch.
