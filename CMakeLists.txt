@@ -25,6 +25,9 @@ endif()
 # Minimum OS X version.
 # This is inserted into the Info.plist as well.
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0.0" CACHE STRING "")
+# The oldest macOS the bundle says it runs on, which the updater also checks. This is higher than
+# the deployment target because the Qt libraries we bundle need macOS 14.
+set(RIO_MACOS_MINIMUM_VERSION "14.0")
 
 set(CMAKE_USER_MAKE_RULES_OVERRIDE "CMake/FlagsOverride.cmake")
 
