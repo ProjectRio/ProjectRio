@@ -1258,7 +1258,12 @@ void NetPlayDialog::OnPlayerConnect(const std::string& player)
 
   // if a new player joins, uncheck the fast reset from HUD box to prevent desyncs.
   if (m_fast_reset_from_HUD->isVisible() && m_fast_reset_from_HUD->isChecked()) // only reset if visible to avoid errors when not playing MSSB.
-    m_fast_reset_from_HUD->setChecked(false);  
+  {
+    DisplayMessage(tr("Fast Reset turned off because a player joined. Check it again to reload the "
+                      "game state."),
+                   "coral");
+    m_fast_reset_from_HUD->setChecked(false);
+  }
 }
 
 void NetPlayDialog::OnPlayerDisconnect(const std::string& player)
@@ -1274,6 +1279,9 @@ void NetPlayDialog::OnPadMappingChanged()
     if (m_fast_reset_from_HUD->isVisible() && m_fast_reset_from_HUD->isEnabled() &&
         m_fast_reset_from_HUD->isChecked())
     {
+      DisplayMessage(tr("Fast Reset turned off because the ports changed. Check it again to reload "
+                        "the game state."),
+                     "coral");
       m_fast_reset_from_HUD->setChecked(false);
     }
   });
