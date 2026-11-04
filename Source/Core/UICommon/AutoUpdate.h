@@ -62,12 +62,13 @@ public:
   };
 
   // Starts the updater process, which will wait in the background until the current process exits.
+  // Returns false if it couldn't be started, in which case the user has been told.
   enum class RestartMode
   {
     NO_RESTART_AFTER_UPDATE = 0,
     RESTART_AFTER_UPDATE,
   };
-  void TriggerUpdate(const NewVersionInformation& info, RestartMode restart_mode);
+  bool TriggerUpdate(const NewVersionInformation& info, RestartMode restart_mode);
 
 protected:
   virtual void OnUpdateAvailable(const NewVersionInformation& info) = 0;

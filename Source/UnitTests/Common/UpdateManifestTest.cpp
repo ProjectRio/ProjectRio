@@ -12,8 +12,11 @@
 #include <gtest/gtest.h>
 #include <mbedtls/base64.h>
 
+#include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
+#include "Common/FileUtil.h"
 #include "Common/StringUtil.h"
+#include "UpdaterCommon/MoveIntoPlace.h"
 #include "UpdaterCommon/UpdateManifest.h"
 
 using namespace UpdateManifest;
@@ -414,4 +417,94 @@ TEST(UpdateManifest, FileFromSigningTool)
   EXPECT_TRUE(
       VerifyPackage(manifest->assets.at("Project_Rio_Windows.zip"), Bytes(TOOL_PACKAGE), &error))
       << error;
+}
+
+namespace
+{
+class MoveIntoPlaceTest : public testing::Test
+{
+protected:
+  void SetUp() override
+  {
+    m_root = File::CreateTempDir();
+    ASSERT_FALSE(m_root.empty());
+    m_source = m_root + DIR_SEP + "source";
+    m_install = m_root + DIR_SEP + "install";
+    m_backup = m_root + DIR_SEP + "backup";
+    ASSERT_TRUE(File::CreateFullPath(m_source + DIR_SEP));
+    ASSERT_TRUE(File::CreateFullPath(m_install + DIR_SEP));
+  }
+  void TearDown() override { File::DeleteDirRecursively(m_root); }
+
+  static void Write(const std::string& path, const std::string& contents)
+  {
+    ASSERT_TRUE(File::CreateFullPath(path));
+    ASSERT_TRUE(File::WriteStringToFile(path, contents));
+  }
+  static std::string Read(const std::string& path)
+  {
+    std::string contents;
+    File::ReadFileToString(path, contents);
+    return contents;
+  }
+
+  std::string m_root;
+  std::string m_source;
+  std::string m_install;
+  std::string m_backup;
+};
+}  // namespace
+
+TEST_F(MoveIntoPlaceTest, ReplacesAndAddsFiles)
+{
+  Write(m_install + "/a.txt", "old a");
+  Write(m_install + "/kept.txt", "kept");
+  Write(m_source + "/a.txt", "new a");
+  Write(m_source + "/Sys/b.txt", "new b");
+
+  std::string error;
+  ASSERT_TRUE(UpdateInstall::MoveIntoPlace(m_source, m_install, m_backup, {"a.txt", "Sys/b.txt"},
+                                           &error))
+      << error;
+
+  EXPECT_EQ(Read(m_install + "/a.txt"), "new a");
+  EXPECT_EQ(Read(m_install + "/Sys/b.txt"), "new b");
+  EXPECT_EQ(Read(m_install + "/kept.txt"), "kept");
+  EXPECT_EQ(Read(m_backup + "/a.txt"), "old a");
+}
+
+TEST_F(MoveIntoPlaceTest, FailureRestoresTheInstall)
+{
+  Write(m_install + "/a.txt", "old a");
+  Write(m_install + "/Sys/b.txt", "old b");
+  Write(m_install + "/c.txt", "old c");
+  Write(m_source + "/a.txt", "new a");
+  Write(m_source + "/new.txt", "new file");
+  Write(m_source + "/Sys/b.txt", "new b");
+  // c.txt isn't in the source, so moving it fails after the others have been done.
+
+  std::string error;
+  EXPECT_FALSE(UpdateInstall::MoveIntoPlace(m_source, m_install, m_backup,
+                                            {"a.txt", "new.txt", "Sys/b.txt", "c.txt"}, &error));
+
+  EXPECT_NE(error.find("c.txt"), std::string::npos);
+  EXPECT_EQ(Read(m_install + "/a.txt"), "old a");
+  EXPECT_EQ(Read(m_install + "/Sys/b.txt"), "old b");
+  EXPECT_EQ(Read(m_install + "/c.txt"), "old c");
+  EXPECT_FALSE(File::Exists(m_install + "/new.txt"));
+}
+
+TEST_F(MoveIntoPlaceTest, ReplacesAndRestoresWholeBundles)
+{
+  Write(m_install + "/One.app/Contents/old.txt", "old one");
+  Write(m_install + "/Two.app/Contents/old.txt", "old two");
+  Write(m_source + "/One.app/Contents/new.txt", "new one");
+
+  std::string error;
+  EXPECT_FALSE(UpdateInstall::MoveIntoPlace(m_source, m_install, m_backup, {"One.app", "Two.app"},
+                                            &error));
+
+  EXPECT_EQ(Read(m_install + "/One.app/Contents/old.txt"), "old one");
+  EXPECT_FALSE(File::Exists(m_install + "/One.app/Contents/new.txt"));
+  EXPECT_EQ(Read(m_install + "/Two.app/Contents/old.txt"), "old two");
 }

@@ -23,6 +23,7 @@
 #include "Common/StringUtil.h"
 #include "Common/Version.h"
 #include "UICommon/AutoUpdate.h"
+#include "UpdaterCommon/MoveIntoPlace.h"
 #include "UpdaterCommon/Platform.h"
 #include "UpdaterCommon/UI.h"
 #include "UpdaterCommon/UpdateKeys.h"
@@ -380,6 +381,29 @@ std::string StagingPath([[maybe_unused]] const Options& opts,
 #endif
 }
 
+// Holds what an update replaces until it has finished, next to the install so moves are renames.
+constexpr char UPDATE_BACKUP_DIR[] = ".projectrio-update-old";
+
+// Puts `items`, relative to `source_path`, in the install. If that fails the install goes back to
+// how it was, so a full disk or a locked file can't leave a mix of two versions.
+bool ReplaceInstalledFiles(const std::string& source_path, const std::string& install_base_path,
+                           const std::vector<std::string>& items)
+{
+  const std::string backup_path = install_base_path + DIR_SEP + UPDATE_BACKUP_DIR;
+  if (File::IsDirectory(backup_path))
+    File::DeleteDirRecursively(backup_path);
+
+  std::string error;
+  if (!UpdateInstall::MoveIntoPlace(source_path, install_base_path, backup_path, items, &error))
+  {
+    LogToFile("%s\n", error.c_str());
+    return false;
+  }
+
+  File::DeleteDirRecursively(backup_path);
+  return true;
+}
+
 #ifdef __APPLE__
 // Moves each top level item of the package (the app bundle and the updater next to it) into place.
 // Bundles are replaced wholesale rather than merged, because macOS caches a Mach-O's code
@@ -394,32 +418,11 @@ bool SwapInPackage(const std::string& source_path, const std::string& install_ba
     return false;
   }
 
+  std::vector<std::string> items;
   for (const auto& child : contents.children)
-  {
-    const std::string destination = install_base_path + DIR_SEP + child.virtualName;
-    LogToFile("Replacing %s.\n", destination.c_str());
+    items.push_back(child.virtualName);
 
-    if (File::IsDirectory(destination))
-    {
-      if (!File::DeleteDirRecursively(destination))
-      {
-        LogToFile("Could not remove the existing %s.\n", destination.c_str());
-        return false;
-      }
-    }
-    else if (File::Exists(destination) && !File::Delete(destination))
-    {
-      LogToFile("Could not remove the existing %s.\n", destination.c_str());
-      return false;
-    }
-
-    if (!File::Rename(child.physicalName, destination))
-    {
-      LogToFile("Could not move %s into place.\n", child.virtualName.c_str());
-      return false;
-    }
-  }
-  return true;
+  return ReplaceInstalledFiles(source_path, install_base_path, items);
 }
 #endif
 
@@ -702,14 +705,10 @@ bool InstallArchive(const Options& opts, const std::string& package_path,
   std::string old_manifest;
   File::ReadFileToString(opts.install_base_path + DIR_SEP + INSTALL_MANIFEST, old_manifest);
 
-  if (!File::Copy(source_path, opts.install_base_path, true))
-  {
-    LogToFile("Could not copy %s over %s.\n", source_path.c_str(),
-              opts.install_base_path.c_str());
+  if (!ReplaceInstalledFiles(source_path, opts.install_base_path, new_files))
     return false;
-  }
 
-  // Only once the new version is fully in place: a failed copy must not also have deleted things.
+  // Only once the new version is fully in place: a failed move must not also have deleted things.
   RemoveStaleFiles(opts.install_base_path, old_manifest, new_files);
   WriteInstallManifest(opts.install_base_path, new_files);
 #endif
@@ -962,38 +961,41 @@ bool RunUpdater(std::vector<std::string> args)
 
   UI::SetVisible(true);
 
+  // Rio closed so that the update could run, so bring it back if the update doesn't go ahead.
+  const auto fail = [&opts](const std::string& message) {
+    FatalError(message);
+    if (opts.binary_to_restart)
+    {
+      FlushLog();
+      UI::LaunchApplication(opts.binary_to_restart.value());
+    }
+    return false;
+  };
+
   const std::string temp_dir = CreateUpdateTempDir(opts);
   if (temp_dir.empty())
-  {
-    FatalError("Could not create temporary directory. Aborting.");
-    return false;
-  }
+    return fail("Could not create temporary directory. Aborting.");
   Common::ScopeGuard temp_dir_guard{[&] { File::DeleteDirRecursively(temp_dir); }};
 
   constexpr char VERIFICATION_FAILED[] = "Could not verify this update, so nothing was changed.";
 
   const std::optional<UpdateManifest::Asset> asset = VerifyRelease(opts);
   if (!asset)
-  {
-    FatalError(VERIFICATION_FAILED);
-    return false;
-  }
+    return fail(VERIFICATION_FAILED);
 
   const std::string package_path = temp_dir + DIR_SEP + opts.package_filename;
   const DownloadResult download_result = DownloadPackage(opts, *asset, package_path);
   if (download_result != DownloadResult::Success)
   {
-    FatalError(download_result == DownloadResult::VerificationFailed ?
-                   VERIFICATION_FAILED :
-                   "Failed to download the update.");
-    return false;
+    return fail(download_result == DownloadResult::VerificationFailed ?
+                    VERIFICATION_FAILED :
+                    "Failed to download the update.");
   }
 
   if (!InstallPackage(opts, package_path, temp_dir))
   {
     RestoreUpdater();
-    FatalError("Failed to apply the update.");
-    return false;
+    return fail("Failed to apply the update.");
   }
 
   UI::ResetCurrentProgress();

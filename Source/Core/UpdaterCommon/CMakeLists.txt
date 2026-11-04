@@ -3,6 +3,8 @@ add_library(updatercommon
   UpdaterCommon.cpp
   UpdaterCommon.h
   UpdateKeys.h
+  MoveIntoPlace.cpp
+  MoveIntoPlace.h
   UpdateManifest.cpp
   UpdateManifest.h
 )

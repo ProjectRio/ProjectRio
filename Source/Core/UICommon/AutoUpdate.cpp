@@ -386,14 +386,14 @@ void AutoUpdateChecker::CheckForUpdate(std::string_view update_track,
   OnUpdateAvailable(nvi);
 }
 
-void AutoUpdateChecker::TriggerUpdate(const AutoUpdateChecker::NewVersionInformation& info,
+bool AutoUpdateChecker::TriggerUpdate(const AutoUpdateChecker::NewVersionInformation& info,
                                       const AutoUpdateChecker::RestartMode restart_mode)
 {
   // Check to make sure we don't already have an update triggered
   if (s_update_triggered)
   {
     WARN_LOG_FMT(COMMON, "Auto-update: received a redundant trigger request, ignoring");
-    return;
+    return true;
   }
 
   s_update_triggered = true;
@@ -417,12 +417,14 @@ void AutoUpdateChecker::TriggerUpdate(const AutoUpdateChecker::NewVersionInforma
   if (!File::Copy(UpdaterPath(), reloc_updater_path))
   {
     CriticalAlertFmtT("Unable to create updater copy.");
-    return;
+    s_update_triggered = false;
+    return false;
   }
   if (chmod((reloc_updater_path + UPDATER_CONTENT_PATH).c_str(), 0700) != 0)
   {
     CriticalAlertFmtT("Unable to set permissions on updater copy.");
-    return;
+    s_update_triggered = false;
+    return false;
   }
 #endif
 
@@ -444,6 +446,8 @@ void AutoUpdateChecker::TriggerUpdate(const AutoUpdateChecker::NewVersionInforma
   {
     const std::string error = Common::GetLastErrorString();
     CriticalAlertFmtT("Could not start updater process: {0}", error);
+    s_update_triggered = false;
+    return false;
   }
 #else
   // An argument vector rather than a shell, which would expand any $ or backtick in a path.
@@ -462,8 +466,13 @@ void AutoUpdateChecker::TriggerUpdate(const AutoUpdateChecker::NewVersionInforma
   {
     const std::string error = std::strerror(spawn_error);
     CriticalAlertFmtT("Could not start updater process: {0}", error);
+    s_update_triggered = false;
+    return false;
   }
 #endif
 
+  return true;
+#else
+  return false;
 #endif
 }

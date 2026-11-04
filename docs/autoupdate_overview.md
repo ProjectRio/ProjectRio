@@ -231,9 +231,11 @@ pushed.
     * Downloads the release asset, verifies its size and sha256 against the manifest, and only then
       writes it to a temporary directory. On Windows that's `.projectrio-update` inside the install,
       so it's only as writable as the install is, even when the updater runs elevated.
-    * Renames the running updater out of the way, then installs the package. If the install fails
-      the updater is moved back so the next attempt still has one.
+    * Renames the running updater out of the way, then installs the package. Each file an update
+      replaces is moved to `.projectrio-update-old` first. If the install fails everything is moved
+      back, including the updater, so the install stays as it was.
     * The temporary directory is deleted whether the update succeeded or not.
+    * If the update can't go ahead for any reason, Rio is started again.
 * If the user updated immediately (rather than waiting for Rio to close before starting
   the update), Rio restarts.
 * As part of Rio's normal startup process, the renamed updater is deleted.

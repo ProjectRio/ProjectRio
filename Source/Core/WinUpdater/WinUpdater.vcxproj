@@ -34,10 +34,12 @@
     <ClInclude Include="..\UpdaterCommon\UI.h" />
     <ClInclude Include="..\UpdaterCommon\UpdaterCommon.h" />
     <ClInclude Include="..\UpdaterCommon\UpdateKeys.h" />
+    <ClInclude Include="..\UpdaterCommon\MoveIntoPlace.h" />
     <ClInclude Include="..\UpdaterCommon\UpdateManifest.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\UpdaterCommon\UpdaterCommon.cpp" />
+    <ClCompile Include="..\UpdaterCommon\MoveIntoPlace.cpp" />
     <ClCompile Include="..\UpdaterCommon\UpdateManifest.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Platform.cpp" />
