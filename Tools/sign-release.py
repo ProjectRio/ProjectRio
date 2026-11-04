@@ -33,9 +33,6 @@ MAX_FILE_SIZE = 64 * 1024
 MAX_SIGNATURE_LINES = 8
 KEY_ID_LENGTH = 16
 
-# Counted by the "Draft release" job in .github/workflows/main.yml.
-KEY_MARKER = "// rio-update-key"
-
 
 class SigningError(Exception):
     pass
@@ -55,7 +52,7 @@ def update_keys_entry(public_hex):
     values = [f"0x{public_hex[i:i + 2]}" for i in range(0, len(public_hex), 2)]
     rows = [", ".join(values[i : i + 11]) for i in range(0, len(values), 11)]
     body = ",\n         ".join(rows)
-    return f"    UpdateManifest::PublicKey{{\n        {{{body}}}}},  {KEY_MARKER}"
+    return f"    UpdateManifest::PublicKey{{\n        {{{body}}}}},  // key {key_id(public_hex)}"
 
 
 def hash_file(path):

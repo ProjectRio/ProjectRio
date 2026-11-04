@@ -195,7 +195,15 @@ DownloadResult DownloadPackage(const Options& opts, const UpdateManifest::Asset&
 
   LogToFile("Downloading %s ...\n", opts.package_url.c_str());
 
-  Common::HttpRequest req(std::chrono::seconds(30), ProgressCallback);
+  // The signed manifest says how big the package is, so stop as soon as the download is bigger.
+  // VerifyPackage still checks the exact size afterwards, since this doesn't run for every chunk.
+  const auto within_size = [&asset](s64 total, s64 now, s64 ultotal, s64 ulnow) {
+    if (total > static_cast<s64>(asset.size) || now > static_cast<s64>(asset.size))
+      return false;
+    return ProgressCallback(total, now, ultotal, ulnow);
+  };
+
+  Common::HttpRequest req(std::chrono::seconds(30), within_size);
   req.FollowRedirects(10);  // Release assets redirect to GitHub's asset host.
   const auto resp = req.Get(opts.package_url);
   if (!resp)

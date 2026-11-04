@@ -348,15 +348,23 @@ jobs:
         # brackets keep this step from matching its own text.
         run: |
           KEY_FILE=Source/Core/UpdaterCommon/UpdateKeys.h
-          KEYS=$(grep -c '// rio-update-key' "${KEY_FILE}" || true)
+          KEYS=$(python3 Tools/count-update-keys.py "${KEY_FILE}")
           echo "update keys: ${KEYS}"
           if [ "${KEYS}" -lt 2 ] || [ "${KEYS}" -gt 5 ]; then
             echo "::error::${KEY_FILE} needs between two and five production keys, found ${KEYS}"
             exit 1
           fi
-          if grep -rnE '[R]IO_UPDATER_TEST_KEYS|[R]ioUpdaterTestKeys' .github/workflows build-*.sh \
-              build-windows.bat BuildMacOSUniversalBinary.py CMakeSettings.json Tools/flatpak.yml; then
+          # grep exits 1 for no match and 2 for an error, such as a listed file being renamed. Only 1
+          # is a pass, or a missing file would silently skip the check.
+          STATUS=0
+          grep -rnE '[R]IO_UPDATER_TEST_KEYS|[R]ioUpdaterTestKeys' .github/workflows build-*.sh \
+              build-windows.bat BuildMacOSUniversalBinary.py CMakeSettings.json Tools/flatpak.yml \
+              || STATUS=$?
+          if [ "${STATUS}" -eq 0 ]; then
             echo "::error::A workflow or build script enables the updater's test key"
+            exit 1
+          elif [ "${STATUS}" -ne 1 ]; then
+            echo "::error::Could not search the workflows and build scripts for the test key"
             exit 1
           fi
       - name: "Download builds"

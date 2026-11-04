@@ -12,8 +12,8 @@
 
 // The keys of the maintainers who can sign a release. An update installs if any one of them signed
 // it, and a build only ever trusts the keys it was compiled with. Tools/sign-release.py prints the
-// entry to add here, ending in the rio-update-key comment that the release job in
-// .github/workflows/main.yml counts. Keep that comment off of anything but a production key.
+// entry to add here. The release job in .github/workflows/main.yml requires two to five, counted
+// by Tools/count-update-keys.py, which also checks the array's size matches its entries.
 //
 // With entries in it, the list reads:
 //   inline constexpr std::array<UpdateManifest::PublicKey, 2> UPDATE_PUBLIC_KEYS{{
