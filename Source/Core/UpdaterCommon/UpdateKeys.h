@@ -20,7 +20,12 @@
 //       <first entry>
 //       <second entry>
 //   }};
-inline constexpr std::array<UpdateManifest::PublicKey, 0> UPDATE_PUBLIC_KEYS{};
+inline constexpr std::array<UpdateManifest::PublicKey, 1> UPDATE_PUBLIC_KEYS{{
+    UpdateManifest::PublicKey{
+        {0xbb, 0x04, 0x55, 0x24, 0xbc, 0xf2, 0x4b, 0xc6, 0x66, 0x27, 0x58,
+         0x4f, 0xba, 0xb9, 0x7d, 0xc2, 0xa4, 0x9d, 0x55, 0xe8, 0x1b, 0xdc,
+         0xf0, 0x98, 0xb6, 0x30, 0xdd, 0x59, 0xe3, 0x36, 0xd7, 0x16}},  // key bb045524bcf24bc6
+}};
 
 #ifdef RIO_UPDATER_TEST_KEYS
 // Throwaway key for testing the updater against a test release, instead of the keys above. It is
