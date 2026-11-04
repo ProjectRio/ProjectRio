@@ -186,8 +186,9 @@ std::vector<GeckoCode> LoadCodes(const Common::IniFile& globalIni, const Common:
   }
 
   // append the gecko codes to allow starting a game from the latest hud game state.
-  // HUDState is pre-populated by OnFastResetHUDSelectedMsg before the game starts.
-  if (isLoadingFromHUD)
+  // HUDState is pre-populated by OnFastResetHUDSelectedMsg before the game starts. The codes patch
+  // MSSB's code, so only add them for MSSB, whatever route set the flag.
+  if (isLoadingFromHUD && gameId == "GYQE01")
   {
           auto hudCodes = MSBQuickMatchCodeBuilder::MSB_GenerateQuickMatchSetupGeckoCode(HUDState);
           for (auto& code : hudCodes)

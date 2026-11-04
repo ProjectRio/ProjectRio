@@ -264,7 +264,7 @@ void RunRioFunctions(const Core::CPUThreadGuard& guard)
   }
 
   DisplayPlayerNames(guard);
-  if (Gecko::isLoadingFromHUD)
+  if (Gecko::isLoadingFromHUD && mGameBeingPlayed == GameName::MarioBaseball)
     MSBQuickMatchBattingOrderMsg(guard, Gecko::HUDState);
   AutoGolfMode(guard);
   TrainingMode(guard);
