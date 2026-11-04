@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <map>
 #include <optional>
 #include <string>
@@ -31,7 +32,10 @@
 #endif
 
 #ifdef __APPLE__
+#include <spawn.h>
 #include <sys/stat.h>
+
+extern char** environ;
 #endif
 
 #if defined(_WIN32) || defined(__APPLE__)
@@ -52,12 +56,15 @@ constexpr char UPDATE_REPO[] = "ProjectRio/ProjectRio";
 constexpr char MANIFEST_NAME[] = "update_manifest.json";
 constexpr char MANIFEST_SIGNATURE_NAME[] = "update_manifest.sig";
 
-// Setting RIO_UPDATE_REPO (e.g. "someone/ProjectRio") checks and downloads from that repo's
-// releases instead, so the whole update flow can be tested against a throwaway release on a fork.
+// In a build with RIO_UPDATER_TEST_KEYS, setting RIO_UPDATE_REPO (e.g. "someone/ProjectRio") checks
+// and downloads from that repo's releases instead, so the whole update flow can be tested against
+// a throwaway release on a fork.
 std::string UpdateRepo()
 {
+#ifdef RIO_UPDATER_TEST_KEYS
   if (const char* repo = std::getenv("RIO_UPDATE_REPO"); repo && *repo)
     return repo;
+#endif
   return UPDATE_REPO;
 }
 
@@ -98,13 +105,10 @@ std::string UpdaterPath(bool relocated = false)
 #endif
 }
 
+#ifdef _WIN32
 std::string MakeUpdaterCommandLine(const std::map<std::string, std::string>& flags)
 {
-#ifdef __APPLE__
-  std::string cmdline = "\"" + UpdaterPath(true) + UPDATER_CONTENT_PATH + "\"";
-#else
   std::string cmdline = UpdaterPath();
-#endif
 
   cmdline += " ";
 
@@ -117,6 +121,7 @@ std::string MakeUpdaterCommandLine(const std::map<std::string, std::string>& fla
   }
   return cmdline;
 }
+#endif
 
 void CleanupFromPreviousUpdate()
 {
@@ -431,10 +436,10 @@ void AutoUpdateChecker::TriggerUpdate(const AutoUpdateChecker::NewVersionInforma
 #endif
 
   // Run the updater!
+#ifdef _WIN32
   std::string command_line = MakeUpdaterCommandLine(updater_flags);
   INFO_LOG_FMT(COMMON, "Updater command line: {}", command_line);
 
-#ifdef _WIN32
   STARTUPINFO sinfo{.cb = sizeof(sinfo)};
   sinfo.dwFlags = STARTF_FORCEOFFFEEDBACK;  // No hourglass cursor after starting the process.
   PROCESS_INFORMATION pinfo;
@@ -450,9 +455,21 @@ void AutoUpdateChecker::TriggerUpdate(const AutoUpdateChecker::NewVersionInforma
     CriticalAlertFmtT("Could not start updater process: {0}", error);
   }
 #else
-  if (popen(command_line.c_str(), "r") == nullptr)
+  // An argument vector rather than a shell, which would expand any $ or backtick in a path.
+  std::vector<std::string> args{UpdaterPath(true) + UPDATER_CONTENT_PATH};
+  for (const auto& flag : updater_flags)
+    args.push_back("--" + flag.first + "=" + flag.second);
+
+  std::vector<char*> argv;
+  for (std::string& arg : args)
+    argv.push_back(arg.data());
+  argv.push_back(nullptr);
+
+  pid_t pid;
+  const int spawn_error = posix_spawn(&pid, argv[0], nullptr, nullptr, argv.data(), environ);
+  if (spawn_error != 0)
   {
-    const std::string error = Common::LastStrerrorString();
+    const std::string error = std::strerror(spawn_error);
     CriticalAlertFmtT("Could not start updater process: {0}", error);
   }
 #endif

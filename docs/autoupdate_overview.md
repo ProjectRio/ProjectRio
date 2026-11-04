@@ -224,7 +224,8 @@ pushed.
     * Downloads the signature and manifest, and runs the first seven checks listed under
       "Signing".
     * Downloads the release asset, verifies its size and sha256 against the manifest, and only then
-      writes it to a temporary directory.
+      writes it to a temporary directory. On Windows that's `.projectrio-update` inside the install,
+      so it's only as writable as the install is, even when the updater runs elevated.
     * Renames the running updater out of the way, then installs the package. If the install fails
       the updater is moved back so the next attempt still has one.
     * The temporary directory is deleted whether the update succeeded or not.
@@ -248,8 +249,9 @@ The whole flow can be run against a throwaway release without touching the real 
 4. Make a build with a lower `RIO_REV_STR` that trusts the test key: pass
    `-DRIO_UPDATER_TEST_KEYS=ON` to CMake, or `/p:RioUpdaterTestKeys=true` to MSBuild. Such a build
    trusts only the test key and must never be published, and a build without the option can't
-   accept a release signed with it. Run it with `RIO_UPDATE_REPO=<owner>/<repo>` set. That
-   redirects both the release check and the URL prefix downloads are allowed from. Use a copy of
+   accept a release signed with it. Run it with `RIO_UPDATE_REPO=<owner>/<repo>` set, which only
+   works in such a build. That redirects both the release check and the URL prefix downloads are
+   allowed from, and the updater accepts any `https://github.com/` URL. Use a copy of
    the install: on Windows the installer asset rewrites the Start menu/desktop shortcuts and the
    Add/Remove Programs entry even when it installs into another folder.
 5. Choose "Install Update". Rio should close, the updater should download, verify and install,
@@ -268,6 +270,6 @@ Updater.exe --package-url=<asset url> --package-filename=<asset name> \
             --install-base-path=<dir> --log-file=<path>
 ```
 
-It refuses any URL that isn't a `https://github.com/` one, and a release that doesn't pass the
+It refuses any URL outside ProjectRio/ProjectRio's releases, and a release that doesn't pass the
 checks under "Signing". Add `--parent-pid` to make it wait for
 a process to exit first, and `--binary-to-restart` to have it relaunch Rio afterwards.

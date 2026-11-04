@@ -868,10 +868,16 @@ std::optional<Options> ParseCommandLine(std::vector<std::string>& args)
     return {};
   }
   // The URLs come from the GitHub API, which only ever serves assets over https from github.com.
+#ifdef RIO_UPDATER_TEST_KEYS
+  constexpr std::string_view RELEASE_URL_PREFIX = "https://github.com/";  // Any test release.
+#else
+  constexpr std::string_view RELEASE_URL_PREFIX =
+      "https://github.com/ProjectRio/ProjectRio/releases/download/";
+#endif
   for (const std::string* const url :
        {&opts.package_url, &opts.manifest_url, &opts.manifest_signature_url})
   {
-    if (!url->starts_with("https://github.com/"))
+    if (!url->starts_with(RELEASE_URL_PREFIX))
       return {};
   }
 
@@ -884,6 +890,22 @@ std::optional<Options> ParseCommandLine(std::vector<std::string>& args)
     opts.log_file = options["log-file"];
 
   return opts;
+}
+
+// Where the update is downloaded and unpacked.
+std::string CreateUpdateTempDir([[maybe_unused]] const Options& opts)
+{
+#ifdef _WIN32
+  // Next to the install rather than in %TEMP%: the updater can be running elevated, and this is
+  // only as writable as the install itself. It's also on the same volume, so running out of disk
+  // space fails during unpacking, before the install has been touched.
+  const std::string path = opts.install_base_path + DIR_SEP + ".projectrio-update";
+  if (File::IsDirectory(path))
+    File::DeleteDirRecursively(path);
+  return File::CreateFullPath(path + DIR_SEP) ? path : "";
+#else
+  return File::CreateTempDir();
+#endif
 }
 }  // namespace
 
@@ -932,7 +954,7 @@ bool RunUpdater(std::vector<std::string> args)
 
   UI::SetVisible(true);
 
-  const std::string temp_dir = File::CreateTempDir();
+  const std::string temp_dir = CreateUpdateTempDir(opts);
   if (temp_dir.empty())
   {
     FatalError("Could not create temporary directory. Aborting.");
