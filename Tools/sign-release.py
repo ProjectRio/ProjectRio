@@ -114,6 +114,8 @@ def command_keygen(args):
     out = Path(args.out)
     if out.exists():
         raise SigningError(f"{out} already exists, refusing to overwrite it.")
+    if not out.parent.is_dir():
+        raise SigningError(f"The folder {out.parent} doesn't exist. Create it first.")
 
     passphrase = getpass.getpass("New passphrase: ")
     if not passphrase:
@@ -128,7 +130,10 @@ def command_keygen(args):
         serialization.BestAvailableEncryption(passphrase.encode("utf-8")),
     )
     # O_EXCL so that this can't replace a key, even if one appeared after the check above.
-    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
+    try:
+        fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
+    except OSError as e:
+        raise SigningError(f"Could not write {out}: {e.strerror}")
     with os.fdopen(fd, "wb") as f:
         f.write(pem)
 
