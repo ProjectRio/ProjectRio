@@ -53,6 +53,9 @@ CI can't sign, so the draft can't install anywhere yet. On a maintainer's own ma
 Then write the notes (they are shown in the update prompt) and publish it. Installs only see a
 release once it is published and not marked as a pre-release.
 
+Sign every release this way, including 2.3.0. 2.2.0 clients only get the website prompt and
+ignore the signature, but signing 2.3.0 proves the process before an update depends on it.
+
 ## Release requirements
 The release job takes care of these. For auto-update to work, a release needs:
 * A tag name that is just the version number, e.g. `2.3.0` (a leading `v` is also accepted). It has
