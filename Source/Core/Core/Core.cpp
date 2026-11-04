@@ -317,21 +317,22 @@ void MSSBCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer)
     return;
 
   // makes the player who paused the golfer. Toy Field pauses without setting aPausingSide
-  if (PowerPC::MMU::HostRead_U8(guard, aIsPaused) != 0 &&
-      PowerPC::MMU::HostRead_U8(guard, aGameMode) != 6 &&
-      PowerPC::MMU::HostRead_U8(guard, aPausingSide) == 0)
+  GameMode gameMode = static_cast<GameMode>(PowerPC::MMU::HostRead_U8(guard, aGameMode));
+  PausingSide pausingSide = static_cast<PausingSide>(PowerPC::MMU::HostRead_U8(guard, aPausingSide));
+  if (PowerPC::MMU::HostRead_U8(guard, aIsPaused) != 0 && gameMode != GameMode::ToyField &&
+      pausingSide == PausingSide::Fielding)
   {
     isField = true;
   }
 
   // add minigame functionality
-  int minigameId = PowerPC::MMU::HostRead_U8(guard, aMinigameID);
-  if (minigameId == 3 || minigameId == 1)
+  MinigameID minigameId = static_cast<MinigameID>(PowerPC::MMU::HostRead_U8(guard, aMinigameID));
+  if (minigameId == MinigameID::BarrelBatter || minigameId == MinigameID::BobombDerby)
   {
     BatterPort = PowerPC::MMU::HostRead_U8(guard, aBarrelBatterPort);
     isField = false;
   }
-  else if (minigameId == 2)
+  else if (minigameId == MinigameID::WallBall)
   {
     FielderPort = PowerPC::MMU::HostRead_U8(guard, aWallBallPort);
     isField = true;

@@ -8,6 +8,7 @@
 //For LocalPLayers
 #include "Common/CommonPaths.h"
 #include "Common/IniFile.h"
+#include "Core/Core.h"
 #include "Core/LocalPlayersConfig.h"
 #include "Common/Version.h"
 
@@ -171,10 +172,10 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
     //Only matches that play the game start movie are recorded (as before: not practice,
     //minigames or the title screen demo). Remember it for as long as the game rel stays loaded
-    const bool game_rel_loaded = PowerPC::MMU::HostRead_U16(guard, aLoadedRel) == 5;
+    const bool game_rel_loaded = static_cast<Core::RelNumber>(PowerPC::MMU::HostRead_U16(guard, aLoadedRel)) == Core::RelNumber::InGame;
     if (!game_rel_loaded)
         m_saw_game_start_movie = false;
-    else if (PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr) == 0x5)
+    else if (static_cast<GAME_CONTROL_STATE>(PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr)) == GAME_CONTROL_STATE::GAME_START_MOVIE)
         m_saw_game_start_movie = true;
 
     //Start recording on the frame the game flags the match as started (the first at bat).
@@ -1921,7 +1922,7 @@ void StatTracker::applyPendingNetplayGameID()
 // intact until the game rel is unloaded about 50 frames later, so the quit is logged in between
 bool StatTracker::hasLeftGame(const Core::CPUThreadGuard& guard)
 {
-  return PowerPC::MMU::HostRead_U16(guard, aLoadedRel) != 5 ||
+  return static_cast<Core::RelNumber>(PowerPC::MMU::HostRead_U16(guard, aLoadedRel)) != Core::RelNumber::InGame ||
          PowerPC::MMU::HostRead_U8(guard, aFramesExitingToMenu) != 0;
 }
 
@@ -2006,7 +2007,8 @@ void StatTracker::onGameQuit(const Core::CPUThreadGuard& guard){
     // only the team that opened the pause menu can quit from it. the owner isn't cleared when
     // the menu closes, so it only counts while the game is paused. the pause data is part of the
     // game rel, so it can't be read if the rel is already gone, e.g. after a reset
-    if (PowerPC::MMU::HostRead_U16(guard, aLoadedRel) == 5 && PowerPC::MMU::HostRead_U8(guard, aIsPaused) != 0)
+    if (static_cast<Core::RelNumber>(PowerPC::MMU::HostRead_U16(guard, aLoadedRel)) == Core::RelNumber::InGame &&
+        PowerPC::MMU::HostRead_U8(guard, aIsPaused) != 0)
     {
         const u32 quitter_team = PowerPC::MMU::HostRead_U32(guard, aPauseOwnerTeam);
         if (quitter_team <= 1)
