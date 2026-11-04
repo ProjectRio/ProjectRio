@@ -74,9 +74,9 @@ enum class GameMode : u8 {
   Minigames = 7,
 };
 
-// aMinigameID
+// aMinigameID. Not "None", which X11 defines as a macro
 enum class MinigameID : u8 {
-  None = 0,
+  NoMinigame = 0,
   BobombDerby = 1,
   WallBall = 2,
   BarrelBatter = 3,
