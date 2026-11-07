@@ -158,7 +158,7 @@ private:
   QMenu* m_game_digest_menu;
   QMenu* m_other_menu;
   //QMenu* m_gecko_menu;
-  QPushButton* m_game_button;
+  QLabel* m_game_label;
   QPushButton* m_start_button;
   QLabel* m_buffer_label;
   QSpinBox* m_buffer_size_box;

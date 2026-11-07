@@ -132,7 +132,7 @@ NetPlayDialog::~NetPlayDialog()
 void NetPlayDialog::CreateMainLayout()
 {
   m_main_layout = new QGridLayout;
-  m_game_button = new QPushButton;
+  m_game_label = new QLabel;
   m_start_button = new QPushButton(tr("Start"));
   m_buffer_size_box = new QSpinBox;
   m_buffer_size_box->setToolTip(tr(
@@ -261,15 +261,15 @@ void NetPlayDialog::CreateMainLayout()
   //       "users.\nWARNING: can cause lag on weaker systems."));
   //m_never_cull_action->setCheckable(true);
 
-  m_game_button->setDefault(false);
-  m_game_button->setAutoDefault(false);
+  m_game_label->setTextFormat(Qt::PlainText);
+  m_game_label->setAlignment(Qt::AlignCenter);
 
   m_savedata_load_only_action->setChecked(true);
   // m_sync_codes_action->setChecked(true);
 
   m_main_layout->setMenuBar(m_menu_bar);
 
-  m_main_layout->addWidget(m_game_button, 0, 0, 1, -1);
+  m_main_layout->addWidget(m_game_label, 0, 0, 1, -1);
   m_main_layout->addWidget(m_splitter, 1, 0, 1, -1);
 
   m_splitter->addWidget(m_chat_box);
@@ -459,22 +459,6 @@ void NetPlayDialog::ConnectWidgets()
 
   connect(m_start_button, &QPushButton::clicked, this, &NetPlayDialog::OnStart);
   connect(m_quit_button, &QPushButton::clicked, this, &NetPlayDialog::reject);
-
-  connect(m_game_button, &QPushButton::clicked, [this] {
-    GameListDialog gld(m_game_list_model, this);
-    SetQWidgetWindowDecorations(&gld);
-    if (gld.exec() == QDialog::Accepted)
-    {
-      Settings& settings = Settings::Instance();
-
-      const UICommon::GameFile& game = gld.GetSelectedGame();
-      const std::string netplay_name = m_game_list_model.GetNetPlayName(game);
-
-      settings.GetNetPlayServer()->ChangeGame(game.GetSyncIdentifier(), netplay_name);
-      Settings::GetQSettings().setValue(QStringLiteral("netplay/hostgame"),
-                                        QString::fromStdString(netplay_name));
-    }
-  });
 
   connect(&Settings::Instance(), &Settings::EmulationStateChanged, this, [this](Core::State state) {
     if (isVisible())
@@ -797,7 +781,6 @@ void NetPlayDialog::show(bool use_traversal)
   m_room_box->setHidden(!is_hosting);
   m_hostcode_label->setHidden(!is_hosting);
   m_hostcode_action_button->setHidden(!is_hosting);
-  m_game_button->setEnabled(is_hosting);
   m_kick_button->setEnabled(false);
   m_night_stadium->setHidden(!is_hosting);
   m_night_stadium->setEnabled(is_hosting);
@@ -811,10 +794,13 @@ void NetPlayDialog::show(bool use_traversal)
   // server/client may exist yet and we don't want to fire the broadcast handlers here.
   m_night_stadium->blockSignals(true);
   m_disable_replays->blockSignals(true);
+  m_fast_reset_from_HUD->blockSignals(true);
   m_night_stadium->setChecked(false);
   m_disable_replays->setChecked(false);
+  m_fast_reset_from_HUD->setChecked(false);
   m_night_stadium->blockSignals(false);
   m_disable_replays->blockSignals(false);
+  m_fast_reset_from_HUD->blockSignals(false);
 
   UpdateLobbyLayout();
   SetOptionsEnabled(true);
@@ -1094,7 +1080,7 @@ void NetPlayDialog::OnMsgChangeGame(const NetPlay::SyncIdentifier& sync_identifi
 {
   QString qname = QString::fromStdString(netplay_name);
   QueueOnObject(this, [this, qname, sync_identifier, netplay_name] {
-    m_game_button->setText(qname);
+    m_game_label->setText(qname);
     m_current_game_identifier = sync_identifier;
     m_current_game_name = netplay_name;
     UpdateDiscordPresence();
@@ -1154,7 +1140,6 @@ void NetPlayDialog::SetOptionsEnabled(bool enabled)
   if (Settings::Instance().GetNetPlayServer())
   {
     m_start_button->setEnabled(enabled);
-    m_game_button->setEnabled(enabled);
     m_savedata_none_action->setEnabled(enabled);
     m_savedata_load_only_action->setEnabled(enabled);
     m_savedata_load_and_write_action->setEnabled(enabled);
