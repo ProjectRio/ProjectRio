@@ -572,13 +572,6 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
             break;
         case (GAME_STATE::INGAME):
             if (m_event_state == EVENT_STATE::GAME_OVER){
-                //onGameQuit already logged the game and wrote the quit files
-                if (m_game_info.game_quit){
-                    std::cout << "INGAME->ENDGAME\n";
-                    m_game_state = GAME_STATE::ENDGAME_LOGGED;
-                    break;
-                }
-
                 logGameInfo(guard);
                 std::cout << "Logging Character Stats\n";
 
@@ -2017,7 +2010,6 @@ void StatTracker::onGameQuit(const Core::CPUThreadGuard& guard){
             m_game_info.quitter_team = (quitter_port == m_game_info.away_port);
         }
     }
-    m_game_info.game_quit = true;
     logGameInfo(guard);
 
     //Remove current event, wasn't finished
@@ -2029,7 +2021,8 @@ void StatTracker::onGameQuit(const Core::CPUThreadGuard& guard){
 
     std::cout << "Quit detected\n";
 
-    //Game has ended. Write file but do not submit
+    //Write the quit files here. The caller then sets GAME_OVER, so the INGAME case of the game
+    //state machine writes the normal stat files and submits the game like a finished one.
     std::string jsonPath = getStatJsonPath("quit.decode.");
     std::string json = getStatJSON(true);
     
@@ -2039,8 +2032,6 @@ void StatTracker::onGameQuit(const Core::CPUThreadGuard& guard){
     json = getStatJSON(false, true);
     
     File::WriteStringToFile(jsonPath, json);
-
-    //Quit games are not submitted to the server
 }
 
 std::optional<StatTracker::Runner> StatTracker::logRunnerInfo(const Core::CPUThreadGuard& guard, u8 base){

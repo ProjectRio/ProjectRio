@@ -1040,7 +1040,6 @@ public:
 
         //Quit?
         u8 quitter_team = 0xFF;
-        bool game_quit = false;
 
         //Tracks the current batter for each team across half-inning switches; index 0=Away, 1=Home
         std::array<u8, 2> current_batter_roster_locs = {0, 0};
