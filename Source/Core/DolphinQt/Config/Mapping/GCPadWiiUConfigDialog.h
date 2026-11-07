@@ -4,10 +4,14 @@
 #pragma once
 
 #include <QDialog>
+#include <QElapsedTimer>
+
+#include "Common/CommonTypes.h"
 
 class QCheckBox;
 class QLabel;
 class QDialogButtonBox;
+class QTimer;
 class QVBoxLayout;
 
 class GCPadWiiUConfigDialog final : public QDialog
@@ -35,6 +39,9 @@ private:
   QLabel* m_status_label;
   QDialogButtonBox* m_button_box;
   QLabel* m_poll_rate_label;
+  QTimer* m_poll_rate_timer;
+  QElapsedTimer m_poll_rate_elapsed;
+  u64 m_last_read_count = 0;
 
   // Checkboxes
   QCheckBox* m_rumble;

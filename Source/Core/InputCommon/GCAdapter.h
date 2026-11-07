@@ -27,6 +27,7 @@ bool IsDetected(const char** error_message);
 bool DeviceConnected(int chan);
 void ResetDeviceType(int chan);
 bool UseAdapter();
-double ReadRate();
+// Total successful reads from the adapter. Compare two values to measure the poll rate.
+u64 ReadCount();
 
 }  // namespace GCAdapter
