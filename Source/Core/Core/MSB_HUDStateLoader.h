@@ -26,7 +26,8 @@ bool GetHUDEventInfo(const std::string& json, HUDEventInfo& outInfo);
 bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
                       const std::string& p1Username, const std::string& p2Username);
 bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& outState,
-                          const std::string& p1Username, const std::string& p2Username);
+                          const std::string& p1Username, const std::string& p2Username,
+                          std::optional<uint8_t> p2Port = std::nullopt);
 int allowLoadFromHUD(const std::string& path,
                      const std::string& p1Username, const std::string& p2Username,
                      bool isNetplay = true,

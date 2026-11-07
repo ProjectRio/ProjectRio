@@ -71,7 +71,8 @@ bool LoadStateFromHud(const std::string& path, MSBQuickMatchGameState& outState,
 }
 
 bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& outState,
-                          const std::string& p1Username, const std::string& p2Username)
+                          const std::string& p1Username, const std::string& p2Username,
+                          std::optional<uint8_t> p2Port)
 {
     picojson::value v;
     std::string err = picojson::parse(v, json_str);
@@ -151,8 +152,10 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
     MSBQuickMatchGameState state;
 
     // Record who is playing for the boot code: a CPU opponent means a 1-player
-    // boot. The second human's controller port defaults inside the generator.
+    // boot. Netplay passes the second human's controller port from the pad map;
+    // when unset (local Player 2) it defaults to port 2 inside the generator.
     state.isCpuMatch = localOpponentIsCpu ? 1 : 0;
+    state.p2Port = p2Port;
 
     // === PRE-GAME SETTINGS ===
     // === ROSTERS ===

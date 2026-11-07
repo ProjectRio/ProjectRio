@@ -114,6 +114,9 @@ NetPlayClient::~NetPlayClient()
     m_dialog->HideChunkedProgressDialog();
   }
 
+  // a HUD selected in this lobby must not boot the next local game
+  Gecko::setFastResetFromHUD(false);
+
   if (m_server)
   {
     Disconnect();
@@ -708,6 +711,7 @@ void NetPlayClient::OnChunkedDataAbort(sf::Packet& packet)
 
 void NetPlayClient::OnPadMapping(sf::Packet& packet)
 {
+  const PadMappingArray old_pad_map = m_pad_map;
   bool assigned = false;
   for (PlayerId& mapping : m_pad_map)
   {
@@ -720,6 +724,9 @@ void NetPlayClient::OnPadMapping(sf::Packet& packet)
   UpdateDevices();
 
   m_dialog->Update();
+
+  if (m_pad_map != old_pad_map)
+    m_dialog->OnPadMappingChanged();
 }
 
 void NetPlayClient::OnWiimoteMapping(sf::Packet& packet)
@@ -1698,8 +1705,9 @@ static std::string FastResetMismatchMessage(int result_code, const HUDValidation
 }
 
 // Resolve player names from the lobby directly so callers don't need the static netplay_client pointer.
-void NetPlayClient::GetFastResetPlayerNames(std::string& p1_username,
-                                            std::string& p2_username) const
+// Returns the second player's 1-based controller port, if there is a second player.
+std::optional<u8> NetPlayClient::GetFastResetPlayerNames(std::string& p1_username,
+                                                         std::string& p2_username) const
 {
   p1_username = std::string(StripWhitespace(
       m_players.count(m_pad_map[0]) ? m_players.at(m_pad_map[0]).name : ""));
@@ -1710,9 +1718,10 @@ void NetPlayClient::GetFastResetPlayerNames(std::string& p1_username,
     if (pid != 0 && m_players.count(pid))
     {
       p2_username = std::string(StripWhitespace(m_players.at(pid).name));
-      break;
+      return static_cast<u8>(i + 1);
     }
   }
+  return std::nullopt;
 }
 
 void NetPlayClient::OnFastResetFromHUDMsg(sf::Packet& packet)
@@ -1788,7 +1797,7 @@ void NetPlayClient::OnFastResetHUDSelectedMsg(sf::Packet& packet)
 
   std::string p1Username;
   std::string p2Username;
-  GetFastResetPlayerNames(p1Username, p2Username);
+  const std::optional<u8> p2Port = GetFastResetPlayerNames(p1Username, p2Username);
 
   // Every client loads this same HUD, whether or not it is the one in its own HudFiles folder.
   HUDValidationDetails details;
@@ -1796,7 +1805,7 @@ void NetPlayClient::OnFastResetHUDSelectedMsg(sf::Packet& packet)
 
   if (resultCode == 0)
   {
-    if (!LoadStateFromHudJson(hudJson, Gecko::HUDState, p1Username, p2Username))
+    if (!LoadStateFromHudJson(hudJson, Gecko::HUDState, p1Username, p2Username, p2Port))
       resultCode = 2;
   }
 
