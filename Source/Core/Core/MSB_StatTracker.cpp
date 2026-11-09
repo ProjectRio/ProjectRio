@@ -223,8 +223,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                     //Remove current event, wasn't finished
                     auto it = m_game_info.events.find(m_game_info.event_num);
-                    if (it != m_game_info.events.end())
-                        m_game_info.events.erase(it);
+                    m_game_info.events.erase(it);
 
                     m_event_state = EVENT_STATE::GAME_OVER;
                 }
@@ -237,8 +236,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                     //Remove current event, wasn't finished
                     auto it = m_game_info.events.find(m_game_info.event_num);
-                    if (it != m_game_info.events.end())
-                        m_game_info.events.erase(it);
+                    m_game_info.events.erase(it);
 
                     m_event_state = EVENT_STATE::GAME_OVER;
                     break;
@@ -1124,7 +1122,7 @@ std::string StatTracker::getStatJSON(bool inDecode, bool hide_riokey){
     //=== Events === 
     json_stream << "  \"Events\": [\n";
     for (auto event_map_iter = m_game_info.events.begin(); event_map_iter != m_game_info.events.end(); event_map_iter++) {
-        u16 event_num = event_map_iter->first;
+        u8 event_num = event_map_iter->first;
         Event& event = event_map_iter->second;
 
         //Don't log events with inning == 0. Means game has crashed/quit and this is an empty event
