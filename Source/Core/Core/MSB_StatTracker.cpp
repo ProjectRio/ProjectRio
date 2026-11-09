@@ -223,7 +223,8 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                     //Remove current event, wasn't finished
                     auto it = m_game_info.events.find(m_game_info.event_num);
-                    m_game_info.events.erase(it);
+                    if (it != m_game_info.events.end())
+                        m_game_info.events.erase(it);
 
                     m_event_state = EVENT_STATE::GAME_OVER;
                 }
@@ -236,7 +237,8 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                     //Remove current event, wasn't finished
                     auto it = m_game_info.events.find(m_game_info.event_num);
-                    m_game_info.events.erase(it);
+                    if (it != m_game_info.events.end())
+                        m_game_info.events.erase(it);
 
                     m_event_state = EVENT_STATE::GAME_OVER;
                     break;
@@ -574,8 +576,8 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                 //Print server warning message
                 OSD::AddTypedMessage(OSD::MessageType::GameStateInfo, fmt::format(
-                    "Submitting game to server \n",
-                    "DO NOT LEAVE THE GAME OR CLOSE RIO"           
+                    "Submitting game to server \n"
+                    "DO NOT LEAVE THE GAME OR CLOSE RIO"
                 ), 500, OSD::Color::RED);
                 
                 json = getStatJSON(false, false);
@@ -589,7 +591,8 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                     // Print server warning message
                     OSD::AddTypedMessage(OSD::MessageType::GameStateInfo,
-                                         fmt::format("Done submitting game \n", "SAFE TO QUIT"),
+                                         fmt::format("Done submitting game \n"
+                                                     "SAFE TO QUIT"),
                                          5000, OSD::Color::GREEN);
                 }
 
@@ -666,7 +669,7 @@ void StatTracker::logDefensiveStats(const Core::CPUThreadGuard& guard, int in_te
 
     stat.batters_faced       = PowerPC::MMU::HostRead_U8(guard, aPitcher_BattersFaced + offset);
     stat.runs_allowed        = PowerPC::MMU::HostRead_U16(guard, aPitcher_RunsAllowed + offset);
-    stat.earned_runs         = PowerPC::MMU::HostRead_U16(guard, aPitcher_RunsAllowed + offset);
+    stat.earned_runs         = PowerPC::MMU::HostRead_U16(guard, aPitcher_EarnedRuns + offset);
     stat.batters_walked      = PowerPC::MMU::HostRead_U16(guard, aPitcher_BattersWalked + offset);
     stat.batters_hit         = PowerPC::MMU::HostRead_U16(guard, aPitcher_BattersHit + offset);
     stat.hits_allowed        = PowerPC::MMU::HostRead_U16(guard, aPitcher_HitsAllowed + offset);
@@ -1121,7 +1124,7 @@ std::string StatTracker::getStatJSON(bool inDecode, bool hide_riokey){
     //=== Events === 
     json_stream << "  \"Events\": [\n";
     for (auto event_map_iter = m_game_info.events.begin(); event_map_iter != m_game_info.events.end(); event_map_iter++) {
-        u8 event_num = event_map_iter->first;
+        u16 event_num = event_map_iter->first;
         Event& event = event_map_iter->second;
 
         //Don't log events with inning == 0. Means game has crashed/quit and this is an empty event

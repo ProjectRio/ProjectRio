@@ -102,7 +102,7 @@ void GeckoCodeWidget::CreateWidgets()
   } else if (m_game_id == "GFTE01") {
     download_codes_tooltip = "Download Mario Golf Toadstool Tour Codes";
   } else {
-    "Download Codes from WiiRD Database";
+    download_codes_tooltip = "Download Codes from WiiRD Database";
   }
   m_download_codes->setToolTip(QString::fromStdString(download_codes_tooltip));
 

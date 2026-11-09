@@ -26,6 +26,7 @@
 #include <QTextEdit>
 #include <QScrollBar>
 
+#include "Common/StringUtil.h"
 #include "Core/Config/NetplaySettings.h"
 #include "Core/NetPlayProto.h"
 
@@ -814,11 +815,19 @@ void NetPlaySetupDialog::UpdateListBrowser()
     auto* version = new QTableWidgetItem(QString::fromStdString(entry.version));
 
     bool enabled = Common::GetRioRevStr() == entry.version;
-    int tagset_id = stoi(game_tags[2]); // should make this safe in the future to catch when it can't convert to int cleanly
-    if (user_tagsets.find(tagset_id) == user_tagsets.end())
+    // A bad game mode id makes the lobby unjoinable.
+    int tagset_id = -1;
+    if (!TryParse(game_tags[2], &tagset_id))
+    {
       enabled = false;
-    if (tagset_id == 0)
-      enabled = true;
+    }
+    else
+    {
+      if (user_tagsets.find(tagset_id) == user_tagsets.end())
+        enabled = false;
+      if (tagset_id == 0)
+        enabled = true;
+    }
 
     for (const auto& item : {region, name, in_game, gamemode, game, player_count, version})
       item->setFlags(enabled ? Qt::ItemIsEnabled | Qt::ItemIsSelectable : Qt::NoItemFlags);

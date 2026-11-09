@@ -179,6 +179,10 @@ namespace Tag
                         //}
                         code_segments.push_back(code_line); //Last half is accessed outside of loop
                     }
+                    // Keep the final line when the code doesn't end with a newline
+                    if (full_code.find_first_not_of(" \t\r") != std::string::npos) {
+                        code_segments.push_back(full_code);
+                    }
                 }
             }
 

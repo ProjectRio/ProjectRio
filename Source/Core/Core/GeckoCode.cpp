@@ -190,7 +190,34 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
   u32 total_bytes = 0;
   for (const GeckoCode& code : s_active_codes)
     total_bytes += static_cast<u32>(code.codes.size()) * CODE_SIZE;
-  codelist_base_address = gecko_end - total_bytes - 0x10; // 0x10 padding is required. if you remove it the last code in the list won't be added. don't ask questions
+
+  // A big list would overwrite the BI2 header the game reads at boot, so put it below BI2.
+  // Smaller lists stay where they always were.
+  constexpr u32 LIST_OVERHEAD = 0x10;  // 0x10 padding is required. if you remove it the last code in the list won't be added. don't ask questions
+  constexpr u32 BI2_HEADER_SIZE = 0x28;
+  const u32 list_bytes = total_bytes + LIST_OVERHEAD;
+  const u32 bi2 = PowerPC::MMU::HostRead_U32(guard, 0x800000F4);
+  if (PowerPC::MMU::HostIsRAMAddress(guard, bi2) && bi2 < gecko_end &&
+      gecko_end - bi2 < u64{list_bytes} + BI2_HEADER_SIZE)
+  {
+    NOTICE_LOG_FMT(ACTIONREPLAY,
+                   "Codelist ({} bytes) would overwrite the BI2 header at {:08x}; placing it "
+                   "below BI2",
+                   total_bytes, bi2);
+    gecko_end = bi2;
+  }
+  if (gecko_end < INSTALLER_END_ADDRESS || list_bytes > gecko_end - INSTALLER_END_ADDRESS)
+  {
+    ERROR_LOG_FMT(ACTIONREPLAY, "Could not enable cheats: the Gecko code list ({} bytes) does not "
+                  "fit in memory below {:08x}.", total_bytes, gecko_end);
+    return Installation::Failed;
+  }
+  if (total_bytes >= 0x100000)
+  {
+    WARN_LOG_FMT(ACTIONREPLAY, "The Gecko code list is very large ({} KiB) and uses game memory.",
+                 total_bytes / 1024);
+  }
+  codelist_base_address = gecko_end - list_bytes;
   codelist_end_address = gecko_end;
   PowerPC::MMU::HostWrite_U32(guard, codelist_base_address, 0x80000034);
   NOTICE_LOG_FMT(ACTIONREPLAY, "Codelist size: {:08x}", total_bytes);

@@ -68,20 +68,28 @@ int ONLINE_COUNT = 0;
 // first tag is the name of the lobby, second is ranked, third is superstars
 std::vector<std::string> LobbyNameVector(const std::string& name)
 {
-  std::vector<std::string> game_tags;
+  // "<name>%%<mode>%%<id>". The name can contain "%%", so split from the right.
+  const std::string delimiter = "%%";
+  std::vector<std::string> game_tags(3);
+
+  const size_t id_pos = name.rfind(delimiter);
+  if (id_pos == std::string::npos)
   {
-    std::string tag_string = name;
-    std::string delimiter = "%%";
-    size_t pos = 0;
-    std::string token;
-    while ((pos = tag_string.find(delimiter)) != std::string::npos)
-    {
-      token = tag_string.substr(0, pos);
-      game_tags.push_back(token);
-      tag_string.erase(0, pos + delimiter.length());
-    }
-    game_tags.push_back(tag_string);
+    game_tags[0] = name;
+    return game_tags;
   }
+  game_tags[2] = name.substr(id_pos + delimiter.length());
+
+  const size_t mode_pos = id_pos < delimiter.length() ?
+                              std::string::npos :
+                              name.rfind(delimiter, id_pos - delimiter.length());
+  if (mode_pos == std::string::npos)
+  {
+    game_tags[0] = name.substr(0, id_pos);
+    return game_tags;
+  }
+  game_tags[0] = name.substr(0, mode_pos);
+  game_tags[1] = name.substr(mode_pos + delimiter.length(), id_pos - mode_pos - delimiter.length());
   return game_tags;
 }
 
