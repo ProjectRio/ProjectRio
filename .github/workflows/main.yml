@@ -58,6 +58,12 @@ jobs:
           SET PATH=%PATH%;C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64;C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x86;C:\Program Files\7-Zip;C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin;C:\Python27\;C:\Python27\Scripts;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja;C:\Program Files\Microsoft VS Code\bin;C:\Program Files\Git\cmd
           cd ./Source
           msbuild.exe /v:m /p:Platform=x64 /p:Configuration=Release dolphin-emu.sln
+      - name: "Run unit tests"
+        # The solution builds the tests but doesn't run them. These include the update signing
+        # and HUD loader tests, so a failure here stops the build from being packaged.
+        shell: cmd
+        working-directory: ${{ github.workspace }}
+        run: Build\x64\Release\UnitTests\bin\UnitTests.exe
       - name: "Package ${{ matrix.build_type }}"
         working-directory: ${{ github.workspace }}
         run: |
