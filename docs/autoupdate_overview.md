@@ -157,7 +157,9 @@ pushed.
     * Passes argument vector to RunUpdater() in UpdaterCommon.h.
 * WinUpdater/Platform.cpp: Checks that the machine can run the new build.
     * Compares the Windows version and the installed VC++ runtime against the `build_info.txt`
-      shipped inside the package, and installs the VC++ redistributable if it is too old.
+      shipped inside the package, and installs the VC++ redistributable if it is too old. The
+      redistributable is downloaded into the update's temporary folder, and only runs if it's signed
+      by Microsoft. The file stays locked from that check until the installer finishes.
 * UpdaterCommon/UpdaterCommon.cpp: Performs the actual update process.
     * Manages updater UI.
     * Verifies the release's signature and manifest, then downloads the release asset and verifies
