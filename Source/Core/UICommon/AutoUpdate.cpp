@@ -87,8 +87,6 @@ const char UPDATER_CONTENT_PATH[] = "/Contents/MacOS/Project Rio Updater";
 
 #ifdef OS_SUPPORTS_UPDATER
 
-const char UPDATER_LOG_FILE[] = "Updater.log";
-
 std::string UpdaterPath(bool relocated = false)
 {
   std::string path(File::GetExeDirectory() + DIR_SEP);
@@ -406,7 +404,7 @@ bool AutoUpdateChecker::TriggerUpdate(const AutoUpdateChecker::NewVersionInforma
   updater_flags["manifest-signature-url"] = info.manifest_signature_url;
   updater_flags["parent-pid"] = std::to_string(GetOwnProcessId());
   updater_flags["install-base-path"] = File::GetExeDirectory();
-  updater_flags["log-file"] = File::GetUserPath(D_LOGS_IDX) + UPDATER_LOG_FILE;
+  updater_flags["log-file"] = File::GetUserPath(D_LOGS_IDX) + UPDATER_LOG_FILENAME;
 
   if (restart_mode == RestartMode::RESTART_AFTER_UPDATE)
     updater_flags["binary-to-restart"] = File::GetExePath();

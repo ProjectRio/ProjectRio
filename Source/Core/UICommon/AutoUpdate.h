@@ -12,6 +12,9 @@
 
 // Refer to docs/autoupdate_overview.md for a detailed overview of the autoupdate process
 
+// Name of the log file Rio asks the updater to write. The updater only opens a log with this name.
+inline constexpr char UPDATER_LOG_FILENAME[] = "Updater.log";
+
 // This class defines all the logic for Dolphin auto-update checking. UI-specific elements have to
 // be defined in a backend specific subclass.
 class AutoUpdateChecker

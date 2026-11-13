@@ -3,6 +3,7 @@
 
 #include "UpdaterCommon/UpdaterCommon.h"
 
+#include <filesystem>
 #include <optional>
 #include <set>
 #include <string>
@@ -931,6 +932,11 @@ bool RunUpdater(std::vector<std::string> args)
   Common::ScopeGuard ui_guard{[] { UI::Stop(); }};
   Options opts = std::move(*maybe_opts);
 
+  // The updater can run as administrator, so a log path from the command line is only opened if
+  // it names Rio's updater log. Opening it truncates the file.
+  if (opts.log_file && StringToPath(*opts.log_file).filename() != UPDATER_LOG_FILENAME)
+    opts.log_file.reset();
+
   if (opts.log_file)
   {
     if (!log_file.Open(opts.log_file.value(), "w"))
@@ -971,6 +977,21 @@ bool RunUpdater(std::vector<std::string> args)
     }
     return false;
   };
+
+#ifdef _WIN32
+  // The updater lives in the install folder, and asks for administrator rights when that folder
+  // isn't writable. Refuse any other install path, so an elevated updater can't be pointed at a
+  // folder it wasn't elevated for.
+  {
+    std::error_code error;
+    if (!std::filesystem::equivalent(StringToPath(opts.install_base_path),
+                                     StringToPath(File::GetExeDirectory()), error))
+    {
+      return fail("The update can only be installed into the updater's own folder, so nothing "
+                  "was changed.");
+    }
+  }
+#endif
 
   const std::string temp_dir = CreateUpdateTempDir(opts);
   if (temp_dir.empty())

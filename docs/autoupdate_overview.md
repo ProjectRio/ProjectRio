@@ -280,5 +280,7 @@ Updater.exe --package-url=<asset url> --package-filename=<asset name> \
 ```
 
 It refuses any URL outside ProjectRio/ProjectRio's releases, and a release that doesn't pass the
-checks under "Signing". Add `--parent-pid` to make it wait for
+checks under "Signing". On Windows `--install-base-path` must be the updater's own folder, since
+that's the folder it asked for administrator rights over. A `--log-file` is only opened if it's
+named `Updater.log`. Add `--parent-pid` to make it wait for
 a process to exit first, and `--binary-to-restart` to have it relaunch Rio afterwards.
