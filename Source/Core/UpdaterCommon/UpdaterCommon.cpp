@@ -406,22 +406,29 @@ bool ReplaceInstalledFiles(const std::string& source_path, const std::string& in
 }
 
 #ifdef __APPLE__
-// Moves each top level item of the package (the app bundle and the updater next to it) into place.
-// Bundles are replaced wholesale rather than merged, because macOS caches a Mach-O's code
-// signature against its inode: writing new bytes over an existing executable makes the kernel
-// check the new binary against the old signature and kill it on launch.
+// Moves the app bundle and the updater bundle next to it into place. Nothing else in the package is
+// installed, since the install folder is often /Applications and anything with the same name there
+// would be replaced. Bundles are replaced wholesale rather than merged, because macOS caches a
+// Mach-O's code signature against its inode: writing new bytes over an existing executable makes
+// the kernel check the new binary against the old signature and kill it on launch.
 bool SwapInPackage(const std::string& source_path, const std::string& install_base_path)
 {
   const File::FSTEntry contents = File::ScanDirectoryTree(source_path, false);
-  if (contents.children.empty())
-  {
-    LogToFile("Package is empty.\n");
-    return false;
-  }
 
   std::vector<std::string> items;
   for (const auto& child : contents.children)
-    items.push_back(child.virtualName);
+  {
+    if (child.virtualName == MAC_APP_BUNDLE || child.virtualName == MAC_UPDATER_BUNDLE)
+      items.push_back(child.virtualName);
+    else
+      LogToFile("Skipping %s, which isn't one of Rio's bundles.\n", child.virtualName.c_str());
+  }
+
+  if (items.empty())
+  {
+    LogToFile("Package contains neither of Rio's bundles.\n");
+    return false;
+  }
 
   return ReplaceInstalledFiles(source_path, install_base_path, items);
 }

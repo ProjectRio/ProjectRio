@@ -170,8 +170,10 @@ pushed.
       install against the current install directory, without elevation and in the install's own
       per-user or all-users mode. On macOS the zip is unpacked
       with `ditto` (our own unzip restores neither the symlinks holding the framework layout
-      together nor the permission bits, which leaves a bundle macOS calls damaged), and each
-      bundle in it is then moved into place with a rename — replacing a Mach-O's bytes in place
+      together nor the permission bits, which leaves a bundle macOS calls damaged), and the two
+      bundles in it, `ProjectRio.app` and `Project Rio Updater.app`, are then moved into place.
+      Anything else in the zip is skipped, since the install folder is often `/Applications`. Each
+      bundle is moved with a rename — replacing a Mach-O's bytes in place
       makes the kernel check the new binary against the cached old code signature and kill it.
     * If the user updated immediately (rather than waiting for Rio to close before starting
       the update), starts Rio again when the update is complete.

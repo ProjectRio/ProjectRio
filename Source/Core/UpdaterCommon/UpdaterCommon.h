@@ -12,6 +12,8 @@
 // Name of the application bundle a macOS package is expected to contain. The updater bundle sits
 // next to it, so the install base path is the directory holding both.
 constexpr char MAC_APP_BUNDLE[] = "ProjectRio.app";
+// Must match the updater bundle name in UICommon/AutoUpdate.cpp.
+constexpr char MAC_UPDATER_BUNDLE[] = "Project Rio Updater.app";
 #endif
 
 void LogToFile(const char* fmt, ...);
