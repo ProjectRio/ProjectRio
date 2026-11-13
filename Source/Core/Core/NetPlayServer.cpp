@@ -792,8 +792,22 @@ void NetPlayServer::BeginFastResetHUDSync()
 
   m_fast_reset_hud_reports.clear();
   m_fast_reset_hud_pending.clear();
-  for (const auto& player : m_players)
-    m_fast_reset_hud_pending.insert(player.first);
+
+  // Only players on a port report their HUD, so a spectator's file can't be picked. Spectators
+  // still get the selected HUD and boot from it with everyone else.
+  for (const PlayerId pid : m_pad_map)
+  {
+    if (pid != 0 && m_players.contains(pid))
+      m_fast_reset_hud_pending.insert(pid);
+  }
+
+  // With nobody on a port, ask everyone so the sync still finishes.
+  if (m_fast_reset_hud_pending.empty())
+  {
+    for (const auto& player : m_players)
+      m_fast_reset_hud_pending.insert(player.first);
+  }
+
   m_fast_reset_hud_sync_active = true;
 }
 
