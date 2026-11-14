@@ -1,4 +1,5 @@
 add_dolphin_test(AssemblerTest AssemblerTest.cpp)
+add_dolphin_test(AutoUpdateTest AutoUpdateTest.cpp)
 add_dolphin_test(BitFieldTest BitFieldTest.cpp)
 add_dolphin_test(BitSetTest BitSetTest.cpp)
 add_dolphin_test(BitUtilsTest BitUtilsTest.cpp)
@@ -18,6 +19,11 @@ add_dolphin_test(NandPathsTest NandPathsTest.cpp)
 add_dolphin_test(SPSCQueueTest SPSCQueueTest.cpp)
 add_dolphin_test(StringUtilTest StringUtilTest.cpp)
 add_dolphin_test(SwapTest SwapTest.cpp)
+
+if (WIN32 OR APPLE)
+  add_dolphin_test(UpdateManifestTest UpdateManifestTest.cpp)
+  target_link_libraries(UpdateManifestTest PRIVATE updatercommon ed25519 MbedTLS::mbedtls)
+endif()
 
 if (_M_X86_64)
   add_dolphin_test(x64EmitterTest x64EmitterTest.cpp)

@@ -263,8 +263,12 @@ void Updater::OnUpdateAvailable(const NewVersionInformation& info)
   if (!choice || *choice != QDialog::Accepted)
     return;
 
-  TriggerUpdate(info, later ? AutoUpdateChecker::RestartMode::NO_RESTART_AFTER_UPDATE :
-                              AutoUpdateChecker::RestartMode::RESTART_AFTER_UPDATE);
+  // Stay open if the updater didn't start, or Rio would close with nothing updated.
+  if (!TriggerUpdate(info, later ? AutoUpdateChecker::RestartMode::NO_RESTART_AFTER_UPDATE :
+                                   AutoUpdateChecker::RestartMode::RESTART_AFTER_UPDATE))
+  {
+    return;
+  }
 
   // The updater waits for us to exit before it touches any files.
   if (!later)

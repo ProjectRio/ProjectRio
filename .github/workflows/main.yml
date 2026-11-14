@@ -342,6 +342,31 @@ jobs:
             echo "::error::Tag ${GITHUB_REF_NAME} does not match RIO_REV_STR \"${CODE_VERSION}\" in Source/Core/Common/Version.cpp"
             exit 1
           fi
+      - name: "Check the update keys"
+        # Installs only trust the keys they were built with, so a release without enough real keys
+        # couldn't install the next one. The test key must never be enabled for a release, and the
+        # brackets keep this step from matching its own text.
+        run: |
+          KEY_FILE=Source/Core/UpdaterCommon/UpdateKeys.h
+          KEYS=$(python3 Tools/count-update-keys.py "${KEY_FILE}")
+          echo "update keys: ${KEYS}"
+          if [ "${KEYS}" -lt 2 ] || [ "${KEYS}" -gt 5 ]; then
+            echo "::error::${KEY_FILE} needs between two and five production keys, found ${KEYS}"
+            exit 1
+          fi
+          # grep exits 1 for no match and 2 for an error, such as a listed file being renamed. Only 1
+          # is a pass, or a missing file would silently skip the check.
+          STATUS=0
+          grep -rnE '[R]IO_UPDATER_TEST_KEYS|[R]ioUpdaterTestKeys' .github/workflows build-*.sh \
+              build-windows.bat BuildMacOSUniversalBinary.py CMakeSettings.json Tools/flatpak.yml \
+              || STATUS=$?
+          if [ "${STATUS}" -eq 0 ]; then
+            echo "::error::A workflow or build script enables the updater's test key"
+            exit 1
+          elif [ "${STATUS}" -ne 1 ]; then
+            echo "::error::Could not search the workflows and build scripts for the test key"
+            exit 1
+          fi
       - name: "Download builds"
         # Through the API rather than actions/download-artifact: some jobs upload a zipped folder
         # and others (the AppImage, the Flatpak) a single raw file, and this handles both.
@@ -387,6 +412,14 @@ jobs:
           one '*.AppImage'                    Project_Rio_Linux.AppImage
           one '*.flatpak'                     Project_Rio_SteamOS.flatpak
           ls -l release
+      - name: "Check the packages don't contain the test key"
+        # Checks the finished builds, so it catches the test key however it got enabled. The
+        # installer is compressed and can't be searched, but it's built from what the zip holds.
+        run: |
+          python3 Tools/check-no-test-key.py Source/Core/UpdaterCommon/UpdateKeys.h \
+            release/Project_Rio_Windows.zip \
+            release/Project_Rio_macOS-Apple_silicon.zip \
+            release/Project_Rio_macOS-Intel.zip
       - name: "Create draft release"
         env:
           GH_TOKEN: ${{ github.token }}
