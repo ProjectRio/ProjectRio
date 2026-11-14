@@ -9,6 +9,7 @@
 //For LocalPLayers
 #include "Common/CommonPaths.h"
 #include "Common/IniFile.h"
+#include "Core/Core.h"
 #include "Core/LocalPlayersConfig.h"
 #include "Common/Version.h"
 
@@ -172,10 +173,10 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
     //Only matches that play the game start movie are recorded (as before: not practice,
     //minigames or the title screen demo). Remember it for as long as the game rel stays loaded
-    const bool game_rel_loaded = PowerPC::MMU::HostRead_U16(guard, aLoadedRel) == 5;
+    const bool game_rel_loaded = static_cast<Core::RelNumber>(PowerPC::MMU::HostRead_U16(guard, aLoadedRel)) == Core::RelNumber::InGame;
     if (!game_rel_loaded)
         m_saw_game_start_movie = false;
-    else if (PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr) == 0x5)
+    else if (static_cast<GAME_CONTROL_STATE>(PowerPC::MMU::HostRead_U8(guard, aGameControlStateCurr)) == GAME_CONTROL_STATE::GAME_START_MOVIE)
         m_saw_game_start_movie = true;
 
     //Start recording on the frame the game flags the match as started (the first at bat).
@@ -268,11 +269,6 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                 }
                 else if (hasLeftGame(guard)){
                     onGameQuit(guard);
-
-                    //Remove current event, wasn't finished
-                    auto it = m_game_info.events.find(m_game_info.event_num);
-                    m_game_info.events.erase(it);
-
                     m_event_state = EVENT_STATE::GAME_OVER;
                 }
                 break;
@@ -281,11 +277,6 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                 //Handle quit to main menu
                 if (hasLeftGame(guard)){
                     onGameQuit(guard);
-
-                    //Remove current event, wasn't finished
-                    auto it = m_game_info.events.find(m_game_info.event_num);
-                    m_game_info.events.erase(it);
-
                     m_event_state = EVENT_STATE::GAME_OVER;
                     break;
                 }
@@ -1925,7 +1916,7 @@ void StatTracker::applyPendingNetplayGameID()
 // intact until the game rel is unloaded about 50 frames later, so the quit is logged in between
 bool StatTracker::hasLeftGame(const Core::CPUThreadGuard& guard)
 {
-  return PowerPC::MMU::HostRead_U16(guard, aLoadedRel) != 5 ||
+  return static_cast<Core::RelNumber>(PowerPC::MMU::HostRead_U16(guard, aLoadedRel)) != Core::RelNumber::InGame ||
          PowerPC::MMU::HostRead_U8(guard, aFramesExitingToMenu) != 0;
 }
 
@@ -2007,19 +1998,32 @@ void StatTracker::initCaptains(const Core::CPUThreadGuard& guard)
 }
 
 void StatTracker::onGameQuit(const Core::CPUThreadGuard& guard){
-    // only the team that opened the pause menu can quit from it
-    const u8 paused_by = PowerPC::MMU::HostRead_U8(guard, aPausedBy);
-    if (paused_by == 1 || paused_by == 2)
+    // only the team that opened the pause menu can quit from it. the owner isn't cleared when
+    // the menu closes, so it only counts while the game is paused. the pause data is part of the
+    // game rel, so it can't be read if the rel is already gone, e.g. after a reset
+    if (static_cast<Core::RelNumber>(PowerPC::MMU::HostRead_U16(guard, aLoadedRel)) == Core::RelNumber::InGame &&
+        PowerPC::MMU::HostRead_U8(guard, aIsPaused) != 0)
     {
-        const u32 quitter_team = PowerPC::MMU::HostRead_U32(guard, paused_by == 1 ? aBattingTeam_P1P2 : aFieldingTeam_P1P2);
-        const u8 quitter_port = PowerPC::MMU::HostRead_U8(guard, quitter_team == 0 ? aPlayer1Port : aPlayer2Port);
-        m_game_info.quitter_team = (quitter_port == m_game_info.away_port);
+        const u32 quitter_team = PowerPC::MMU::HostRead_U32(guard, aPauseOwnerTeam);
+        if (quitter_team <= 1)
+        {
+            const u8 quitter_port = PowerPC::MMU::HostRead_U8(guard, quitter_team == 0 ? aPlayer1Port : aPlayer2Port);
+            m_game_info.quitter_team = (quitter_port == m_game_info.away_port);
+        }
     }
     logGameInfo(guard);
 
+    //Remove current event, wasn't finished
+    auto it = m_game_info.events.find(m_game_info.event_num);
+    if (it != m_game_info.events.end())
+    {
+        m_game_info.events.erase(it);
+    }
+
     std::cout << "Quit detected\n";
 
-    //Game has ended. Write file but do not submit
+    //Write the quit files here. The caller then sets GAME_OVER, so the INGAME case of the game
+    //state machine writes the normal stat files and submits the game like a finished one.
     std::string jsonPath = getStatJsonPath("quit.decode.");
     std::string json = getStatJSON(true);
     
@@ -2029,16 +2033,6 @@ void StatTracker::onGameQuit(const Core::CPUThreadGuard& guard){
     json = getStatJSON(false, true);
     
     File::WriteStringToFile(jsonPath, json);
-
-    // json = getStatJSON(false, false);
-    // if (shouldSubmitGame()) {
-    //     const Common::HttpRequest::Response response =
-    //     m_http.Post("https://api.projectrio.app/populate_db/", json,
-    //         {
-    //             {"Content-Type", "application/json"},
-    //         }
-    //     );
-    // }
 }
 
 std::optional<StatTracker::Runner> StatTracker::logRunnerInfo(const Core::CPUThreadGuard& guard, u8 base){

@@ -530,10 +530,11 @@ static const int cNumOfPositions = 9;
 
 //Addrs for triggering evts
 static const u32 aEndOfGameFlag    = 0x80892AB3;
-static const u32 aPausedBy         = 0x8039D7D3; //who opened the pause menu: 1 == batting team, 2 == fielding team
+static const u32 aPauseOwnerTeam   = 0x80895D70; //(u32) team index (0 or 1) that owns the pause menu. Not cleared when the menu closes
+static const u32 aIsPaused         = 0x80895F45; //set from the pause press until the game resumes. Stays set while exiting from the pause menu
 static const u32 aGameControlStateCurr = 0x80892aaa;
 static const u32 aGameControlStatePrev = 0x80892aab;
-static const u32 aLoadedRel        = 0x800E877C; //(halfword) 5 == game rel is loaded
+static const u32 aLoadedRel        = 0x800E877C; //(halfword) Core::RelNumber
 static const u32 aGameHasStarted   = 0x80892AB5; //set by the game at the first at bat. Only valid while the game rel is loaded
 static const u32 aFramesExitingToMenu = 0x80892AAE; //counts up while the game fades out of the match to the main menu; 0 otherwise
 static const u32 aGameTypeSelected = 0x800E8703; //4 == title screen demo

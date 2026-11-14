@@ -296,11 +296,11 @@ void AutoGolfMode(const Core::CPUThreadGuard& guard)
 }
 
 // the game stores which team (0 or 1) is batting/fielding; this converts that to the team's port
-// returns 0->3 for a human player. anything higher is a CPU or an invalid team
+// returns 0->3 for a human player, and 0xFF for a CPU or an invalid team
 static u8 MSSBGetTeamPort(const Core::CPUThreadGuard& guard, u32 aTeam)
 {
   u32 team = PowerPC::MMU::HostRead_U32(guard, aTeam);
-  if (team > 1)
+  if (team > 1 || PowerPC::MMU::HostRead_U8(guard, aTeamIsCPU + team) != 0)
     return 0xFF;
 
   return static_cast<u8>(PowerPC::MMU::HostRead_U32(guard, aTeamPorts + (4 * team)));
@@ -316,18 +316,23 @@ void MSSBCalculateNextGolfer(const Core::CPUThreadGuard& guard, int& nextGolfer)
   if (rel != RelNumber::InGame)
     return;
 
-  // makes the player who paused the golfer
-  if (PowerPC::MMU::HostRead_U8(guard, aWhoPaused) == 2)
+  // makes the player who paused the golfer. Toy Field pauses without setting aPausingSide
+  GameMode gameMode = static_cast<GameMode>(PowerPC::MMU::HostRead_U8(guard, aGameMode));
+  PausingSide pausingSide = static_cast<PausingSide>(PowerPC::MMU::HostRead_U8(guard, aPausingSide));
+  if (PowerPC::MMU::HostRead_U8(guard, aIsPaused) != 0 && gameMode != GameMode::ToyField &&
+      pausingSide == PausingSide::Fielding)
+  {
     isField = true;
+  }
 
   // add minigame functionality
-  int minigameId = PowerPC::MMU::HostRead_U8(guard, aMinigameID);
-  if (minigameId == 3 || minigameId == 1)
+  MinigameID minigameId = static_cast<MinigameID>(PowerPC::MMU::HostRead_U8(guard, aMinigameID));
+  if (minigameId == MinigameID::BarrelBatter || minigameId == MinigameID::BobombDerby)
   {
     BatterPort = PowerPC::MMU::HostRead_U8(guard, aBarrelBatterPort);
     isField = false;
   }
-  else if (minigameId == 2)
+  else if (minigameId == MinigameID::WallBall)
   {
     FielderPort = PowerPC::MMU::HostRead_U8(guard, aWallBallPort);
     isField = true;

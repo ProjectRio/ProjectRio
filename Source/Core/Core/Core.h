@@ -64,6 +64,34 @@ enum class RelNumber : u16 {
   InGame = 5,
 };
 
+// aGameMode, the mode picked from the main menu
+enum class GameMode : u8 {
+  Exhibition = 0,
+  Practice = 2,
+  Demo = 4,
+  Challenge = 5,
+  ToyField = 6,
+  Minigames = 7,
+};
+
+// aMinigameID. Not "None", which X11 defines as a macro
+enum class MinigameID : u8 {
+  NoMinigame = 0,
+  BobombDerby = 1,
+  WallBall = 2,
+  BarrelBatter = 3,
+  ChainChompSprint = 4,
+  PiranhaPanic = 5,
+  StarDash = 6,
+  GrandPrix = 7,
+};
+
+// aPausingSide, which team opened the pause menu
+enum class PausingSide : u8 {
+  Fielding = 0,
+  Batting = 1,
+};
+
 // Console type values based on:
 //  - YAGCD 4.2.1.1.2
 //  - OSInit (GameCube ELF from Finding Nemo)
@@ -244,15 +272,6 @@ int GetNextGolferID();
 // true for a controller port a person can play on (0->3). CPU teams and unset ports use higher values
 bool IsHumanPort(int port);
 
-//enum class GameMode
-//{
-//  StarsOff,
-//  StarsOn,
-//  Custom,
-//};
-
-// auto GameMode = GameMode::Custom;
-
 using namespace Tag;
 
 void SetNetplayGameID(u64 gameID);
@@ -266,7 +285,8 @@ bool GameSupportsTagSets();
 static const u32 aRelState = 0x800E877C;
 static const u32 aBattingTeam = 0x80892990;   // team index (0 or 1), swaps each half inning
 static const u32 aFieldingTeam = 0x80892994;  // team index (0 or 1), swaps each half inning
-static const u32 aTeamPorts = 0x80892A78;     // u32[2], port (0->3) of each team; >= 4 is CPU
+static const u32 aTeamPorts = 0x80892A78;     // u32[2], port (0->3) of each team. Also 0->3 for a CPU team, so check aTeamIsCPU
+static const u32 aTeamIsCPU = 0x80892ACA;     // u8[2], 1 if the team is CPU controlled
 static const u32 aIsField = 0x8089389B;
 static const u32 aIsInGame = 0x80871A6D;
 static const u32 aContactMade = 0x808909A1;
@@ -280,8 +300,10 @@ static const u32 aBallPosition_Y = 0x80890B3C;
 static const u32 aBallPosition_Z = 0x80890B40;
 static const u32 aBarrelBatterPort = 0x80890971; // port of character at bat in barrel batter & bom-omb derby
 static const u32 aWallBallPort = 0x80890AD9; // port of character pitching in wall ball
-static const u32 aMinigameID = 0x808980DE;  // 3 == Barrel Batter; 2 == Wall Ball; 1 == Bom-omb Derby; 4 == Chain Chomp Sprint; 5 == Piranha Panic; 6 == Star Dash; 7 == Grand Prix
-static const u32 aWhoPaused = 0x8039D7D3; // 2 == fielder, 1 == batter
+static const u32 aMinigameID = 0x808980DE;  // MinigameID
+static const u32 aPausingSide = 0x80895F48;  // PausingSide. Only valid while aIsPaused is set, and not set in Toy Field
+static const u32 aIsPaused = 0x80895F45;
+static const u32 aGameMode = 0x800E8703;  // GameMode
 //static const u32 aMatchStarted = 0x8036F3B8;  // bool for if a game is in session
 static const u32 aSceneId = 0x800E877F;
 static const u32 aRelNumber = 0x800E877C;
