@@ -1,0 +1,12 @@
+# Proposes updates to the pinned actions in .github/workflows/main.yml as one PR. Nothing updates
+# without a person merging it. build-appimage.sh's linuxdeploy pins aren't covered: bump by hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: semiannually
+    groups:
+      actions:
+        patterns:
+          - "*"

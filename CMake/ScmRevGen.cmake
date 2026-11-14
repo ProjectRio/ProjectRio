@@ -1,7 +1,13 @@
 cmake_minimum_required(VERSION 3.13)
 
 # for revision info
-if(GIT_FOUND)
+# A build without a Git checkout, such as the Flatpak, is told which commit it's building. Netplay
+# only accepts an exact revision match, so it needs the same value as every other platform.
+if(RIO_SCM_REVISION)
+  set(DOLPHIN_WC_REVISION "${RIO_SCM_REVISION}")
+  set(DOLPHIN_WC_DESCRIBE "${RIO_SCM_REVISION}")
+  set(DOLPHIN_WC_BRANCH "master")
+elseif(GIT_FOUND)
   # defines DOLPHIN_WC_REVISION
   execute_process(WORKING_DIRECTORY ${PROJECT_SOURCE_DIR} COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
       OUTPUT_VARIABLE DOLPHIN_WC_REVISION
@@ -18,6 +24,12 @@ if(GIT_FOUND)
   execute_process(WORKING_DIRECTORY ${PROJECT_SOURCE_DIR} COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD
       OUTPUT_VARIABLE DOLPHIN_WC_BRANCH
       OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+  # Release builds check out a tag, which has no branch, so Git reports HEAD. Label them like a
+  # build of master, or they'd show "[HEAD]" in the title bar.
+  if(DOLPHIN_WC_BRANCH STREQUAL "HEAD")
+    set(DOLPHIN_WC_BRANCH "master")
+  endif()
 endif()
 
 # Project Rio version number (kept in sync with RIO_REV_STR in Version.cpp)
