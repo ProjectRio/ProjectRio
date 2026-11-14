@@ -244,6 +244,12 @@ jobs:
         run: |
           export HOMEBREW_NO_AUTO_UPDATE=1
 
+          # The runner image ships openssl@3 linked, and Qt's dependencies now pull in openssl@4.
+          # Both can be installed, but only one can own the `openssl` command, and brew fails the
+          # install rather than replace the link. Rio doesn't use the command, so drop openssl@3's
+          # links. Its libraries stay installed for the tools on the image that use them.
+          brew unlink openssl@3 || true
+
           # Pin qtbase to 6.11.0. qtbase 6.11.1 regressed macOS fullscreen handling:
           # the render window no longer snaps back to the forced 4:3 aspect ratio on a
           # fullscreen toggle until the window is manually nudged. Homebrew's `qt`
