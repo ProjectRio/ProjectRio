@@ -4,9 +4,209 @@
 #include "Common/StringUtil.h"
 #include "Common/TagSet.h"
 #include "Core/Core.h"
+#include <cmath>
 #include <fstream>
+#include <limits>
+#include <optional>
 #include <string>
 #include <picojson.h>
+
+namespace
+{
+// HUD text comes from disk and from other netplay players, so none of it can be trusted.
+// picojson's get<T>() aborts on a type mismatch and at() throws on a missing key, so HUD fields
+// are only read through the TryGet helpers below: they check the key and its type, log the
+// field's name and return false, and the caller returns its usual failure result.
+
+// Far deeper than anything the stat tracker writes.
+constexpr int HUD_MAX_JSON_DEPTH = 100;
+// Highest character in the game (see cCharIdToCharName).
+constexpr uint8_t HUD_MAX_CHAR_ID = 0x35;
+
+// picojson::parse can also take Rio down on its own: a number too big for a double ("1e999")
+// reaches the abort in value(double), and it recurses once per level of nesting with no limit.
+class HUDParseContext : public picojson::default_parse_context
+{
+public:
+    HUDParseContext(picojson::value* out, int depth, bool* hasBadNumber)
+        : picojson::default_parse_context(out), m_depth(depth), m_hasBadNumber(hasBadNumber)
+    {
+    }
+
+    bool set_number(double f)
+    {
+        // picojson ignores this function's result, so a flag has to carry the failure out.
+        if (!std::isfinite(f))
+        {
+            *m_hasBadNumber = true;
+            return true;
+        }
+        return picojson::default_parse_context::set_number(f);
+    }
+
+    template <typename Iter>
+    bool parse_array_item(picojson::input<Iter>& in, size_t)
+    {
+        if (m_depth >= HUD_MAX_JSON_DEPTH)
+            return false;
+        picojson::array& a = out_->get<picojson::array>();
+        a.push_back(picojson::value());
+        HUDParseContext ctx(&a.back(), m_depth + 1, m_hasBadNumber);
+        return picojson::_parse(ctx, in);
+    }
+
+    template <typename Iter>
+    bool parse_object_item(picojson::input<Iter>& in, const std::string& key)
+    {
+        if (m_depth >= HUD_MAX_JSON_DEPTH)
+            return false;
+        picojson::object& o = out_->get<picojson::object>();
+        HUDParseContext ctx(&o[key], m_depth + 1, m_hasBadNumber);
+        return picojson::_parse(ctx, in);
+    }
+
+private:
+    int m_depth;
+    bool* m_hasBadNumber;
+};
+
+// Returns the root object of the HUD, which lives in v, or nullptr if there isn't one.
+const picojson::object* ParseHUDObject(const std::string& json, picojson::value& v)
+{
+    bool hasBadNumber = false;
+    HUDParseContext ctx(&v, 0, &hasBadNumber);
+    std::string err;
+    picojson::_parse(ctx, json.begin(), json.end(), &err);
+
+    if (!err.empty())
+    {
+        ERROR_LOG_FMT(COMMON, "Failed to parse HUD JSON ({})", err);
+        return nullptr;
+    }
+
+    if (hasBadNumber)
+    {
+        ERROR_LOG_FMT(COMMON, "HUD JSON has a number that is out of range");
+        return nullptr;
+    }
+
+    if (!v.is<picojson::object>())
+    {
+        ERROR_LOG_FMT(COMMON, "HUD JSON is not an object");
+        return nullptr;
+    }
+
+    return &v.get<picojson::object>();
+}
+
+bool TryGetString(const picojson::object& obj, const std::string& key, std::string* out)
+{
+    const auto it = obj.find(key);
+    if (it == obj.end() || !it->second.is<std::string>())
+    {
+        ERROR_LOG_FMT(COMMON, "HUD field '{}' is missing or not a string.", key);
+        return false;
+    }
+    *out = it->second.get<std::string>();
+    return true;
+}
+
+bool TryGetNumber(const picojson::object& obj, const std::string& key, double* out)
+{
+    const auto it = obj.find(key);
+    if (it == obj.end() || !it->second.is<double>())
+    {
+        ERROR_LOG_FMT(COMMON, "HUD field '{}' is missing or not a number.", key);
+        return false;
+    }
+    *out = it->second.get<double>();
+    return true;
+}
+
+bool TryGetObject(const picojson::object& obj, const std::string& key, const picojson::object** out)
+{
+    const auto it = obj.find(key);
+    if (it == obj.end() || !it->second.is<picojson::object>())
+    {
+        ERROR_LOG_FMT(COMMON, "HUD field '{}' is missing or not an object.", key);
+        return false;
+    }
+    *out = &it->second.get<picojson::object>();
+    return true;
+}
+
+bool TryGetArray(const picojson::object& obj, const std::string& key, const picojson::array** out)
+{
+    const auto it = obj.find(key);
+    if (it == obj.end() || !it->second.is<picojson::array>())
+    {
+        ERROR_LOG_FMT(COMMON, "HUD field '{}' is missing or not an array.", key);
+        return false;
+    }
+    *out = &it->second.get<picojson::array>();
+    return true;
+}
+
+// Casting a double that doesn't fit the target type is undefined behaviour, so check it first.
+// Fractions truncate, the same as the cast.
+template <typename T>
+bool TryConvertToInt(double number, const std::string& name, T* out)
+{
+    const double truncated = std::trunc(number);
+    if (truncated < static_cast<double>(std::numeric_limits<T>::lowest()) ||
+        truncated > static_cast<double>(std::numeric_limits<T>::max()))
+    {
+        ERROR_LOG_FMT(COMMON, "HUD field '{}' is out of range ({}).", name, number);
+        return false;
+    }
+    *out = static_cast<T>(truncated);
+    return true;
+}
+
+template <typename T>
+bool TryGetInt(const picojson::object& obj, const std::string& key, T* out)
+{
+    double number = 0;
+    return TryGetNumber(obj, key, &number) && TryConvertToInt(number, key, out);
+}
+
+// For fields a HUD may leave out: a missing key is fine and leaves out unset, a bad value is not.
+template <typename T>
+bool TryGetOptionalInt(const picojson::object& obj, const std::string& key, std::optional<T>* out)
+{
+    if (!obj.count(key))
+        return true;
+    T value = 0;
+    if (!TryGetInt(obj, key, &value))
+        return false;
+    *out = value;
+    return true;
+}
+
+template <typename T>
+bool TryGetArrayInt(const picojson::array& array, size_t index, const std::string& name, T* out)
+{
+    if (!array[index].is<double>())
+    {
+        ERROR_LOG_FMT(COMMON, "HUD field '{}' has an entry that is not a number.", name);
+        return false;
+    }
+    return TryConvertToInt(array[index].get<double>(), name, out);
+}
+
+// "Away Player" and "Home Player" may be left out, which reads as an empty name.
+bool TryGetPlayerName(const picojson::object& obj, const std::string& key, std::string* out)
+{
+    out->clear();
+    if (!obj.count(key))
+        return true;
+    std::string name;
+    if (!TryGetString(obj, key, &name))
+        return false;
+    *out = std::string(StripWhitespace(name));
+    return true;
+}
+} // namespace
 
 
 bool ReadHUDFile(const std::string& path, std::string& outJson)
@@ -25,17 +225,17 @@ bool ReadHUDFile(const std::string& path, std::string& outJson)
 bool GetHUDEventInfo(const std::string& json, HUDEventInfo& outInfo)
 {
     picojson::value v;
-    std::string err = picojson::parse(v, json);
-    if (!err.empty() || !v.is<picojson::object>())
+    const picojson::object* root = ParseHUDObject(json, v);
+    if (!root)
         return false;
 
-    const picojson::object& j = v.get<picojson::object>();
-    if (!j.count("Event Num") || !j.at("Event Num").is<std::string>())
+    const picojson::object& j = *root;
+    std::string eventNum;
+    if (!TryGetString(j, "Event Num", &eventNum))
         return false;
 
     // "Event Num" is the event index plus which of the event's two HUD writes this is:
     // "a" = before the pitch, "b" = after the play.
-    const std::string& eventNum = j.at("Event Num").get<std::string>();
     size_t digits = 0;
     uint32_t event = 0;
     while (digits < eventNum.size() && eventNum[digits] >= '0' && eventNum[digits] <= '9')
@@ -50,9 +250,10 @@ bool GetHUDEventInfo(const std::string& json, HUDEventInfo& outInfo)
     outInfo.eventOrder = event * 2 + ((eventNum.find('b', digits) != std::string::npos) ? 1 : 0);
     // Hex from 2.3.0. Older game ids have the writer's locale (digit grouping), so keep the digits only.
     outInfo.gameId.clear();
-    if (j.count("GameID") && j.at("GameID").is<std::string>())
+    std::string gameId;
+    if (j.count("GameID") && TryGetString(j, "GameID", &gameId))
     {
-        for (const char c : j.at("GameID").get<std::string>())
+        for (const char c : gameId)
             if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))
                 outInfo.gameId += c;
     }
@@ -75,21 +276,11 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
                           std::optional<uint8_t> p2Port)
 {
     picojson::value v;
-    std::string err = picojson::parse(v, json_str);
-
-    if (!err.empty())
-    {
-        ERROR_LOG_FMT(COMMON, "Failed to parse HUD JSON ({})", err);
+    const picojson::object* root = ParseHUDObject(json_str, v);
+    if (!root)
         return false;
-    }
 
-    if (!v.is<picojson::object>())
-    {
-        ERROR_LOG_FMT(COMMON, "HUD JSON is not an object");
-        return false;
-    }
-
-    const picojson::object& j = v.get<picojson::object>();
+    const picojson::object& j = *root;
 
     // === P1/P2 to HOME/AWAY MAPPING and VERIFICATION ===
     if (p1Username.empty())
@@ -100,10 +291,13 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
     INFO_LOG_FMT(COMMON, "P1 player: {}", p1Username);
     INFO_LOG_FMT(COMMON, "P2 player: {}", p2Username.empty() ? "none (solo)" : p2Username);
 
-    std::string awayPlayer = j.count("Away Player") ?
-        std::string(StripWhitespace(j.at("Away Player").get<std::string>())) : "";
-    std::string homePlayer = j.count("Home Player") ?
-        std::string(StripWhitespace(j.at("Home Player").get<std::string>())) : "";
+    std::string awayPlayer;
+    std::string homePlayer;
+    if (!TryGetPlayerName(j, "Away Player", &awayPlayer) ||
+        !TryGetPlayerName(j, "Home Player", &homePlayer))
+    {
+        return false;
+    }
     INFO_LOG_FMT(COMMON, "Home and away players set: Home {}, Away {}.", homePlayer, awayPlayer);
 
     // Validate players match the HUD file
@@ -175,58 +369,108 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
 
         if (j.count(p1Key))
         {
-            const picojson::object& roster = j.at(p1Key).get<picojson::object>();
-            if (!roster.count("CharID") || !roster.count("Fielding Position") ||
-                !roster.count("Batting Hand") || !roster.count("Fielding Hand") || !roster.count("Superstar"))
+            const picojson::object* roster = nullptr;
+            if (!TryGetObject(j, p1Key, &roster))
+                return false;
+            if (!roster->count("CharID") || !roster->count("Fielding Position") ||
+                !roster->count("Batting Hand") || !roster->count("Fielding Hand") || !roster->count("Superstar"))
             {
                 ERROR_LOG_FMT(COMMON, "Roster {} missing required fields.", p1Key);
                 return false;
             }
-            uint8_t charID = static_cast<uint8_t>(roster.at("CharID").get<double>());
-            uint8_t position = static_cast<uint8_t>(roster.at("Fielding Position").get<double>());
+            uint8_t charID = 0;
+            uint8_t position = 0;
+            if (!TryGetInt(*roster, "CharID", &charID) || !TryGetInt(*roster, "Fielding Position", &position))
+                return false;
             // draft-slot order: "Away/Home Roster i" is slot i as the game stores it
             state.rosterCharP1BySlot[i] = charID;
             state.positionByRosterSlotP1[i] = position;
             if (position < 9)
             {
+                // The generator's batting-order hook writes these into game code without a clamp.
+                if (charID > HUD_MAX_CHAR_ID)
+                {
+                    ERROR_LOG_FMT(COMMON, "Roster {} has invalid CharID {}.", p1Key, charID);
+                    return false;
+                }
                 state.charactersP1ByPosition[position] = charID;
-                state.battingHandP1ByPosition[position] = static_cast<uint8_t>(roster.at("Batting Hand").get<double>());
-                state.fieldingHandP1ByPosition[position] = static_cast<uint8_t>(roster.at("Fielding Hand").get<double>());
-                state.superstarP1ByPosition[position] = static_cast<uint8_t>(roster.at("Superstar").get<double>());
+                uint8_t battingHand = 0;
+                uint8_t fieldingHand = 0;
+                uint8_t superstar = 0;
+                if (!TryGetInt(*roster, "Batting Hand", &battingHand) ||
+                    !TryGetInt(*roster, "Fielding Hand", &fieldingHand) ||
+                    !TryGetInt(*roster, "Superstar", &superstar))
+                {
+                    return false;
+                }
+                state.battingHandP1ByPosition[position] = battingHand;
+                state.fieldingHandP1ByPosition[position] = fieldingHand;
+                state.superstarP1ByPosition[position] = superstar;
             }
 
-            if (roster.count("Captain") && roster.at("Captain").get<double>() == 1)
+            if (roster->count("Captain"))
             {
-                state.captainCharacterP1 = charID;
-                state.captainPositionP1 = position;
+                double captain = 0;
+                if (!TryGetNumber(*roster, "Captain", &captain))
+                    return false;
+                if (captain == 1)
+                {
+                    state.captainCharacterP1 = charID;
+                    state.captainPositionP1 = position;
+                }
             }
         }
 
         if (j.count(p2Key))
         {
-            const picojson::object& roster = j.at(p2Key).get<picojson::object>();
-            if (!roster.count("CharID") || !roster.count("Fielding Position") ||
-                !roster.count("Batting Hand") || !roster.count("Fielding Hand") || !roster.count("Superstar"))
+            const picojson::object* roster = nullptr;
+            if (!TryGetObject(j, p2Key, &roster))
+                return false;
+            if (!roster->count("CharID") || !roster->count("Fielding Position") ||
+                !roster->count("Batting Hand") || !roster->count("Fielding Hand") || !roster->count("Superstar"))
             {
                 ERROR_LOG_FMT(COMMON, "Roster {} missing required fields.", p2Key);
                 return false;
             }
-            uint8_t charID = static_cast<uint8_t>(roster.at("CharID").get<double>());
-            uint8_t position = static_cast<uint8_t>(roster.at("Fielding Position").get<double>());
+            uint8_t charID = 0;
+            uint8_t position = 0;
+            if (!TryGetInt(*roster, "CharID", &charID) || !TryGetInt(*roster, "Fielding Position", &position))
+                return false;
             state.rosterCharP2BySlot[i] = charID;
             state.positionByRosterSlotP2[i] = position;
             if (position < 9)
             {
+                // The generator's batting-order hook writes these into game code without a clamp.
+                if (charID > HUD_MAX_CHAR_ID)
+                {
+                    ERROR_LOG_FMT(COMMON, "Roster {} has invalid CharID {}.", p2Key, charID);
+                    return false;
+                }
                 state.charactersP2ByPosition[position] = charID;
-                state.battingHandP2ByPosition[position] = static_cast<uint8_t>(roster.at("Batting Hand").get<double>());
-                state.fieldingHandP2ByPosition[position] = static_cast<uint8_t>(roster.at("Fielding Hand").get<double>());
-                state.superstarP2ByPosition[position] = static_cast<uint8_t>(roster.at("Superstar").get<double>());
+                uint8_t battingHand = 0;
+                uint8_t fieldingHand = 0;
+                uint8_t superstar = 0;
+                if (!TryGetInt(*roster, "Batting Hand", &battingHand) ||
+                    !TryGetInt(*roster, "Fielding Hand", &fieldingHand) ||
+                    !TryGetInt(*roster, "Superstar", &superstar))
+                {
+                    return false;
+                }
+                state.battingHandP2ByPosition[position] = battingHand;
+                state.fieldingHandP2ByPosition[position] = fieldingHand;
+                state.superstarP2ByPosition[position] = superstar;
             }
 
-            if (roster.count("Captain") && roster.at("Captain").get<double>() == 1)
+            if (roster->count("Captain"))
             {
-                state.captainCharacterP2 = charID;
-                state.captainPositionP2 = position;
+                double captain = 0;
+                if (!TryGetNumber(*roster, "Captain", &captain))
+                    return false;
+                if (captain == 1)
+                {
+                    state.captainCharacterP2 = charID;
+                    state.captainPositionP2 = position;
+                }
             }
         }
     }
@@ -262,8 +506,10 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
 
     if (j.count("Away Logo") && j.count("Home Logo"))
     {
-        uint32_t awayLogo = static_cast<uint32_t>(j.at("Away Logo").get<double>());
-        uint32_t homeLogo = static_cast<uint32_t>(j.at("Home Logo").get<double>());
+        uint32_t awayLogo = 0;
+        uint32_t homeLogo = 0;
+        if (!TryGetInt(j, "Away Logo", &awayLogo) || !TryGetInt(j, "Home Logo", &homeLogo))
+            return false;
         state.logoP1 = p1IsAway ? awayLogo : homeLogo;
         state.logoP2 = p1IsAway ? homeLogo : awayLogo;
     }
@@ -273,7 +519,9 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
     if (j.count("StadiumID"))
     {
         // need to convert stadium ID in HUD to menu index.
-        uint8_t stadiumID = static_cast<uint8_t>(j.at("StadiumID").get<double>());
+        uint8_t stadiumID = 0;
+        if (!TryGetInt(j, "StadiumID", &stadiumID))
+            return false;
         uint8_t stadiumIndex;
         if (stadiumID == 1) stadiumIndex = 5; // Bowser Stadium
         else if (stadiumID == 4) stadiumIndex = 1; // Peach Garden
@@ -295,27 +543,29 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
     // }
     // INFO_LOG_FMT(COMMON, "First Batter: {}", state.firstBatter.has_value() ? std::to_string(state.firstBatter.value()) : "not set");
 
-    if (j.count("Star Skills On"))
-        state.starSkills = static_cast<uint8_t>(j.at("Star Skills On").get<double>());
+    if (!TryGetOptionalInt(j, "Star Skills On", &state.starSkills))
+        return false;
     INFO_LOG_FMT(COMMON, "Star Skills: {}", state.starSkills.has_value() ? std::to_string(state.starSkills.value()) : "not set");
 
-    if (j.count("Innings Selected"))
-        state.inningsSelected = static_cast<uint8_t>(j.at("Innings Selected").get<double>());
+    if (!TryGetOptionalInt(j, "Innings Selected", &state.inningsSelected))
+        return false;
     INFO_LOG_FMT(COMMON, "Innings Selected: {}", state.inningsSelected.has_value() ? std::to_string(state.inningsSelected.value()) : "not set");
 
-    if (j.count("Mercy On"))
-        state.mercy = static_cast<uint8_t>(j.at("Mercy On").get<double>());
+    if (!TryGetOptionalInt(j, "Mercy On", &state.mercy))
+        return false;
     INFO_LOG_FMT(COMMON, "Mercy: {}", state.mercy.has_value() ? std::to_string(state.mercy.value()) : "not set");
 
     // === IN-GAME STATE ===
 
-    if (j.count("Inning"))
-        state.inning = static_cast<uint32_t>(j.at("Inning").get<double>());
+    if (!TryGetOptionalInt(j, "Inning", &state.inning))
+        return false;
     INFO_LOG_FMT(COMMON, "Inning: {}", state.inning.has_value() ? std::to_string(state.inning.value()) : "not set");
 
     if (j.count("Half Inning"))
     {
-        uint8_t halfInning = static_cast<uint8_t>(j.at("Half Inning").get<double>());
+        uint8_t halfInning = 0;
+        if (!TryGetInt(j, "Half Inning", &halfInning))
+            return false;
 
         state.halfInning = halfInning;
 
@@ -330,26 +580,40 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
     INFO_LOG_FMT(COMMON, "Fielding Team: {}", state.fieldingTeam.has_value() ? std::to_string(state.fieldingTeam.value()) : "not set");
     INFO_LOG_FMT(COMMON, "First Batter: {}", state.firstBatter.has_value() ? std::to_string(state.firstBatter.value()) : "not set");
 
-    if (j.count("Away Score"))
-        state.awayScore = static_cast<uint16_t>(j.at("Away Score").get<double>());
+    if (!TryGetOptionalInt(j, "Away Score", &state.awayScore))
+        return false;
     INFO_LOG_FMT(COMMON, "Away Score: {}", state.awayScore.has_value() ? std::to_string(state.awayScore.value()) : "not set");
 
-    if (j.count("Home Score"))
-        state.homeScore = static_cast<uint16_t>(j.at("Home Score").get<double>());
+    if (!TryGetOptionalInt(j, "Home Score", &state.homeScore))
+        return false;
     INFO_LOG_FMT(COMMON, "Home Score: {}", state.homeScore.has_value() ? std::to_string(state.homeScore.value()) : "not set");
 
     if (j.count("Away Inning Scores"))
     {
-        const picojson::array& scores = j.at("Away Inning Scores").get<picojson::array>();
-        for (int i = 0; i < static_cast<int>(scores.size()) && i < 18; i++)
-            state.awayInningScores[i] = static_cast<uint16_t>(scores[i].get<double>());
+        const picojson::array* scores = nullptr;
+        if (!TryGetArray(j, "Away Inning Scores", &scores))
+            return false;
+        for (int i = 0; i < static_cast<int>(scores->size()) && i < 18; i++)
+        {
+            uint16_t score = 0;
+            if (!TryGetArrayInt(*scores, i, "Away Inning Scores", &score))
+                return false;
+            state.awayInningScores[i] = score;
+        }
     }
 
     if (j.count("Home Inning Scores"))
     {
-        const picojson::array& scores = j.at("Home Inning Scores").get<picojson::array>();
-        for (int i = 0; i < static_cast<int>(scores.size()) && i < 18; i++)
-            state.homeInningScores[i] = static_cast<uint16_t>(scores[i].get<double>());
+        const picojson::array* scores = nullptr;
+        if (!TryGetArray(j, "Home Inning Scores", &scores))
+            return false;
+        for (int i = 0; i < static_cast<int>(scores->size()) && i < 18; i++)
+        {
+            uint16_t score = 0;
+            if (!TryGetArrayInt(*scores, i, "Home Inning Scores", &score))
+                return false;
+            state.homeInningScores[i] = score;
+        }
     }
     for (int i = 0; i < 18; i++)
     {
@@ -359,21 +623,23 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
             INFO_LOG_FMT(COMMON, "Home Inning {} Score: {}", i, state.homeInningScores[i].value());
     }
 
-    if (j.count("Strikes"))
-        state.strikes = static_cast<uint32_t>(j.at("Strikes").get<double>());
+    if (!TryGetOptionalInt(j, "Strikes", &state.strikes))
+        return false;
     INFO_LOG_FMT(COMMON, "Strikes: {}", state.strikes.has_value() ? std::to_string(state.strikes.value()) : "not set");
 
-    if (j.count("Balls"))
-        state.balls = static_cast<uint32_t>(j.at("Balls").get<double>());
+    if (!TryGetOptionalInt(j, "Balls", &state.balls))
+        return false;
     INFO_LOG_FMT(COMMON, "Balls: {}", state.balls.has_value() ? std::to_string(state.balls.value()) : "not set");
 
-    if (j.count("Outs"))
-        state.outs = static_cast<uint32_t>(j.at("Outs").get<double>());
+    if (!TryGetOptionalInt(j, "Outs", &state.outs))
+        return false;
     INFO_LOG_FMT(COMMON, "Outs: {}", state.outs.has_value() ? std::to_string(state.outs.value()) : "not set");
 
     if (j.count("Away Stars"))
     {
-        uint8_t awayStars = static_cast<uint8_t>(j.at("Away Stars").get<double>());
+        uint8_t awayStars = 0;
+        if (!TryGetInt(j, "Away Stars", &awayStars))
+            return false;
         if (p1IsAway)
             state.p1TeamStars = awayStars;
         else
@@ -387,7 +653,9 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
 
     if (j.count("Home Stars"))
     {
-        uint8_t homeStars = static_cast<uint8_t>(j.at("Home Stars").get<double>());
+        uint8_t homeStars = 0;
+        if (!TryGetInt(j, "Home Stars", &homeStars))
+            return false;
         if (p1IsAway)
             state.p2TeamStars = homeStars;
         else
@@ -399,15 +667,21 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
             (state.p2TeamStars.has_value() ? std::to_string(state.p2TeamStars.value()) : "not set") :
             (state.p1TeamStars.has_value() ? std::to_string(state.p1TeamStars.value()) : "not set"));
 
-    if (j.count("Star Chance"))
-        state.isStarChance = static_cast<uint8_t>(j.at("Star Chance").get<double>());
+    if (!TryGetOptionalInt(j, "Star Chance", &state.isStarChance))
+        return false;
     INFO_LOG_FMT(COMMON, "Star Chance: {}", state.isStarChance.has_value() ? std::to_string(state.isStarChance.value()) : "not set");
 
     // === POSITIONS BY BATTING ORDER ===
     if (j.count("Away Batter Roster Loc") && j.count("Home Batter Roster Loc"))
     {
-        int awayStartingBatter = static_cast<int>(j.at("Away Batter Roster Loc").get<double>());
-        int homeStartingBatter = static_cast<int>(j.at("Home Batter Roster Loc").get<double>());
+        // int16_t so the "i + startingBatter" below can't overflow.
+        int16_t awayStartingBatter = 0;
+        int16_t homeStartingBatter = 0;
+        if (!TryGetInt(j, "Away Batter Roster Loc", &awayStartingBatter) ||
+            !TryGetInt(j, "Home Batter Roster Loc", &homeStartingBatter))
+        {
+            return false;
+        }
 
         // Keep the current batter's natural-order slot so the generator can
         // un-rotate the batting order and set the current batter correctly.
@@ -421,16 +695,20 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
 
             if (j.count(awayKey))
             {
-                const picojson::object& roster = j.at(awayKey).get<picojson::object>();
-                uint32_t position = static_cast<uint32_t>(roster.at("Fielding Position").get<double>());
+                const picojson::object* roster = nullptr;
+                uint32_t position = 0;
+                if (!TryGetObject(j, awayKey, &roster) || !TryGetInt(*roster, "Fielding Position", &position))
+                    return false;
                 if (position < 9)
                     state.awayPositionByBattingOrder[i] = position;
             }
 
             if (j.count(homeKey))
             {
-                const picojson::object& roster = j.at(homeKey).get<picojson::object>();
-                uint32_t position = static_cast<uint32_t>(roster.at("Fielding Position").get<double>());
+                const picojson::object* roster = nullptr;
+                uint32_t position = 0;
+                if (!TryGetObject(j, homeKey, &roster) || !TryGetInt(*roster, "Fielding Position", &position))
+                    return false;
                 if (position < 9)
                     state.homePositionByBattingOrder[i] = position;
             }
@@ -455,19 +733,18 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
         const std::string& key = runnerKeys[i];
         if (j.count(key))
         {
-            const picojson::object& runner = j.at(key).get<picojson::object>();
+            const picojson::object* runner = nullptr;
+            if (!TryGetObject(j, key, &runner))
+                return false;
 
-            if (runner.count("Runner Roster Loc"))
-            {
-                // Absolute natural batting slot of the runner (0 = leadoff), which
-                // is the index into the batting team's in-memory roster the boot
-                // code writes directly.
-                state.runnerRosterSpot[i] =
-                    static_cast<uint16_t>(runner.at("Runner Roster Loc").get<double>());
-            }
+            // Absolute natural batting slot of the runner (0 = leadoff), which
+            // is the index into the batting team's in-memory roster the boot
+            // code writes directly.
+            if (!TryGetOptionalInt(*runner, "Runner Roster Loc", &state.runnerRosterSpot[i]))
+                return false;
 
-            if (runner.count("Runner Char Id"))
-                state.runnerCharacterID[i] = static_cast<uint16_t>(runner.at("Runner Char Id").get<double>());
+            if (!TryGetOptionalInt(*runner, "Runner Char Id", &state.runnerCharacterID[i]))
+                return false;
         }
     }
     for (int i = 0; i < 3; i++)
@@ -488,23 +765,31 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
 
         if (j.count(p1Key))
         {
-            const picojson::object& roster = j.at(p1Key).get<picojson::object>();
-            if (roster.count("Defensive Stats"))
+            const picojson::object* roster = nullptr;
+            if (!TryGetObject(j, p1Key, &roster))
+                return false;
+            if (roster->count("Defensive Stats"))
             {
-                const picojson::object& defensiveStats = roster.at("Defensive Stats").get<picojson::object>();
-                if (defensiveStats.count("Stamina"))
-                    state.pitcherStaminaP1[i] = static_cast<uint16_t>(defensiveStats.at("Stamina").get<double>());
+                const picojson::object* defensiveStats = nullptr;
+                if (!TryGetObject(*roster, "Defensive Stats", &defensiveStats))
+                    return false;
+                if (!TryGetOptionalInt(*defensiveStats, "Stamina", &state.pitcherStaminaP1[i]))
+                    return false;
             }
         }
 
         if (j.count(p2Key))
         {
-            const picojson::object& roster = j.at(p2Key).get<picojson::object>();
-            if (roster.count("Defensive Stats"))
+            const picojson::object* roster = nullptr;
+            if (!TryGetObject(j, p2Key, &roster))
+                return false;
+            if (roster->count("Defensive Stats"))
             {
-                const picojson::object& defensiveStats = roster.at("Defensive Stats").get<picojson::object>();
-                if (defensiveStats.count("Stamina"))
-                    state.pitcherStaminaP2[i] = static_cast<uint16_t>(defensiveStats.at("Stamina").get<double>());
+                const picojson::object* defensiveStats = nullptr;
+                if (!TryGetObject(*roster, "Defensive Stats", &defensiveStats))
+                    return false;
+                if (!TryGetOptionalInt(*defensiveStats, "Stamina", &state.pitcherStaminaP2[i]))
+                    return false;
             }
         }
     }
@@ -518,8 +803,10 @@ bool LoadStateFromHudJson(const std::string& json_str, MSBQuickMatchGameState& o
     {
         const bool homeIsPitching = (state.halfInning.value() == 0);
         const bool p1IsPitching = (homeIsPitching != p1IsAway);
-        const int pitcherSlot = static_cast<int>(j.at("Pitcher Roster Loc").get<double>());
-        const uint16_t prePlayStamina = static_cast<uint16_t>(j.at("Pitcher Stamina").get<double>());
+        int pitcherSlot = 0;
+        uint16_t prePlayStamina = 0;
+        if (!TryGetInt(j, "Pitcher Roster Loc", &pitcherSlot) || !TryGetInt(j, "Pitcher Stamina", &prePlayStamina))
+            return false;
         std::optional<uint16_t>* staminaBySlot = p1IsPitching ? state.pitcherStaminaP1 : state.pitcherStaminaP2;
         if (pitcherSlot >= 0 && pitcherSlot < 9)
         {
@@ -565,21 +852,11 @@ int allowLoadFromHUDJson(const std::string& json_str,
 
     // ===== check HUD can be parsed. =====
     picojson::value v;
-    std::string err = picojson::parse(v, json_str);
-
-    if (!err.empty())
-    {
-        ERROR_LOG_FMT(COMMON, "Failed to parse HUD JSON ({})", err);
+    const picojson::object* root = ParseHUDObject(json_str, v);
+    if (!root)
         return 2;
-    }
 
-    if (!v.is<picojson::object>())
-    {
-        ERROR_LOG_FMT(COMMON, "HUD JSON is not an object");
-        return 2;
-    }
-
-    const picojson::object& j = v.get<picojson::object>();
+    const picojson::object& j = *root;
 
     INFO_LOG_FMT(COMMON, "File check passed, checking gamemode.");
 
@@ -590,8 +867,8 @@ int allowLoadFromHUDJson(const std::string& json_str,
     // Read the HUD's TagSetID. The HUD writer always emits this field, using -1
     // as the sentinel for "no game mode", so check the value rather than key presence.
     int hudTagSetId = -1;
-    if (j.count("TagSetID"))
-        hudTagSetId = static_cast<int>(j.at("TagSetID").get<double>());
+    if (j.count("TagSetID") && !TryGetInt(j, "TagSetID", &hudTagSetId))
+        return 2;
     bool hudHasTagSet = (hudTagSetId != -1);
 
     if (hudHasTagSet)
@@ -649,10 +926,13 @@ int allowLoadFromHUDJson(const std::string& json_str,
     INFO_LOG_FMT(COMMON, "P1 player: {}", p1Username);
     INFO_LOG_FMT(COMMON, "P2 player: {}", p2Username.empty() ? "none (solo)" : p2Username);
 
-    std::string awayPlayer = j.count("Away Player") ?
-        std::string(StripWhitespace(j.at("Away Player").get<std::string>())) : "";
-    std::string homePlayer = j.count("Home Player") ?
-        std::string(StripWhitespace(j.at("Home Player").get<std::string>())) : "";
+    std::string awayPlayer;
+    std::string homePlayer;
+    if (!TryGetPlayerName(j, "Away Player", &awayPlayer) ||
+        !TryGetPlayerName(j, "Home Player", &homePlayer))
+    {
+        return 2;
+    }
 
     if (outDetails)
     {
@@ -695,6 +975,12 @@ int allowLoadFromHUDJson(const std::string& json_str,
                     p1Username, p2Username, awayPlayer, homePlayer);
         return 4;
     }
+
+    // Netplay reports its HUD as valid off this result and the server relays the one it picks, so
+    // a HUD that can't load has to fail here or it would beat the other player's valid HUD.
+    MSBQuickMatchGameState unusedState;
+    if (!LoadStateFromHudJson(json_str, unusedState, p1Username, p2Username))
+        return 2;
 
     INFO_LOG_FMT(COMMON, "All checks passed. HUD can load.");
 

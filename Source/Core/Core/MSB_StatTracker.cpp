@@ -1,6 +1,7 @@
 
 #include "Core/MSB_StatTracker.h"
 
+#include <algorithm>
 #include <iomanip>
 #include <fstream>
 #include <ctime>
@@ -1180,7 +1181,7 @@ std::string StatTracker::getStatJSON(bool inDecode, bool hide_riokey){
     //=== Events === 
     json_stream << "  \"Events\": [\n";
     for (auto event_map_iter = m_game_info.events.begin(); event_map_iter != m_game_info.events.end(); event_map_iter++) {
-        u8 event_num = event_map_iter->first;
+        u16 event_num = event_map_iter->first;
         Event& event = event_map_iter->second;
 
         //Don't log events with inning == 0. Means game has crashed/quit and this is an empty event
@@ -1417,14 +1418,14 @@ std::string StatTracker::getHUDJSON(std::string in_event_num, Event& in_curr_eve
     json_stream << "  \"Away Inning Scores\": [";
     for (u8 i = 0; i < in_curr_event.inning && i < 18; ++i) {
         json_stream << in_curr_event.away_inning_scores[i];
-        if (i < in_curr_event.inning - 1) json_stream << ", ";
+        if (i < std::min<int>(in_curr_event.inning, 18) - 1) json_stream << ", ";
     }
     json_stream << "],\n";
 
     json_stream << "  \"Home Inning Scores\": [";
     for (u8 i = 0; i < in_curr_event.inning && i < 18; ++i) {
         json_stream << in_curr_event.home_inning_scores[i];
-        if (i < in_curr_event.inning - 1) json_stream << ", ";
+        if (i < std::min<int>(in_curr_event.inning, 18) - 1) json_stream << ", ";
     }
     json_stream << "],\n";
 
@@ -2324,7 +2325,7 @@ void StatTracker::postOngoingGame(Event& in_curr_event){
     json_stream << "  \"Away Inning Scores\": [";
     for (u8 i = 0; i < in_curr_event.inning && i < 18; ++i) {
         json_stream << in_curr_event.away_inning_scores[i];
-        if (i < in_curr_event.inning - 1) json_stream << ", ";
+        if (i < std::min<int>(in_curr_event.inning, 18) - 1) json_stream << ", ";
     }
     json_stream << "],\n";
 
@@ -2332,7 +2333,7 @@ void StatTracker::postOngoingGame(Event& in_curr_event){
     json_stream << "  \"Home Inning Scores\": [";
     for (u8 i = 0; i < home_inning_limit && i < 18; ++i) {
         json_stream << in_curr_event.home_inning_scores[i];
-        if (i < home_inning_limit - 1) json_stream << ", ";
+        if (i < std::min<int>(home_inning_limit, 18) - 1) json_stream << ", ";
     }
     json_stream << "],\n";
 
@@ -2429,7 +2430,7 @@ void StatTracker::updateOngoingGame(Event& in_curr_event){
     json_stream << "  \"Away Inning Scores\": [";
     for (u8 i = 0; i < in_curr_event.inning && i < 18; ++i) {
         json_stream << in_curr_event.away_inning_scores[i];
-        if (i < in_curr_event.inning - 1) json_stream << ", ";
+        if (i < std::min<int>(in_curr_event.inning, 18) - 1) json_stream << ", ";
     }
     json_stream << "],\n";
 
@@ -2437,7 +2438,7 @@ void StatTracker::updateOngoingGame(Event& in_curr_event){
     json_stream << "  \"Home Inning Scores\": [";
     for (u8 i = 0; i < home_inning_limit && i < 18; ++i) {
         json_stream << in_curr_event.home_inning_scores[i];
-        if (i < home_inning_limit - 1) json_stream << ", ";
+        if (i < std::min<int>(home_inning_limit, 18) - 1) json_stream << ", ";
     }
     json_stream << "],\n";
 

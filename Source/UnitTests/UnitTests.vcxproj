@@ -70,6 +70,7 @@
     <ClCompile Include="Core\IOS\FS\FileSystemTest.cpp" />
     <ClCompile Include="Core\IOS\USB\SkylandersTest.cpp" />
     <ClCompile Include="Core\MMIOTest.cpp" />
+    <ClCompile Include="Core\MSB_HUDStateLoaderTest.cpp" />
     <ClCompile Include="Core\PageFaultTest.cpp" />
     <ClCompile Include="Core\PowerPC\DivUtilsTest.cpp" />
     <ClCompile Include="VideoCommon\VertexLoaderTest.cpp" />
