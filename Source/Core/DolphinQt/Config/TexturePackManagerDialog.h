@@ -18,7 +18,7 @@ class QTreeWidgetItem;
 
 // Dialog for managing the active set and priority of texture packs.
 //
-// Packs live under either User/TexturePacks/<pack>/ or Sys/Load/TexturePacks/<pack>/. Each pack
+// Packs live under either User/TexturePacks/<pack>/ or Sys/TexturePacks/<pack>/. Each pack
 // optionally contains a pack.json describing its name, author, category, description, and game
 // family; packs without one show up under "Uncategorized" using the folder name.
 //

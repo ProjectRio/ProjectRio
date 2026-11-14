@@ -591,8 +591,8 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                 //Print server warning message
                 OSD::AddTypedMessage(OSD::MessageType::GameStateInfo, fmt::format(
-                    "Submitting game to server \n",
-                    "DO NOT LEAVE THE GAME OR CLOSE RIO"           
+                    "Submitting game to server \n"
+                    "DO NOT LEAVE THE GAME OR CLOSE RIO"
                 ), 500, OSD::Color::RED);
                 
                 json = getStatJSON(false, false);
@@ -606,7 +606,8 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
 
                     // Print server warning message
                     OSD::AddTypedMessage(OSD::MessageType::GameStateInfo,
-                                         fmt::format("Done submitting game \n", "SAFE TO QUIT"),
+                                         fmt::format("Done submitting game \n"
+                                                     "SAFE TO QUIT"),
                                          5000, OSD::Color::GREEN);
                 }
 
@@ -683,7 +684,7 @@ void StatTracker::logDefensiveStats(const Core::CPUThreadGuard& guard, int in_te
 
     stat.batters_faced       = PowerPC::MMU::HostRead_U8(guard, aPitcher_BattersFaced + offset);
     stat.runs_allowed        = PowerPC::MMU::HostRead_U16(guard, aPitcher_RunsAllowed + offset);
-    stat.earned_runs         = PowerPC::MMU::HostRead_U16(guard, aPitcher_RunsAllowed + offset);
+    stat.earned_runs         = PowerPC::MMU::HostRead_U16(guard, aPitcher_EarnedRuns + offset);
     stat.batters_walked      = PowerPC::MMU::HostRead_U16(guard, aPitcher_BattersWalked + offset);
     stat.batters_hit         = PowerPC::MMU::HostRead_U16(guard, aPitcher_BattersHit + offset);
     stat.hits_allowed        = PowerPC::MMU::HostRead_U16(guard, aPitcher_HitsAllowed + offset);

@@ -168,7 +168,9 @@ public:
   void RequestGolfControl();
   std::string GetCurrentGolfer();
   std::vector<std::string> v_ActiveGeckoCodes;
-  std::map<u8, u32> ourChecksum;
+  // Used by the CPU and network threads.
+  static constexpr u8 CHECKSUM_SLOTS = 16;
+  std::array<std::atomic<u32>, CHECKSUM_SLOTS> ourChecksum{};
 
   // Send and receive pads values
   struct WiimoteDataBatchEntry
