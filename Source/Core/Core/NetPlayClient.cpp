@@ -1887,6 +1887,12 @@ std::string NetPlayClient::GetNetplayNames(u8 PortInt)
     if (!Core::IsHumanPort(PortInt))
         return "";
 
+    // called from the CPU thread, while the netplay thread can change the player list
+    std::lock_guard lk(crit_netplay_client);
+    if (!netplay_client)
+        return "";
+    std::lock_guard lkp(netplay_client->m_crit.players);
+
     PlayerId pid = netplay_client->m_pad_map[PortInt];
 
     if (pid == 0)  // 0 means unassigned
@@ -1902,6 +1908,13 @@ std::string NetPlayClient::GetNetplayNames(u8 PortInt)
 std::map<int, LocalPlayers::LocalPlayers::Player> NetPlayClient::getNetplayerUserInfo()
 {
   std::map<int, LocalPlayers::LocalPlayers::Player> NetplayerUserInfo;
+
+  // called from the CPU thread, while the netplay thread can change the player list
+  std::lock_guard lk(crit_netplay_client);
+  if (!netplay_client)
+    return NetplayerUserInfo;
+  std::lock_guard lkp(netplay_client->m_crit.players);
+
   for (auto& player : netplay_client->m_players)
   {
     LocalPlayers::LocalPlayers::Player player_info;
