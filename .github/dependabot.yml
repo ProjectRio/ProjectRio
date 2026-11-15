@@ -1,11 +1,12 @@
-# Proposes updates to the pinned actions in .github/workflows/main.yml as one PR. Nothing updates
-# without a person merging it. build-appimage.sh's linuxdeploy pins aren't covered: bump by hand.
+# Proposes updates to the pinned actions in .github/workflows/main.yml as one PR a month. With
+# Dependabot security updates on in the repo settings, security fixes come right away instead.
+# Nothing updates without a person merging it. build-appimage.sh's linuxdeploy pins aren't covered: bump by hand.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
-      interval: semiannually
+      interval: monthly
     groups:
       actions:
         patterns:
