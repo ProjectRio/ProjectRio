@@ -50,7 +50,7 @@
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.games</string>
     <key>LSMinimumSystemVersion</key>
-    <string>${CMAKE_OSX_DEPLOYMENT_TARGET}</string>
+    <string>${RIO_MACOS_MINIMUM_VERSION}</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>CSResourcesFileMapped</key>

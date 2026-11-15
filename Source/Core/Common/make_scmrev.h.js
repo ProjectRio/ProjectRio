@@ -76,6 +76,9 @@ var gitexe = GetGitExe();
 var revision	= GetFirstStdOutLine(gitexe + cmd_revision);
 var describe	= GetFirstStdOutLine(gitexe + cmd_describe);
 var branch		= GetFirstStdOutLine(gitexe + cmd_branch);
+// Release builds check out a tag, which has no branch, so Git reports HEAD. Label them like a
+// build of master, or they'd show "[HEAD]" in the title bar.
+if (branch == "HEAD") branch = "master";
 var isStable = +("master" == branch || "stable" == branch);
 
 // Get environment information.

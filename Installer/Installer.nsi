@@ -17,7 +17,7 @@
 ; Must match <ProjectName> in Source/Core/DolphinQt/DolphinQt.vcxproj, which is what the build
 ; names the executable.
 !define PRODUCT_EXE "Project Rio.exe"
-!define PRODUCT_PUBLISHER "Dolphin Team"
+!define PRODUCT_PUBLISHER "Project Rio"
 !define PRODUCT_WEB_SITE "https://projectrio.online/"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\${PRODUCT_NAME}.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
@@ -243,12 +243,14 @@ Section Uninstall
   Delete "$INSTDIR\install_manifest.txt"
   Delete "$INSTDIR\${PRODUCT_EXE}"
   Delete "$INSTDIR\Dolphin.exe"  ; Left over from installs made before the rename.
+  Delete "$INSTDIR\FIX-VCRUNTIME140-ERROR.txt"
   Delete "$INSTDIR\DolphinTool.exe"
   Delete "$INSTDIR\DSPTool.exe"
   Delete "$INSTDIR\license.txt"
   Delete "$INSTDIR\qt.conf"
   Delete "$INSTDIR\uninst.exe"
   Delete "$INSTDIR\Updater.exe"
+  Delete "$INSTDIR\Updater.exe.bak"
   Delete "$INSTDIR\Updater.log"
   RMDir /r "$INSTDIR\Sys"
   RMDir /r "$INSTDIR\Languages"

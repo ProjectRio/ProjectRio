@@ -17,6 +17,10 @@ on:
       - "**.md"
       - "**.ini"
 
+# The release job asks for what it needs on top of this.
+permissions:
+  contents: read
+
 jobs:
   windows:
     strategy:
@@ -33,7 +37,7 @@ jobs:
     runs-on: windows-2022
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v2
+        uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2.8.0
         with:
           submodules: recursive
       - name: 'Fetch Git Tags'
@@ -45,8 +49,8 @@ jobs:
           echo "GIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "GIT_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
           echo "CURR_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
-      - uses: seanmiddleditch/gha-setup-ninja@master
-      - uses: egor-tensin/vs-shell@v2
+      - uses: seanmiddleditch/gha-setup-ninja@3b1f8f94a2f8254bd26914c4ab9474d4f0015f67 # v6
+      - uses: egor-tensin/vs-shell@7710434f30f873ff4ab78184b74cc576a10726d6 # v2.2.3
       - name: "Build ${{ matrix.build_type }} Dolphin"
         shell: cmd
         working-directory: ${{ github.workspace }}
@@ -54,6 +58,12 @@ jobs:
           SET PATH=%PATH%;C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64;C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x86;C:\Program Files\7-Zip;C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin;C:\Python27\;C:\Python27\Scripts;C:\Windows\system32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0\;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja;C:\Program Files\Microsoft VS Code\bin;C:\Program Files\Git\cmd
           cd ./Source
           msbuild.exe /v:m /p:Platform=x64 /p:Configuration=Release dolphin-emu.sln
+      - name: "Run unit tests"
+        # The solution builds the tests but doesn't run them. These include the update signing
+        # and HUD loader tests, so a failure here stops the build from being packaged.
+        shell: cmd
+        working-directory: ${{ github.workspace }}
+        run: Build\x64\Release\UnitTests\bin\UnitTests.exe
       - name: "Package ${{ matrix.build_type }}"
         working-directory: ${{ github.workspace }}
         run: |
@@ -85,7 +95,7 @@ jobs:
           mv "Installer/projectrio-x64-${{ env.CURR_DATE }}-${{ env.GIT_HASH }}-${{ env.GIT_TAG }}-installer.exe" "artifact/${FILE_NAME}.exe"
       - name: "Publish"
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ matrix.artifact_name }}
           path: "./artifact/"
@@ -102,7 +112,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v2
+        uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2.8.0
         with:
           submodules: recursive
       - name: 'Fetch Git Tags'
@@ -166,7 +176,7 @@ jobs:
             libudev-dev \
             libsystemd-dev
       - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@5ebbd400eff9e74630f759d94ddd7b6c26299639 # v1.2.20
         with:
           create-symlink: true
       - name: "Build ${{ matrix.build_type }} Project Rio"
@@ -180,7 +190,7 @@ jobs:
           git config core.fileMode false ; bash ./build-appimage.sh
       - name: "Publish"
         if: success()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.artifact_name }}
           path: ./build/Binaries/${{ matrix.artifact_name }}.AppImage
@@ -201,7 +211,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v2
+        uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2.8.0
         with:
           submodules: recursive
       - name: "Fetch Git Tags"
@@ -212,18 +222,18 @@ jobs:
           echo "GIT_TAG=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
           echo "CURR_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
       - name: "Set up Python"
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@7f4fc3e22c37d6ff65e88745f38bd3157c663f7c # v4.9.1
         with:
           python-version: "3.11"
       - name: "Cache Homebrew downloads"
-        uses: actions/cache@v3
+        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3.5.0
         with:
           path: ~/Library/Caches/Homebrew
           key: ${{ runner.os }}-${{ matrix.arch }}-brew-${{ hashFiles('.github/workflows/main.yml') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-brew-
       - name: "Cache ccache"
-        uses: actions/cache@v3
+        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c # v3.5.0
         with:
           path: ~/.ccache
           key: ${{ runner.os }}-${{ matrix.arch }}-ccache-${{ github.sha }}
@@ -255,16 +265,20 @@ jobs:
           brew install local/qtpin/qtbase
           brew pin qtbase
 
-          brew install \
-            ccache \
-            ffmpeg \
-            libpng \
-            pkgconfig \
-            libao \
-            sound-touch \
-            hidapi \
-            icu4c \
-            qt@6
+          DEPS=(ccache ffmpeg libpng pkgconfig libao sound-touch hidapi icu4c qt@6)
+
+          # The runner image ships openssl@3 linked, and Qt's dependencies now pull in openssl@4.
+          # Both can be installed, but only one can own the `openssl` command, and brew fails the
+          # install rather than replace the link. Rio doesn't use the command, so drop openssl@3's
+          # links; its libraries stay installed for the tools on the image that use them. If brew
+          # upgrades openssl@3 during the install, that links it again, so on a failure give the
+          # command to openssl@4 and run the install once more. A real failure still fails the retry.
+          brew unlink openssl@3 || true
+          if ! brew install "${DEPS[@]}"; then
+            brew unlink openssl@3 || true
+            brew link --overwrite openssl@4 || true
+            brew install "${DEPS[@]}"
+          fi
           brew unlink fmt || true
       - name: "Build ${{ matrix.arch }}"
         shell: bash
@@ -286,7 +300,7 @@ jobs:
           mv "${FILE_NAME}" ../../artifact/
       - name: "Publish"
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ matrix.artifact_name }}
           path: "./artifact/"
@@ -306,10 +320,16 @@ jobs:
             artifact_name: ProjectRio-steamOS
     steps:
       - name: Checkout (with submodules)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
           fetch-depth: 1
+      - name: Stamp the revision into the manifest
+        # flatpak-builder works from a copy of the source that may not have .git, and netplay only
+        # accepts an exact revision match, so tell the build which commit this is.
+        run: |
+          sed -i "/^      - -DDISTRIBUTOR=Project Rio$/a\      - -DRIO_SCM_REVISION=${GITHUB_SHA}" Tools/flatpak.yml
+          grep -q "RIO_SCM_REVISION=${GITHUB_SHA}" Tools/flatpak.yml
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@bf5cafdfd97dcf5a89c7475bbc86a616e1f86acb # v6.7
         with:
@@ -330,7 +350,7 @@ jobs:
       actions: read
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: "Check the tag matches the version in the code"
         # A build reports RIO_REV_STR as its version. If the tag is ahead of it, every updated
         # install still looks out of date and offers the same update on every launch.
