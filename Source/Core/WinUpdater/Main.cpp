@@ -7,6 +7,7 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "Common/CommonFuncs.h"
@@ -27,6 +28,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
                 L"Error", MB_ICONERROR);
     return 1;
   }
+
+  std::vector<std::string> args = Common::CommandLineToUtf8Argv(pCmdLine);
 
   // Test for write permissions
   bool need_admin = false;
@@ -58,11 +61,22 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
     }
 
     // Relaunch the updater as administrator
-    ShellExecuteW(nullptr, L"runas", path->c_str(), pCmdLine, nullptr, SW_SHOW);
-    return 0;
-  }
+    const auto result = reinterpret_cast<INT_PTR>(
+        ShellExecuteW(nullptr, L"runas", path->c_str(), pCmdLine, nullptr, SW_SHOW));
+    if (result > 32)
+      return 0;
 
-  std::vector<std::string> args = Common::CommandLineToUtf8Argv(pCmdLine);
+    // The user declined, and Rio closed so that the update could run, so bring it back.
+    MessageBoxW(nullptr, L"The update needs administrator access, so nothing was changed.",
+                L"Update canceled", MB_ICONINFORMATION);
+    constexpr std::string_view RESTART_FLAG = "--binary-to-restart=";
+    for (const std::string& arg : args)
+    {
+      if (arg.starts_with(RESTART_FLAG))
+        UI::LaunchApplication(arg.substr(RESTART_FLAG.size()));
+    }
+    return 1;
+  }
 
   return RunUpdater(args) ? 0 : 1;
 }

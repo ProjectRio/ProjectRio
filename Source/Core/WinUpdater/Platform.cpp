@@ -1,10 +1,16 @@
 #include <Windows.h>
+#include <SoftPub.h>
+#include <WinTrust.h>
+
+#pragma comment(lib, "crypt32.lib")
+#pragma comment(lib, "wintrust.lib")
 
 #include <filesystem>
 #include <map>
 #include <optional>
 #include <sstream>
 #include <string>
+#include <string_view>
 
 #include "Common/CommonPaths.h"
 #include "Common/CommonTypes.h"
@@ -179,7 +185,56 @@ static VersionCheckResult VCRuntimeVersionCheck(const BuildInfos& build_infos)
   return result;
 }
 
-static bool VCRuntimeUpdate(const BuildInfo& build_info)
+// Whether `file` has a valid Authenticode signature from Microsoft.
+static bool IsSignedByMicrosoft(HANDLE file, const std::wstring& path)
+{
+  WINTRUST_FILE_INFO file_info{.cbStruct = sizeof(file_info),
+                               .pcwszFilePath = path.c_str(),
+                               .hFile = file};
+  WINTRUST_DATA trust_data{.cbStruct = sizeof(trust_data),
+                           .dwUIChoice = WTD_UI_NONE,
+                           .fdwRevocationChecks = WTD_REVOKE_NONE,
+                           .dwUnionChoice = WTD_CHOICE_FILE,
+                           .pFile = &file_info,
+                           .dwStateAction = WTD_STATEACTION_VERIFY};
+  GUID action = WINTRUST_ACTION_GENERIC_VERIFY_V2;
+
+  const LONG status = WinVerifyTrust(static_cast<HWND>(INVALID_HANDLE_VALUE), &action, &trust_data);
+  Common::ScopeGuard state_guard([&] {
+    trust_data.dwStateAction = WTD_STATEACTION_CLOSE;
+    WinVerifyTrust(static_cast<HWND>(INVALID_HANDLE_VALUE), &action, &trust_data);
+  });
+  if (status != ERROR_SUCCESS)
+  {
+    LogToFile("VC++ Redist signature check failed: 0x%08lx\n", static_cast<unsigned long>(status));
+    return false;
+  }
+
+  // A valid signature only says someone signed it, so also check who.
+  CRYPT_PROVIDER_DATA* provider = WTHelperProvDataFromStateData(trust_data.hWVTStateData);
+  CRYPT_PROVIDER_SGNR* signer = provider ? WTHelperGetProvSignerFromChain(provider, 0, FALSE, 0) :
+                                           nullptr;
+  CRYPT_PROVIDER_CERT* cert = signer ? WTHelperGetProvCertFromChain(signer, 0) : nullptr;
+  if (!cert || !cert->pCert)
+  {
+    LogToFile("VC++ Redist signer could not be read.\n");
+    return false;
+  }
+
+  wchar_t name[256]{};
+  CertGetNameStringW(cert->pCert, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0, nullptr, name,
+                     static_cast<DWORD>(std::size(name)));
+  if (std::wstring_view(name) != L"Microsoft Corporation")
+  {
+    LogToFile("VC++ Redist is signed by %s, not Microsoft.\n", WStringToUTF8(name).c_str());
+    return false;
+  }
+  return true;
+}
+
+// `staging_dir` is the update's temporary folder. It sits in the install folder, so it's only as
+// writable as the install, unlike the current directory.
+static bool VCRuntimeUpdate(const BuildInfo& build_info, const std::filesystem::path& staging_dir)
 {
   UI::SetDescription("Updating VC++ Redist, please wait...");
 
@@ -189,8 +244,7 @@ static bool VCRuntimeUpdate(const BuildInfo& build_info)
   if (!resp)
     return false;
 
-  // Write it to current working directory.
-  auto redist_path = std::filesystem::current_path() / L"vc_redist.x64.exe";
+  auto redist_path = staging_dir / L"vc_redist.x64.exe";
   auto redist_path_u8 = WStringToUTF8(redist_path.wstring());
   File::IOFile redist_file;
   redist_file.Open(redist_path_u8, "wb");
@@ -199,6 +253,19 @@ static bool VCRuntimeUpdate(const BuildInfo& build_info)
   redist_file.Close();
 
   Common::ScopeGuard redist_deleter([&] { File::Delete(redist_path_u8); });
+
+  // Keep the file open without write or delete sharing from the signature check until the
+  // installer has finished, so it can't be swapped in between. Starting a process only needs read
+  // sharing.
+  const HANDLE redist_handle =
+      CreateFileW(redist_path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                  FILE_ATTRIBUTE_NORMAL, nullptr);
+  if (redist_handle == INVALID_HANDLE_VALUE)
+    return false;
+  Common::ScopeGuard handle_guard([&] { CloseHandle(redist_handle); });
+
+  if (!IsSignedByMicrosoft(redist_handle, redist_path.wstring()))
+    return false;
 
   // The installer also supports /passive and /quiet. We normally pass neither (the
   // exception being test automation) to allow the user to see and interact with the installer.
@@ -274,7 +341,7 @@ std::optional<BuildInfos> InitBuildInfos(const std::string& install_base_path,
   return build_infos;
 }
 
-bool CheckBuildInfo(const BuildInfos& build_infos)
+bool CheckBuildInfo(const BuildInfos& build_infos, const std::filesystem::path& staging_dir)
 {
   // The existing BuildInfo may have been modified. Be careful not to overly trust its contents!
 
@@ -292,7 +359,7 @@ bool CheckBuildInfo(const BuildInfos& build_infos)
   const auto is_test_mode = UI::IsTestMode();
   if (vc_check.status != VersionCheckStatus::NothingToDo || is_test_mode)
   {
-    auto update_ok = VCRuntimeUpdate(build_infos.next);
+    auto update_ok = VCRuntimeUpdate(build_infos.next, staging_dir);
     if (!update_ok && is_test_mode)
     {
       // For now, only check return value when test automation is running.
@@ -319,7 +386,8 @@ bool VersionCheck(const std::string& install_base_path, const std::string& packa
   {
     return true;
   }
-  return CheckBuildInfo(build_infos.value());
+  // The package is unpacked into the update's temporary folder, which holds the redist download too.
+  return CheckBuildInfo(build_infos.value(), StringToPath(package_path).parent_path());
 }
 
 }  // namespace Platform
