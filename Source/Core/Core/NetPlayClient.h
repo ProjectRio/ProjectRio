@@ -147,6 +147,7 @@ public:
   // Called from the GUI thread.
   bool IsConnected() const { return m_is_connected; }
   bool IsDesyncDetected() const { return m_desync_detected; }
+  bool IsGameModeActive() const { return m_game_mode_active; }
   bool StartGame(const std::string& path);
   void InvokeStop();
   bool StopGame();
@@ -379,6 +380,8 @@ private:
 
   bool m_is_connected = false;
   std::atomic<bool> m_desync_detected = false;
+  std::atomic<bool> m_game_mode_active = false;
+  bool m_missing_game_mode = false;
   ConnectionState m_connection_state = ConnectionState::Failure;
 
   PlayerId m_pid = 0;

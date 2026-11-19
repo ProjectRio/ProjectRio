@@ -1609,8 +1609,11 @@ void NetPlayClient::OnGameModeMsg(sf::Packet& packet)
   packet >> exists;
   packet >> tagset_id;
 
+  m_game_mode_active = exists;
   // Joining by room code can land in a game mode we don't have.
-  if (exists && (!TagSetMap || !TagSetMap->count(tagset_id)))
+  m_missing_game_mode = exists && (!TagSetMap || !TagSetMap->count(tagset_id));
+  SendGameStatus();
+  if (m_missing_game_mode)
   {
     m_dialog->AppendChat(fmt::format(
         "ERROR: You don't have the host's game mode (ID {}). Please leave this lobby.", tagset_id));
@@ -2972,8 +2975,10 @@ void NetPlayClient::SendGameStatus()
       result = SyncIdentifierComparison::DifferentGame;
     }
   }
+  if (m_missing_game_mode)
+    result = SyncIdentifierComparison::DifferentGame;
 
-  packet << static_cast<u32>(result);
+  packet << result;
   Send(packet);
 }
 
