@@ -18,9 +18,10 @@ class Logger{
 public:
     // Constructor
     Logger(std::string in_file_name){
+        // No ':' in file names (Windows)
         std::time_t unix_time = std::time(nullptr);
-        std::string time = std::asctime(std::localtime(&unix_time));
-        time.pop_back();
+        char time[32];
+        std::strftime(time, sizeof(time), "%Y%m%dT%H%M%S", std::localtime(&unix_time));
         log_file_path = File::GetUserPath(D_STATELOGGER_IDX) + time + '_' + in_file_name + ".txt";
     };    
     

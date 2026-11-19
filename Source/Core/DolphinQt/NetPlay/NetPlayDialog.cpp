@@ -702,7 +702,16 @@ void NetPlayDialog::OnIndexRefreshFailed(const std::string error)
 
 void NetPlayDialog::OnStart()
 {
-  if (!Settings::Instance().GetNetPlayClient()->DoAllPlayersHaveGame())
+  const auto client = Settings::Instance().GetNetPlayClient();
+  const auto players = client->GetPlayers();
+  if (client->IsGameModeActive() && std::any_of(players.begin(), players.end(), [](auto* p) {
+        return p->game_status == NetPlay::SyncIdentifierComparison::DifferentGame;
+      }))
+  {
+    ModalMessageBox::critical(this, tr("Error"), tr("Not all players have this game mode."));
+    return;
+  }
+  if (!client->DoAllPlayersHaveGame())
   {
     if (ModalMessageBox::question(
             this, tr("Warning"),
