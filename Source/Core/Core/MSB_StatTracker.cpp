@@ -569,10 +569,17 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                 //TODO: See if user has signed up for beta test features in future
                 File::WriteStringToFile(jsonPath, json);
 
+                OSD::AddTypedMessage(OSD::MessageType::GameStateInfo, "Submitting game to server",
+                                     500, OSD::Color::RED);
+
                 json = getStatJSON(false, false);
                 if (shouldSubmitGame())
+                {
                     m_http.Post("https://api.projectrio.app/populate_db/", json,
                                 {{"Content-Type", "application/json"}});
+                    OSD::AddTypedMessage(OSD::MessageType::GameStateInfo, "Done submitting game",
+                                         5000, OSD::Color::GREEN);
+                }
 
                 std::cout << "Logging to " << jsonPath << "\n";
                 std::cout << "INGAME->ENDGAME\n";
