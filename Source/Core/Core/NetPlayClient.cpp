@@ -1620,6 +1620,18 @@ void NetPlayClient::OnGameModeMsg(sf::Packet& packet)
   packet >> exists;
   packet >> tagset_id;
 
+  m_game_mode_active = exists;
+  // Joining by room code can land in a game mode we don't have.
+  m_missing_game_mode = exists && (!TagSetMap || !TagSetMap->count(tagset_id));
+  SendGameStatus();
+  if (m_missing_game_mode)
+  {
+    m_dialog->AppendChat(fmt::format(
+        "ERROR: You don't have the host's game mode (ID {}). Please leave this lobby.", tagset_id));
+    Core::SetTagSet(std::nullopt, true);
+    return;
+  }
+
   std::optional<Tag::TagSet> current_tagset =
       exists ? std::optional<Tag::TagSet>{TagSetMap->at(tagset_id)} : std::nullopt;
 
@@ -1832,6 +1844,9 @@ void NetPlayClient::OnChecksumMsg(sf::Packet& packet)
   u8 checksumId;
   packet >> inChecksum;
   packet >> checksumId;
+
+  if (checksumId >= CHECKSUM_SLOTS)
+    return;
 
   if (ourChecksum[checksumId] != inChecksum)
   {
@@ -3073,14 +3088,16 @@ void NetPlayClient::SendGameStatus()
       result = SyncIdentifierComparison::DifferentGame;
     }
   }
+  if (m_missing_game_mode)
+    result = SyncIdentifierComparison::DifferentGame;
 
-  packet << static_cast<u32>(result);
+  packet << result;
   Send(packet);
 }
 
 void NetPlayClient::SendChecksum(u8 checksumId, u64 frame, u32 checksum)
 {
-  netplay_client->ourChecksum[checksumId] = checksum;
+  netplay_client->ourChecksum[checksumId & 0xF] = checksum;
 
   if (frame < 1000) // dont send the initial ones since they're whack
     return;
@@ -3089,7 +3106,7 @@ void NetPlayClient::SendChecksum(u8 checksumId, u64 frame, u32 checksum)
 
   sf::Packet packet;
   packet << MessageID::Checksum;
-  packet << netplay_client->ourChecksum[newId]; 
+  packet << netplay_client->ourChecksum[newId].load();
   packet << newId;
 
   netplay_client->SendAsync(std::move(packet));

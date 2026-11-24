@@ -149,6 +149,7 @@ public:
   // Called from the GUI thread.
   bool IsConnected() const { return m_is_connected; }
   bool IsDesyncDetected() const { return m_desync_detected; }
+  bool IsGameModeActive() const { return m_game_mode_active; }
   bool StartGame(const std::string& path);
   void InvokeStop();
   bool StopGame();
@@ -168,7 +169,9 @@ public:
   void RequestGolfControl();
   std::string GetCurrentGolfer();
   std::vector<std::string> v_ActiveGeckoCodes;
-  std::map<u8, u32> ourChecksum;
+  // Used by the CPU and network threads.
+  static constexpr u8 CHECKSUM_SLOTS = 16;
+  std::array<std::atomic<u32>, CHECKSUM_SLOTS> ourChecksum{};
 
   // Send and receive pads values
   struct WiimoteDataBatchEntry
@@ -388,6 +391,8 @@ private:
 
   bool m_is_connected = false;
   std::atomic<bool> m_desync_detected = false;
+  std::atomic<bool> m_game_mode_active = false;
+  bool m_missing_game_mode = false;
   ConnectionState m_connection_state = ConnectionState::Failure;
 
   PlayerId m_pid = 0;

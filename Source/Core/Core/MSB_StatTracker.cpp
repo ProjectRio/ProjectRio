@@ -50,7 +50,7 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
             // Add state of current event to event.history for logging purposes
             m_game_info.getCurrentEvent().history.push_back(m_event_state);
 
-            if (m_event_state == EVENT_STATE::FINAL_RESULT) {
+            if (m_event_state == EVENT_STATE::FINAL_RESULT && Config::Get(Config::MAIN_ENABLE_DEBUGGING)) {
             // Write state details on play over
                 state_logger.writeToFile(fmt::format(
                     "Game State: {}\n"
@@ -586,27 +586,15 @@ void StatTracker::lookForTriggerEvents(const Core::CPUThreadGuard& guard)
                 //TODO: See if user has signed up for beta test features in future
                 File::WriteStringToFile(jsonPath, json);
 
-                //File::WriteStringToFile(jsonPath, json);
-                //https://api.projectrio.app/populate_db
+                OSD::AddTypedMessage(OSD::MessageType::GameStateInfo, "Submitting game to server",
+                                     500, OSD::Color::RED);
 
-                //Print server warning message
-                OSD::AddTypedMessage(OSD::MessageType::GameStateInfo, fmt::format(
-                    "Submitting game to server \n",
-                    "DO NOT LEAVE THE GAME OR CLOSE RIO"           
-                ), 500, OSD::Color::RED);
-                
                 json = getStatJSON(false, false);
-                if (shouldSubmitGame()) {
-                    const Common::HttpRequest::Response response =
+                if (shouldSubmitGame())
+                {
                     m_http.Post("https://api.projectrio.app/populate_db/", json,
-                        {
-                            {"Content-Type", "application/json"},
-                        }
-                    );
-
-                    // Print server warning message
-                    OSD::AddTypedMessage(OSD::MessageType::GameStateInfo,
-                                         fmt::format("Done submitting game \n", "SAFE TO QUIT"),
+                                {{"Content-Type", "application/json"}});
+                    OSD::AddTypedMessage(OSD::MessageType::GameStateInfo, "Done submitting game",
                                          5000, OSD::Color::GREEN);
                 }
 
@@ -683,7 +671,7 @@ void StatTracker::logDefensiveStats(const Core::CPUThreadGuard& guard, int in_te
 
     stat.batters_faced       = PowerPC::MMU::HostRead_U8(guard, aPitcher_BattersFaced + offset);
     stat.runs_allowed        = PowerPC::MMU::HostRead_U16(guard, aPitcher_RunsAllowed + offset);
-    stat.earned_runs         = PowerPC::MMU::HostRead_U16(guard, aPitcher_RunsAllowed + offset);
+    stat.earned_runs         = PowerPC::MMU::HostRead_U16(guard, aPitcher_EarnedRuns + offset);
     stat.batters_walked      = PowerPC::MMU::HostRead_U16(guard, aPitcher_BattersWalked + offset);
     stat.batters_hit         = PowerPC::MMU::HostRead_U16(guard, aPitcher_BattersHit + offset);
     stat.hits_allowed        = PowerPC::MMU::HostRead_U16(guard, aPitcher_HitsAllowed + offset);
